@@ -9,6 +9,7 @@ from dive_mcp.host.agents import AgentFactory, get_chat_agent_factory
 from dive_mcp.host.conf import HostConfig
 from dive_mcp.host.conversation import Conversation
 from dive_mcp.host.helpers.context import ContextProtocol
+from dive_mcp.models import load_model
 
 
 class DiveMcpHost(ContextProtocol):
@@ -79,7 +80,18 @@ class DiveMcpHost(ContextProtocol):
     async def _init_models(self) -> None:
         if self._model:
             return
-        raise NotImplementedError
+        model_config = self._config.llm
+        kwargs = model_config.model_dump(exclude_unset=True)
+        if "model" in kwargs:
+            kwargs.pop("model")
+        if "provider" in kwargs:
+            kwargs.pop("provider")
+        model = load_model(
+            model_config.provider,
+            model_config.model,
+            **kwargs,
+        )
+        self._model = model
 
     async def conversation[T](
         self,
