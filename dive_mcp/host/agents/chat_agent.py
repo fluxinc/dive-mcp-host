@@ -1,5 +1,10 @@
+"""This module contains the ChatAgentFactory for the host.
+
+It uses langgraph.prebuilt.create_react_agent to create the agent.
+"""
+
 from collections.abc import Sequence
-from typing import Annotated, Self, TypedDict
+from typing import Annotated, TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage
@@ -13,10 +18,9 @@ from langgraph.prebuilt import create_react_agent  # type: ignore[arg-type]
 from langgraph.prebuilt.tool_node import ToolNode
 from langgraph.store.base import BaseStore
 
-from dive_mcp.host.agent_factory import AgentFactory, initial_messages
+from dive_mcp.host.agents.agent_factory import AgentFactory, initial_messages
+from dive_mcp.host.helpers import today_datetime
 from dive_mcp.host.prompt import PromptType
-
-from .helpers import today_datetime
 
 
 class AgentState(TypedDict):
@@ -39,15 +43,6 @@ class ChatAgentFactory(AgentFactory[AgentState]):
         """Initialize the chat agent factory."""
         self._model = model
         self._tools = tools
-
-    @classmethod
-    def create_factory(
-        cls,
-        model: BaseChatModel,
-        tools: Sequence[BaseTool] | ToolNode,
-    ) -> Self:
-        """Create a chat agent factory."""
-        return cls(model, tools)
 
     def create_agent(
         self,

@@ -5,8 +5,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import BaseTool
 from langgraph.prebuilt.tool_node import ToolNode
 
-from dive_mcp.host.agent import get_chat_agent_factory
-from dive_mcp.host.agent_factory import AgentFactory
+from dive_mcp.host.agents import AgentFactory, get_chat_agent_factory
 from dive_mcp.host.conf import HostConfig
 from dive_mcp.host.conversation import Conversation
 from dive_mcp.host.helpers.context import ContextProtocol
@@ -26,14 +25,24 @@ class DiveMcpHost(ContextProtocol):
     Example:
         # Initialize host with configuration
         config = HostConfig(...)
+        thread_id = ""
         async with DiveMcpHost(config) as host:
             # Send a message and get response
-            async with host.conversation(thread_id="123") as conversation:
+            async with host.conversation() as conversation:
                 while query := input("Enter a message: "):
                     if query == "exit":
+                        nonlocal thread_id
+                        # save the thread_id for resume
+                        thread_id = conversation.thread_id
                         break
                     async for response in await conversation.query(query):
                         print(response)
+        ...
+        # Resume conversation
+        async with DiveMcpHost(config) as host:
+            # pass the thread_id to resume the conversation
+            async with host.conversation(thread_id=thread_id) as conversation:
+                ...
 
     The host must be used as an async context manager to ensure proper resource
     management, including model initialization and cleanup.
@@ -47,7 +56,6 @@ class DiveMcpHost(ContextProtocol):
 
         Args:
             config: The host configuration.
-            agent_factory_creator: The agent factory creator.
         """
         self._config = config
         self._model: BaseChatModel | None = None

@@ -1,4 +1,5 @@
 """Model for the MCP servers."""
+
 from langchain_core.tools import BaseTool
 
 
