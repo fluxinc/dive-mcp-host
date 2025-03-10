@@ -1,7 +1,9 @@
 """Additional models for the MCP."""
 
+from importlib import import_module
 from typing import Any
 
+from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 
 
@@ -34,4 +36,21 @@ def load_model(
     If the provider is neither "dive" nor "__load__", it will load model from langchain.
     """
     # XXX Pass configurations/parameters to the model
-    raise NotImplementedError
+
+    if provider == "dive":
+        model_module = import_module(
+            f"dive_mcp.models.{model_name.replace('-', '_').replace('.', '_').lower()}",
+        )
+        model = model_module.load_model(*args, **kwargs)
+    elif provider == "__load__":
+        module_path, class_name = model_name.rsplit(":", 1)
+        model_module = import_module(module_path)
+        class_ = getattr(model_module, class_name)
+        model = class_(*args, **kwargs)
+    else:
+        if len(args) > 0:
+            raise ValueError(
+                f"Additional arguments are not supported for {provider} provider.",
+            )
+        model = init_chat_model(model=model_name, model_provider=provider, **kwargs)
+    return model
