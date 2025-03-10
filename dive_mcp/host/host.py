@@ -93,7 +93,7 @@ class DiveMcpHost(ContextProtocol):
         )
         self._model = model
 
-    async def conversation[T](
+    def conversation[T](
         self,
         *,
         thread_id: str | None = None,

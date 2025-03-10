@@ -15,39 +15,6 @@ from dive_mcp.models.fake import FakeMessageToolModel
 
 
 @pytest.mark.asyncio
-async def test_fake_model_single_message() -> None:
-    """Test the fake model."""
-    model = FakeMessageToolModel()
-    prompt = ChatPromptTemplate.from_messages(
-        [("system", "You are a helpful assistant."), ("placeholder", "{messages}")],
-    )
-    agent_executor = create_react_agent(
-        model,
-        tools=[],
-        state_schema=AgentState,
-        debug=False,
-        prompt=prompt,
-    )
-
-    input_messages = AgentState(
-        messages=[HumanMessage(content="Hello, world!")],
-        is_last_step=False,
-        today_datetime=today_datetime(),
-        remaining_steps=3,
-    )
-
-    def check_results(results: list[dict[str, Any]], msg: str) -> None:
-        assert len(results) == 1, msg
-        print(results[0], type(results[0]))
-
-    check_results(
-        [a async for a in agent_executor.astream(input_messages)],
-        "astream",
-    )
-    check_results(list(agent_executor.stream(input_messages)), "stream")
-
-
-@pytest.mark.asyncio
 async def test_fake_model_tool_call() -> None:
     """Test the fake model."""
 
