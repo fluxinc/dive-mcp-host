@@ -45,12 +45,13 @@ class CheckpointerConfig(BaseModel):
 class ServerConfig(BaseModel):
     """Configuration for an MCP server."""
 
-    command: str
+    name: str
+    command: str = ""
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
     enabled: bool = True
     exclude_tools: list[str] = Field(default_factory=list)
-
+    url: str | None = None
 
 class HostConfig(BaseModel):
     """Configuration for the MCP host."""

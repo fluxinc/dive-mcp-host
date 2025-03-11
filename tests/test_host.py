@@ -31,4 +31,4 @@ async def test_host_context() -> None:
             ]
             # assert len(responses) == len(espect_responses)
             for res, expect in zip(responses, espect_responses, strict=True):
-                assert res.content == expect.content
+                assert res.content == expect.content  # type: ignore[attr-defined]

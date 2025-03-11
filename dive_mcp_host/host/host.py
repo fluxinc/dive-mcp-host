@@ -10,10 +10,12 @@ from dive_mcp_host.host.conf import HostConfig
 from dive_mcp_host.host.conversation import Conversation
 from dive_mcp_host.host.helpers.checkpointer import get_checkpointer
 from dive_mcp_host.host.helpers.context import ContextProtocol
+from dive_mcp_host.host.tools import ToolManager
 from dive_mcp_host.models import load_model
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
+
 
 
 class DiveMcpHost(ContextProtocol):
@@ -65,7 +67,8 @@ class DiveMcpHost(ContextProtocol):
         self._config = config
         self._model: BaseChatModel | None = None
         self._tools: Sequence[BaseTool] = []
-        self._checkpointer: BaseCheckpointSaver | None = None
+        self._checkpointer: BaseCheckpointSaver[str] | None = None
+        self._tool_manager: ToolManager = ToolManager(self._config.mcp_servers)
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
         try:
@@ -85,7 +88,6 @@ class DiveMcpHost(ContextProtocol):
     async def _init_tools(self) -> None:
         if self._tools:
             return
-        raise NotImplementedError
 
     async def _init_models(self) -> None:
         if self._model:
@@ -130,7 +132,7 @@ class DiveMcpHost(ContextProtocol):
         if self._model is None:
             raise RuntimeError("Model not initialized")
         if tools is None:
-            tools = self._tools
+            tools = self._tool_manager.tools()
         agent_factory = get_agent_factory_method(
             self._model,
             tools,
