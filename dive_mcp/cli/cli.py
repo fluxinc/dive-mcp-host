@@ -64,6 +64,6 @@ async def run() -> None:
             async for response in conversation.query(query, stream_mode=None):
                 ai_message = response["agent"]["messages"][0]
                 ai_responses.append(ai_message)
-                print(ai_message.content)  # noqa: T201
+                print(ai_message.content)
 
-    print(f"Thread ID: {current_thread_id}")  # noqa: T201
+    print(f"Thread ID: {current_thread_id}")

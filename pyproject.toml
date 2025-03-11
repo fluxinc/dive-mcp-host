@@ -69,6 +69,7 @@ lint.extend-select = ["I"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "ANN", "D107"]  # Allow assert statements in test files
+"dive_mcp/cli/**/*.py" = ["S101", "ANN", "D107", "T201"]  # Allow assert statements in test files
 
 [tool.ruff.format]
 quote-style = "double"
