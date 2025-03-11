@@ -1,7 +1,8 @@
-from datetime import datetime
 from typing import Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from ..database.models import Chat, ChatMessage, Message  # noqa: F401, TID252
 
 T = TypeVar("T")
 
@@ -11,33 +12,6 @@ class ResultResponse(BaseModel):
 
     success: bool
     message: str | None
-
-
-class Chat(BaseModel):
-    """Represents a chat conversation with its basic properties."""
-
-    id: str
-    title: str
-    created_at: datetime = Field(alias="createdAt")
-
-
-class Message(BaseModel):
-    """Represents a message within a chat conversation."""
-
-    id: int
-    create_at: datetime = Field(alias="createdAt")
-    content: str
-    role: str
-    chat_id: str = Field(alias="chatId")
-    message_id: str = Field(alias="messageId")
-    files: object  # TODO: define files
-
-
-class ChatMessage(BaseModel):
-    """Combines a chat with its associated messages."""
-
-    chat: Chat
-    messages: list[Message]
 
 
 Transport = Literal["command", "sse", "websocket"]
