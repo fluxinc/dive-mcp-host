@@ -1,5 +1,5 @@
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import BaseTool
@@ -8,8 +8,12 @@ from langgraph.prebuilt.tool_node import ToolNode
 from dive_mcp.host.agents import AgentFactory, get_chat_agent_factory
 from dive_mcp.host.conf import HostConfig
 from dive_mcp.host.conversation import Conversation
+from dive_mcp.host.helpers.checkpointer import get_checkpointer
 from dive_mcp.host.helpers.context import ContextProtocol
 from dive_mcp.models import load_model
+
+if TYPE_CHECKING:
+    from langgraph.checkpoint.base import BaseCheckpointSaver
 
 
 class DiveMcpHost(ContextProtocol):
@@ -61,14 +65,20 @@ class DiveMcpHost(ContextProtocol):
         self._config = config
         self._model: BaseChatModel | None = None
         self._tools: Sequence[BaseTool] = []
+        self._checkpointer: BaseCheckpointSaver | None = None
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
         try:
-            # TODO: Add database context
-            # async with database:
-            #     yield self
-            await self._init_models()
-            yield self
+            if self._config.checkpointer:
+                async with get_checkpointer(
+                    str(self._config.checkpointer.uri),
+                ) as checkpointer:
+                    self._checkpointer = checkpointer
+                    await self._init_models()
+                    yield self
+            else:
+                await self._init_models()
+                yield self
         except Exception as e:
             raise e
 
@@ -130,6 +140,7 @@ class DiveMcpHost(ContextProtocol):
             agent_factory=agent_factory,
             thread_id=thread_id,
             user_id=user_id,
+            checkpointer=self._checkpointer,
         )
 
     async def reload(
