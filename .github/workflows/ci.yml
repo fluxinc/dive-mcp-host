@@ -6,6 +6,13 @@ jobs:
   lint-and-test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mcp
+          POSTGRES_PASSWORD: mcp
+
     steps:
     - uses: actions/checkout@v4
 
@@ -25,5 +32,8 @@ jobs:
         ruff format --config pyproject.toml --check .
 
     - name: Test with pytest
+      env:
+        POSTGRES_URI: postgres://mcp:mcp@postgres:5432/mcp
+        SQLITE_URI: sqlite:///dummy_checkpointer.db
       run: |
         pytest

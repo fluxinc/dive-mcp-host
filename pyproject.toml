@@ -28,6 +28,7 @@ dependencies = [
     "pydantic>=2.10",
     "pywin32>=306; sys_platform == 'win32' or platform_system == 'Windows'",
     "sqlite-vec>=0.1.0",
+    "psycopg[binary]>=3.2.5",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -49,6 +50,7 @@ Homepage = "https://github.com/OpenAgentPlatform/dive-mcp-py"
 
 [project.scripts]
 dive_httpd = "dive_mcp_host.httpd:main"
+dive_cli = "dive_mcp.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -67,6 +69,7 @@ lint.extend-select = ["I"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "ANN", "D107"]  # Allow assert statements in test files
+"dive_mcp/cli/**/*.py" = ["S101", "ANN", "D107", "T201"]  # Allow assert statements in test files
 
 [tool.ruff.format]
 quote-style = "double"

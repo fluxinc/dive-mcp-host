@@ -78,6 +78,11 @@ Install development dependencies:
 pip install -e ".[dev]"
 ```
 
+(Optional) Start local PostgreSQL
+```
+./scripts/run_pg.sh
+```
+
 Run tests:
 
 ```bash
