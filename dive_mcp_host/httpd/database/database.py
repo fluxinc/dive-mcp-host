@@ -7,7 +7,6 @@ from .models import (
     ChatMessage,
     Message,
     QueryInput,
-    ResourceUsage,
 )
 
 
@@ -67,14 +66,12 @@ class AbstractMessageStore(ABC):
         self,
         message: Message,
         user_id: str,
-        resource_usage: ResourceUsage,
     ) -> Message:
         """Create a new message.
 
         Args:
             message: NewMessage object containing message data.
             user_id: User ID or fingerprint, depending on the prefix.
-            resource_usage: Resource usage information.
 
         Returns:
             Created Message object.
@@ -128,7 +125,6 @@ class AbstractMessageStore(ABC):
         message_id: str,
         data: QueryInput,
         user_id: str,
-        resource_usage: ResourceUsage,
     ) -> Message:
         """Update the content of a message.
 
@@ -136,7 +132,6 @@ class AbstractMessageStore(ABC):
             message_id: Unique identifier for the message.
             data: New content for the message.
             user_id: User ID or fingerprint, depending on the prefix.
-            resource_usage: Resource usage information.
 
         Returns:
             Updated Message object.
