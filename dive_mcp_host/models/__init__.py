@@ -38,8 +38,9 @@ def load_model(
     # XXX Pass configurations/parameters to the model
 
     if provider == "dive":
+        model_name_lower = model_name.replace("-", "_").replace(".", "_").lower()
         model_module = import_module(
-            f"dive_mcp.models.{model_name.replace('-', '_').replace('.', '_').lower()}",
+            f"dive_mcp_host.models.{model_name_lower}",
         )
         model = model_module.load_model(*args, **kwargs)
     elif provider == "__load__":

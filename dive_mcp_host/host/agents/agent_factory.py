@@ -7,7 +7,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver, V
 from langgraph.graph.graph import CompiledGraph
 from langgraph.store.base import BaseStore
 
-from dive_mcp.host.prompt import PromptType
+from dive_mcp_host.host.prompt import PromptType
 
 
 # XXX is there any better way to do this?

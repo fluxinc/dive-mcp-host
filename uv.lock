@@ -268,7 +268,7 @@ wheels = [
 ]
 
 [[package]]
-name = "dive-mcp"
+name = "dive-mcp-host"
 version = "0.0.1"
 source = { editable = "." }
 dependencies = [

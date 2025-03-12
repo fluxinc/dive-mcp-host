@@ -5,12 +5,12 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import BaseTool
 from langgraph.prebuilt.tool_node import ToolNode
 
-from dive_mcp.host.agents import AgentFactory, get_chat_agent_factory
-from dive_mcp.host.conf import HostConfig
-from dive_mcp.host.conversation import Conversation
-from dive_mcp.host.helpers.checkpointer import get_checkpointer
-from dive_mcp.host.helpers.context import ContextProtocol
-from dive_mcp.models import load_model
+from dive_mcp_host.host.agents import AgentFactory, get_chat_agent_factory
+from dive_mcp_host.host.conf import HostConfig
+from dive_mcp_host.host.conversation import Conversation
+from dive_mcp_host.host.helpers.checkpointer import get_checkpointer
+from dive_mcp_host.host.helpers.context import ContextProtocol
+from dive_mcp_host.models import load_model
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
