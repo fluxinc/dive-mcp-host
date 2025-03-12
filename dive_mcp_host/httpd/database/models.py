@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class LLMModel(BaseModel):
+class ResourceUsage(BaseModel):
     """Represents information about a language model's usage statistics."""
 
     model: str
@@ -57,7 +57,7 @@ class Message(BaseModel):
     role: str
     chat_id: str = Field(alias="chatId")
     message_id: str = Field(alias="messageId")
-    files: object  # TODO: define files
+    resource_usage: ResourceUsage | None = None
 
 
 class ChatMessage(BaseModel):

@@ -1,11 +1,12 @@
 from contextlib import AbstractAsyncContextManager
 
-from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 
-def get_checkpointer(uri: str) -> AbstractAsyncContextManager[BaseCheckpointSaver]:
+def get_checkpointer(
+    uri: str,
+) -> AbstractAsyncContextManager[AsyncSqliteSaver | AsyncPostgresSaver]:
     """Get an appropriate async checkpointer based on the database connection string.
 
     Args:
@@ -22,6 +23,6 @@ def get_checkpointer(uri: str) -> AbstractAsyncContextManager[BaseCheckpointSave
     if uri.startswith("sqlite"):
         path = uri.removeprefix("sqlite:///")
         return AsyncSqliteSaver.from_conn_string(path)
-    if uri.startswith("postgres"):
+    if uri.startswith("postgresql"):
         return AsyncPostgresSaver.from_conn_string(uri)
     raise ValueError(f"Unsupported database: {uri}")
