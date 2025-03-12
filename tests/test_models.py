@@ -7,11 +7,11 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 
-from dive_mcp.host.agents.chat_agent import AgentState
-from dive_mcp.host.conf import LLMConfig
-from dive_mcp.host.helpers import today_datetime
-from dive_mcp.models import load_model
-from dive_mcp.models.fake import FakeMessageToolModel
+from dive_mcp_host.host.agents.chat_agent import AgentState
+from dive_mcp_host.host.conf import LLMConfig
+from dive_mcp_host.host.helpers import today_datetime
+from dive_mcp_host.models import load_model
+from dive_mcp_host.models.fake import FakeMessageToolModel
 
 
 @pytest.mark.asyncio
@@ -95,5 +95,5 @@ def test_load_langchain_model() -> None:
 
 def test_load__load__model() -> None:
     """Test the load __load__ model."""
-    model = load_model("__load__", "dive_mcp.models.fake:FakeMessageToolModel")
+    model = load_model("__load__", "dive_mcp_host.models.fake:FakeMessageToolModel")
     assert isinstance(model, FakeMessageToolModel)

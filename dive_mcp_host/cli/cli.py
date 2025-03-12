@@ -5,9 +5,9 @@ from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from dive_mcp.cli.cli_types import CLIArgs
-from dive_mcp.host.conf import HostConfig
-from dive_mcp.host.host import DiveMcpHost
+from dive_mcp_host.cli.cli_types import CLIArgs
+from dive_mcp_host.host.conf import HostConfig
+from dive_mcp_host.host.host import DiveMcpHost
 
 
 def parse_query(args: type[CLIArgs]) -> HumanMessage:

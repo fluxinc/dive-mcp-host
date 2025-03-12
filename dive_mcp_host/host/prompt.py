@@ -2,7 +2,7 @@
 
 from langchain_core.messages import SystemMessage
 
-from dive_mcp.host.helpers import today_datetime
+from dive_mcp_host.host.helpers import today_datetime
 
 PromptType = SystemMessage | str
 

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "dive_mcp"
+name = "dive-mcp-host"
 version = "0.0.1"
 description = "A MCP host for Dive"
 readme = "README.md"
@@ -50,7 +50,7 @@ Homepage = "https://github.com/OpenAgentPlatform/dive-mcp-py"
 
 [project.scripts]
 dive_httpd = "dive_mcp_host.httpd:main"
-dive_cli = "dive_mcp.cli:main"
+dive_cli = "dive_mcp_host.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -69,7 +69,7 @@ lint.extend-select = ["I"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "ANN", "D107"]  # Allow assert statements in test files
-"dive_mcp/cli/**/*.py" = ["S101", "ANN", "D107", "T201"]  # Allow assert statements in test files
+"dive_mcp_host/cli/**/*.py" = ["S101", "ANN", "D107", "T201"]  # Allow assert statements in test files
 
 [tool.ruff.format]
 quote-style = "double"

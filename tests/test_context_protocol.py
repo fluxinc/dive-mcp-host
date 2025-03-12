@@ -3,7 +3,7 @@ from typing import Self
 
 import pytest
 
-from dive_mcp.host.helpers.context import ContextProtocol
+from dive_mcp_host.host.helpers.context import ContextProtocol
 
 
 class FakeContextImplementation(ContextProtocol):

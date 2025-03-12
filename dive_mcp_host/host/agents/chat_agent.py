@@ -18,9 +18,9 @@ from langgraph.prebuilt import create_react_agent  # type: ignore[arg-type]
 from langgraph.prebuilt.tool_node import ToolNode
 from langgraph.store.base import BaseStore
 
-from dive_mcp.host.agents.agent_factory import AgentFactory, initial_messages
-from dive_mcp.host.helpers import today_datetime
-from dive_mcp.host.prompt import PromptType
+from dive_mcp_host.host.agents.agent_factory import AgentFactory, initial_messages
+from dive_mcp_host.host.helpers import today_datetime
+from dive_mcp_host.host.prompt import PromptType
 
 
 class AgentState(TypedDict):

@@ -1,6 +1,6 @@
 import pytest
 
-from dive_mcp.host.helpers.checkpointer import get_checkpointer
+from dive_mcp_host.host.helpers.checkpointer import get_checkpointer
 from tests.helper import POSTGRES_URI, SQLITE_URI
 
 

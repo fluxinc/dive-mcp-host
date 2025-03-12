@@ -11,9 +11,9 @@ from langgraph.types import StreamMode
 if TYPE_CHECKING:
     from langgraph.graph.graph import CompiledGraph
 
-from dive_mcp.host.agents import AgentFactory, V
-from dive_mcp.host.helpers.context import ContextProtocol
-from dive_mcp.host.prompt import default_system_prompt
+from dive_mcp_host.host.agents import AgentFactory, V
+from dive_mcp_host.host.helpers.context import ContextProtocol
+from dive_mcp_host.host.prompt import default_system_prompt
 
 
 class Conversation[T](ContextProtocol):

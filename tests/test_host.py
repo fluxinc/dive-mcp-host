@@ -1,8 +1,8 @@
 import pytest
 
-from dive_mcp.host.conf import HostConfig, LLMConfig
-from dive_mcp.host.host import DiveMcpHost
-from dive_mcp.models.fake import default_responses
+from dive_mcp_host.host.conf import HostConfig, LLMConfig
+from dive_mcp_host.host.host import DiveMcpHost
+from dive_mcp_host.models.fake import default_responses
 
 
 @pytest.mark.asyncio
