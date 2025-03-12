@@ -1,6 +1,7 @@
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 
 from .models import Chat, ChatMessage, ResultResponse
 
@@ -9,7 +10,7 @@ chat = APIRouter(prefix="/chat", tags=["chat"])
 T = TypeVar("T")
 
 
-class DataResult[T](ResultResponse):
+class DataResult(ResultResponse, Generic[T]):
     """Generic result that extends ResultResponse with a data field."""
 
     data: T | None
@@ -21,6 +22,36 @@ async def list_chat() -> DataResult[list[Chat]]:
 
     Returns:
         DataResult[list[Chat]]: List of available chats.
+    """
+    raise NotImplementedError
+
+
+@chat.post("/")
+async def create_chat(chat: Chat) -> StreamingResponse:
+    """Create a new chat.
+
+    Args:
+        chat (Chat): The chat to create.
+    """
+    raise NotImplementedError
+
+
+@chat.post("/edit")
+async def edit_chat(chat: Chat) -> StreamingResponse:
+    """Edit a chat.
+
+    Args:
+        chat (Chat): The chat to edit.
+    """
+    raise NotImplementedError
+
+
+@chat.post("/retry")
+async def retry_chat(chat: Chat) -> StreamingResponse:
+    """Retry a chat.
+
+    Args:
+        chat (Chat): The chat to retry.
     """
     raise NotImplementedError
 
