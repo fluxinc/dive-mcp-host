@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class LLMModel(BaseModel):
+class ResourceUsage(BaseModel):
     """Represents information about a language model's usage statistics."""
 
     model: str
@@ -12,26 +12,7 @@ class LLMModel(BaseModel):
     total_run_time: int
 
 
-class Options(BaseModel):
-    """Contains configuration options for user sessions and model usage."""
-
-    user_access_token: str | None
-    fingerprint: str | None
-    llm_model: LLMModel | None = Field(alias="LLM_Model")
-
-
-class NewMessage(BaseModel):
-    """Represents a newly created message in a chat conversation."""
-
-    role: str
-    content: str
-    created_at: datetime = Field(alias="createdAt")
-    chat_id: str = Field(alias="chatId")
-    message_id: str = Field(alias="messageId")
-    files: object  # TODO unknown struct
-    id: int | None
-
-
+# NOTE: Currently not used
 class QueryInput(BaseModel):
     """User input for a query with text, images and documents."""
 
@@ -57,7 +38,7 @@ class Message(BaseModel):
     role: str
     chat_id: str = Field(alias="chatId")
     message_id: str = Field(alias="messageId")
-    files: object  # TODO: define files
+    resource_usage: ResourceUsage | None = None
 
 
 class ChatMessage(BaseModel):
