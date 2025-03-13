@@ -149,7 +149,7 @@ async def test_get_all_chats(
     chats = await message_store.get_all_chats(sample_chat.user_id)
 
     # Verify results
-    assert len(chats) == 2  # noqa: PLR2004
+    assert len(chats) == 2
     assert all(isinstance(chat, Chat) for chat in chats)
     assert any(chat.id == sample_chat.id for chat in chats)
     assert any(chat.id == another_chat.id for chat in chats)
@@ -172,7 +172,7 @@ async def test_get_chat_with_messages(
     assert chat_with_messages is not None
     assert isinstance(chat_with_messages, ChatMessage)
     assert chat_with_messages.chat.id == sample_chat.id
-    assert len(chat_with_messages.messages) == 2  # noqa: PLR2004
+    assert len(chat_with_messages.messages) == 2
 
     # Check message roles
     roles = [msg.role for msg in chat_with_messages.messages]
@@ -371,7 +371,8 @@ async def test_get_next_ai_message_error(
     """Test error when getting next AI message for an assistant message."""
     # Try to get next AI message for an assistant message
     with pytest.raises(
-        ValueError, match="Can only get next AI message for user messages"
+        ValueError,
+        match="Can only get next AI message for user messages",
     ):
         await message_store.get_next_ai_message(
             sample_chat.id,
