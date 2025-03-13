@@ -2,9 +2,10 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from .database import SqliteDatabase
-from .middlewares import KwargsMiddleware
+from .middlewares import KwargsMiddleware, error_handler
 from .routers import chat, config, model_verify, openai, tools
 from .store.local import LocalStore
 
@@ -24,6 +25,7 @@ app = FastAPI(lifespan=lifespan)
 
 kwargs_func = {}
 
+app.add_middleware(BaseHTTPMiddleware, dispatch=error_handler)
 app.add_middleware(KwargsMiddleware, kwargs_func=kwargs_func)
 app.include_router(openai)
 app.include_router(chat, prefix="/api")

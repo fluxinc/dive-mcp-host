@@ -58,36 +58,6 @@ def event_stream(
     )
 
 
-async def preapre_query_input(
-    store: Store,
-    message: str | None,
-    files: list[UploadFile] | None,
-    filepaths: list[str] | None,
-) -> QueryInput:
-    """Prepare the query input for the chat.
-
-    Args:
-        store (Store): The store object.
-        message (str | None): The message to send.
-        files (list[UploadFile] | None): The files to upload.
-        filepaths (list[str] | None): The file paths to upload.
-    """
-    query_input = QueryInput(text=message, images=None, documents=None)
-
-    if files is None:
-        files = []
-
-    if filepaths is None:
-        filepaths = []
-
-    images, documents = await store.upload_files(files, filepaths)
-
-    query_input.images = images
-    query_input.documents = documents
-
-    return query_input
-
-
 @chat.post("")
 async def create_chat(
     request: Request,
@@ -109,8 +79,16 @@ async def create_chat(
     db: Database = request.app.state.db
     db_opts = request.state.get_kwargs("db_opts")
 
+    if files is None:
+        files = []
+
+    if filepaths is None:
+        filepaths = []
+
+    images, documents = await store.upload_files(files, filepaths)
+
     async def process() -> AsyncGenerator[str, None]:
-        query_input = await preapre_query_input(store, message, files, filepaths)
+        query_input = QueryInput(text=message, images=images, documents=documents)
         # TODO: send query to LLM
 
         yield "[Done]"
@@ -144,8 +122,16 @@ async def edit_chat(
     if chat_id is None or message_id is None:
         raise UserInputError("Chat ID and Message ID are required")
 
+    if files is None:
+        files = []
+
+    if filepaths is None:
+        filepaths = []
+
+    images, documents = await store.upload_files(files, filepaths)
+
     async def process() -> AsyncGenerator[str, None]:
-        query_input = await preapre_query_input(store, content, files, filepaths)
+        query_input = QueryInput(text=content, images=images, documents=documents)
         await db.update_message_content(message_id, query_input, **db_opts)
         next_ai_message = await db.get_next_ai_message(chat_id, message_id, **db_opts)
         # TODO: send query to LLM
