@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -9,7 +10,7 @@ class ResourceUsage(BaseModel):
     model: str
     total_input_tokens: int
     total_output_tokens: int
-    total_run_time: int
+    total_run_time: float
 
 
 # NOTE: Currently not used
@@ -27,6 +28,24 @@ class Chat(BaseModel):
     id: str
     title: str
     created_at: datetime = Field(alias="createdAt")
+    user_id: str
+
+
+class Role(StrEnum):
+    """Role for Messages."""
+
+    ASSISTANT = "assistant"
+    USER = "user"
+
+
+class NewMessage(BaseModel):
+    """Represents a message within a chat conversation."""
+
+    content: str
+    role: Role
+    chat_id: str = Field(alias="chatId")
+    message_id: str = Field(alias="messageId")
+    resource_usage: ResourceUsage | None = None
 
 
 class Message(BaseModel):
@@ -35,7 +54,7 @@ class Message(BaseModel):
     id: int
     create_at: datetime = Field(alias="createdAt")
     content: str
-    role: str
+    role: Role
     chat_id: str = Field(alias="chatId")
     message_id: str = Field(alias="messageId")
     resource_usage: ResourceUsage | None = None

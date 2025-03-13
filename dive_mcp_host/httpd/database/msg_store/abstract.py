@@ -1,31 +1,20 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+# new abstraction for database
 
-from .message_store_abc import AbstractMessageStore
-from .models import (
+from abc import ABC, abstractmethod
+
+from dive_mcp.httpd.database.models import (
     Chat,
     ChatMessage,
     Message,
+    NewMessage,
     QueryInput,
 )
-from .orm_models import (
-    Chat as ORMChat,
-)
-from .orm_models import (
-    Message as ORMMessage,
-)
 
 
-class MessageStore(AbstractMessageStore):
-    """Message store."""
+class AbstractMessageStore(ABC):
+    """Abstract base class for database operations."""
 
-    def __init__(self, session: AsyncSession) -> None:
-        """Initialize the message store.
-
-        Args:
-            session: SQLAlchemy async session.
-        """
-        self.session = session
-
+    @abstractmethod
     async def get_all_chats(
         self,
         user_id: str,
@@ -38,8 +27,8 @@ class MessageStore(AbstractMessageStore):
         Returns:
             List of Chat objects.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     async def get_chat_with_messages(
         self,
         chat_id: str,
@@ -54,8 +43,8 @@ class MessageStore(AbstractMessageStore):
         Returns:
             ChatMessage object or None if not found.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     async def create_chat(
         self,
         chat_id: str,
@@ -72,12 +61,11 @@ class MessageStore(AbstractMessageStore):
         Returns:
             Created Chat object or None if creation failed.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     async def create_message(
         self,
-        message: Message,
-        user_id: str,
+        message: NewMessage,
     ) -> Message:
         """Create a new message.
 
@@ -88,8 +76,8 @@ class MessageStore(AbstractMessageStore):
         Returns:
             Created Message object.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     async def check_chat_exists(
         self,
         chat_id: str,
@@ -104,8 +92,8 @@ class MessageStore(AbstractMessageStore):
         Returns:
             True if chat exists, False otherwise.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     async def delete_chat(self, chat_id: str, user_id: str) -> None:
         """Delete a chat from the database.
 
@@ -113,13 +101,12 @@ class MessageStore(AbstractMessageStore):
             chat_id: Unique identifier for the chat.
             user_id: User ID or fingerprint, depending on the prefix.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     async def delete_messages_after(
         self,
         chat_id: str,
         message_id: str,
-        user_id: str,
     ) -> None:
         """Delete all messages after a specific message in a chat.
 
@@ -129,8 +116,8 @@ class MessageStore(AbstractMessageStore):
             user_id: User ID or fingerprint, depending on the prefix.
         """
 
-    # NOTE: Currently not used
-    #       Arguments might need to change, uncertain about the usecase
+    # NOTE: Might change, currently not used
+    @abstractmethod
     async def update_message_content(
         self,
         message_id: str,
@@ -147,10 +134,8 @@ class MessageStore(AbstractMessageStore):
         Returns:
             Updated Message object.
         """
-        raise NotImplementedError
 
-    # NOTE: Currently not used
-    #       Arguments might need to change, uncertain about the usecase
+    @abstractmethod
     async def get_next_ai_message(self, chat_id: str, message_id: str) -> Message:
         """Get the next AI message after a specific message.
 
@@ -161,4 +146,3 @@ class MessageStore(AbstractMessageStore):
         Returns:
             Next AI Message object.
         """
-        raise NotImplementedError

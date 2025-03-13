@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Text
+from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Index, Integer, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -36,6 +36,7 @@ class Chat(Base):
     """
 
     __tablename__ = "chats"
+    __table_args__ = (Index("idx_chats_user_id", "user_id", postgresql_using="hash"),)
     id: Mapped[str] = mapped_column(Text(), primary_key=True)
     title: Mapped[str] = mapped_column(Text())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -54,18 +55,29 @@ class Message(Base):
 
     Attributes:
         id: Message ID.
+        created_at: Message creation timestamp.
         content: Message content.
         role: Message role.
         chat_id: Chat ID.
+        message_id: Message ID.
     """
 
     __tablename__ = "messages"
-    id: Mapped[int] = mapped_column(BigInteger(), primary_key=True)
+    __table_args__ = (
+        Index("messages_message_id_index", "message_id", postgresql_using="hash"),
+        Index("idx_messages_chat_id", "chat_id", postgresql_using="hash"),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer(), "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     content: Mapped[str] = mapped_column(Text())
     role: Mapped[str] = mapped_column(Text())
     chat_id: Mapped[str] = mapped_column(ForeignKey("chats.id", ondelete="CASCADE"))
-    message_id: Mapped[str] = mapped_column(Text())
+    message_id: Mapped[str] = mapped_column(Text(), unique=True)
 
     chat: Mapped["Chat"] = relationship(foreign_keys=chat_id, back_populates="messages")
     resource_usage: Mapped["ResourceUsage"] = relationship(
@@ -86,14 +98,19 @@ class ResourceUsage(Base):
     """
 
     __tablename__ = "resource_usage"
-    id: Mapped[int] = mapped_column(BigInteger(), primary_key=True)
-    message_id: Mapped[int] = mapped_column(
-        ForeignKey("messages.id", ondelete="CASCADE"),
+    __table_args__ = (Index("idx_resource_usage_message_id", "message_id"),)
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer(), "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
+    message_id: Mapped[str] = mapped_column(
+        ForeignKey("messages.message_id", ondelete="CASCADE"),
     )
     model: Mapped[str] = mapped_column(Text())
     total_input_tokens: Mapped[int] = mapped_column(BigInteger())
     total_output_tokens: Mapped[int] = mapped_column(BigInteger())
-    total_run_time: Mapped[int] = mapped_column(BigInteger())
+    total_run_time: Mapped[float] = mapped_column(Float())
 
     message: Mapped["Message"] = relationship(
         foreign_keys=message_id,
