@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "dive_mcp"
+name = "dive-mcp-host"
 version = "0.0.1"
 description = "A MCP host for Dive"
 readme = "README.md"
@@ -28,6 +28,7 @@ dependencies = [
     "pydantic>=2.10",
     "pywin32>=306; sys_platform == 'win32' or platform_system == 'Windows'",
     "sqlite-vec>=0.1.0",
+    "psycopg[binary]>=3.2.5",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -49,6 +50,7 @@ Homepage = "https://github.com/OpenAgentPlatform/dive-mcp-py"
 
 [project.scripts]
 dive_httpd = "dive_mcp_host.httpd:main"
+dive_cli = "dive_mcp_host.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -60,13 +62,14 @@ asyncio_default_fixture_loop_scope = "function"
 [tool.ruff]
 target-version = "py312"
 line-length = 88
-select = ["E", "F", "B", "I", "W", "C90", "N", "D", "UP", "ANN", "S", "BLE", "A", "COM", "C4", "DTZ", "T10", "EM", "EXE", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "NPY", "RUF"]
-ignore = ["ANN401", "D100", "D104", "D105", "EM", "ERA001"]
+lint.select = ["E", "F", "B", "I", "W", "C90", "N", "D", "UP", "ANN", "S", "BLE", "A", "COM", "C4", "DTZ", "T10", "EM", "EXE", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "NPY", "RUF"]
+lint.ignore = ["ANN401", "D100", "D104", "D105", "EM", "ERA001"]
 # Follow Google Style Guide
-extend-select = ["I"]
+lint.extend-select = ["I"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "ANN", "D107"]  # Allow assert statements in test files
+"dive_mcp_host/cli/**/*.py" = ["S101", "ANN", "D107", "T201"]  # Allow assert statements in test files
 
 [tool.ruff.format]
 quote-style = "double"

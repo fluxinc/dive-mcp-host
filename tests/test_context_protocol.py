@@ -3,7 +3,7 @@ from typing import Self
 
 import pytest
 
-from dive_mcp.host.helpers.context import ContextProtocol
+from dive_mcp_host.host.helpers.context import ContextProtocol
 
 
 class FakeContextImplementation(ContextProtocol):
@@ -67,7 +67,7 @@ async def test_context_with_exception():
         async with context as ctx:
             assert context is ctx
             assert context.setup_called is True
-        raise ValueError("Test exception")
+            raise ValueError("Test exception")
 
     with pytest.raises(ValueError, match="Test exception"):
         await _f()

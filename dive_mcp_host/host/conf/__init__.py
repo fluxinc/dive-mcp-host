@@ -1,13 +1,20 @@
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import AnyUrl, BaseModel, Field, UrlConstraints
+
+SpecialProvider = Literal["dive", "__load__"]
+"""
+special providers:
+- dive: use the model in dive_mcp.models
+- __load__: load the model from the configuration
+"""
 
 
 class LLMConfig(BaseModel):
     """Configuration for the LLM model."""
 
     model: str = "gpt-4o"
-    provider: str = "openai"
+    provider: str | SpecialProvider = "openai"
     embed: str | None = None
     embed_dims: int = 0
     api_key: str | None = None

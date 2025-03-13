@@ -34,3 +34,4 @@ dmypy.json
 /site
 Pipfile.lock
 poetry.lock
+config.json

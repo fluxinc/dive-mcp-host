@@ -1,15 +1,19 @@
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import BaseTool
 from langgraph.prebuilt.tool_node import ToolNode
 
-from dive_mcp.host.agent import get_chat_agent_factory
-from dive_mcp.host.agent_factory import AgentFactory
-from dive_mcp.host.conf import HostConfig
-from dive_mcp.host.conversation import Conversation
-from dive_mcp.host.helpers.context import ContextProtocol
+from dive_mcp_host.host.agents import AgentFactory, get_chat_agent_factory
+from dive_mcp_host.host.conf import HostConfig
+from dive_mcp_host.host.conversation import Conversation
+from dive_mcp_host.host.helpers.checkpointer import get_checkpointer
+from dive_mcp_host.host.helpers.context import ContextProtocol
+from dive_mcp_host.models import load_model
+
+if TYPE_CHECKING:
+    from langgraph.checkpoint.base import BaseCheckpointSaver
 
 
 class DiveMcpHost(ContextProtocol):
@@ -26,14 +30,24 @@ class DiveMcpHost(ContextProtocol):
     Example:
         # Initialize host with configuration
         config = HostConfig(...)
+        thread_id = ""
         async with DiveMcpHost(config) as host:
             # Send a message and get response
-            async with host.conversation(thread_id="123") as conversation:
+            async with host.conversation() as conversation:
                 while query := input("Enter a message: "):
                     if query == "exit":
+                        nonlocal thread_id
+                        # save the thread_id for resume
+                        thread_id = conversation.thread_id
                         break
                     async for response in await conversation.query(query):
                         print(response)
+        ...
+        # Resume conversation
+        async with DiveMcpHost(config) as host:
+            # pass the thread_id to resume the conversation
+            async with host.conversation(thread_id=thread_id) as conversation:
+                ...
 
     The host must be used as an async context manager to ensure proper resource
     management, including model initialization and cleanup.
@@ -47,19 +61,24 @@ class DiveMcpHost(ContextProtocol):
 
         Args:
             config: The host configuration.
-            agent_factory_creator: The agent factory creator.
         """
         self._config = config
         self._model: BaseChatModel | None = None
         self._tools: Sequence[BaseTool] = []
+        self._checkpointer: BaseCheckpointSaver | None = None
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
         try:
-            # TODO: Add database context
-            # async with database:
-            #     yield self
-            await self._init_models()
-            yield self
+            if self._config.checkpointer:
+                async with get_checkpointer(
+                    str(self._config.checkpointer.uri),
+                ) as checkpointer:
+                    self._checkpointer = checkpointer
+                    await self._init_models()
+                    yield self
+            else:
+                await self._init_models()
+                yield self
         except Exception as e:
             raise e
 
@@ -71,9 +90,20 @@ class DiveMcpHost(ContextProtocol):
     async def _init_models(self) -> None:
         if self._model:
             return
-        raise NotImplementedError
+        model_config = self._config.llm
+        kwargs = model_config.model_dump(exclude_unset=True)
+        if "model" in kwargs:
+            kwargs.pop("model")
+        if "provider" in kwargs:
+            kwargs.pop("provider")
+        model = load_model(
+            model_config.provider,
+            model_config.model,
+            **kwargs,
+        )
+        self._model = model
 
-    async def conversation[T](
+    def conversation[T](
         self,
         *,
         thread_id: str | None = None,
@@ -110,6 +140,7 @@ class DiveMcpHost(ContextProtocol):
             agent_factory=agent_factory,
             thread_id=thread_id,
             user_id=user_id,
+            checkpointer=self._checkpointer,
         )
 
     async def reload(

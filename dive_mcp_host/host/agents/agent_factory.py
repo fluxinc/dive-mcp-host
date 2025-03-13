@@ -1,17 +1,13 @@
-from collections.abc import Sequence
-from typing import Protocol, Self
+from typing import Protocol
 
-from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables.config import RunnableConfig
-from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver, V
 from langgraph.graph.graph import CompiledGraph
-from langgraph.prebuilt.tool_node import ToolNode
 from langgraph.store.base import BaseStore
 
-from dive_mcp.host.prompt import PromptType
+from dive_mcp_host.host.prompt import PromptType
 
 
 # XXX is there any better way to do this?
@@ -22,15 +18,6 @@ class AgentFactory[T](Protocol):
     Pass the factory to the host to create an agent for the conversation.
     """
 
-    @classmethod
-    def create_factory(
-        cls,
-        model: BaseChatModel,
-        tools: Sequence[BaseTool] | ToolNode,
-    ) -> Self:
-        """Create an agent factory."""
-        ...
-
     def create_agent(
         self,
         *,
@@ -39,7 +26,17 @@ class AgentFactory[T](Protocol):
         store: BaseStore | None = None,
         debug: bool = False,
     ) -> CompiledGraph:
-        """Create an agent."""
+        """Create an agent.
+
+        Args:
+            prompt: The prompt to use for the agent.
+            checkpointer: A langgraph checkpointer to keep the agent's state.
+            store: A langgraph store for long-term memory.
+            debug: Whether to enable debug mode for the agent.
+
+        Returns:
+            The compiled agent.
+        """
         ...
 
     def create_config(
@@ -79,7 +76,7 @@ class AgentFactory[T](Protocol):
     def state_type(
         self,
     ) -> type[T]:
-        """Create an agent factory."""
+        """Get type of the state."""
         ...
 
     def create_prompt(
@@ -95,18 +92,9 @@ class AgentFactory[T](Protocol):
         return ChatPromptTemplate.from_messages(  # type: ignore[arg-type]
             [
                 ("system", system_prompt),
-                ("placeholder", self.placeholder()),
+                ("placeholder", "{messages}"),
             ],
         )
-
-    def placeholder(
-        self,
-    ) -> str:
-        """Return a placeholder of prompt for the agent.
-
-        The default implementation returns "{messages}".
-        """
-        return "{messages}"
 
 
 def initial_messages(
@@ -114,10 +102,15 @@ def initial_messages(
 ) -> list[HumanMessage]:
     """Create an initial message for your state.
 
+    The state must contain a 'messages' key with type list[HumanMessage].
+    This utility helps convert the query into list[HumanMessage], regardless of whether
+    the query is a str or HumanMessage.
+
     Args:
         query: The query to create the initial message from.
 
     Returns:
         A list of HumanMessage objects.
+
     """
     return [HumanMessage(content=query)] if isinstance(query, str) else [query]

@@ -11,10 +11,9 @@ from langgraph.types import StreamMode
 if TYPE_CHECKING:
     from langgraph.graph.graph import CompiledGraph
 
-from dive_mcp.host.helpers.context import ContextProtocol
-from dive_mcp.host.prompt import SYSTEM_PROMPT
-
-from .agent_factory import AgentFactory, V
+from dive_mcp_host.host.agents import AgentFactory, V
+from dive_mcp_host.host.helpers.context import ContextProtocol
+from dive_mcp_host.host.prompt import default_system_prompt
 
 
 class Conversation[T](ContextProtocol):
@@ -48,7 +47,7 @@ class Conversation[T](ContextProtocol):
         self._store = store
         self._checkpointer = checkpointer
         self._model = model
-        self._system_prompt = system_prompt if system_prompt else SYSTEM_PROMPT
+        self._system_prompt = system_prompt
         self._agent: CompiledGraph | None = None
         self._agent_factory: AgentFactory[T] = agent_factory
 
@@ -58,9 +57,11 @@ class Conversation[T](ContextProtocol):
         return self._thread_id
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
-        prompt = self._agent_factory.create_prompt(
-            system_prompt=self._system_prompt,
-        )
+        if self._system_prompt is None:
+            system_prompt = default_system_prompt()
+        else:
+            system_prompt = self._system_prompt
+        prompt = self._agent_factory.create_prompt(system_prompt=system_prompt)
         # we can do something to the prompt here.
         self._agent = self._agent_factory.create_agent(
             prompt=prompt,
@@ -70,7 +71,7 @@ class Conversation[T](ContextProtocol):
         yield self
         self._agent = None
 
-    async def query(
+    def query(
         self,
         query: str | HumanMessage,
         *,
