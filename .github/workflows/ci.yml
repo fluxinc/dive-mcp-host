@@ -28,8 +28,10 @@ jobs:
 
     - name: Test with pytest
       env:
-        POSTGRES_URI: postgres://mcp:mcp@postgres:5432/mcp
-        SQLITE_URI: sqlite:///dummy_checkpointer.db
+        POSTGRES_URI: postgresql://mcp:mcp@postgres:5432/mcp
+        POSTGRES_URI_ASYNC: postgresql+asyncpg://mcp:mcp@postgres:5432/mcp
+        SQLITE_URI: sqlite:///dummy.db
+        SQLITE_URI_ASYNC: sqlite+aiosqlite:///dummy.db
       run: |
         pytest
 

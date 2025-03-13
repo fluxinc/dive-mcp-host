@@ -50,11 +50,22 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_index("idx_resource_usage_message_id", table_name="resource_usage")
     op.drop_index(
-        "messages_message_id_index", table_name="messages", postgresql_using="hash"
+        "idx_resource_usage_message_id",
+        table_name="resource_usage",
     )
     op.drop_index(
-        "idx_messages_chat_id", table_name="messages", postgresql_using="hash"
+        "messages_message_id_index",
+        table_name="messages",
+        postgresql_using="hash",
     )
-    op.drop_index("idx_chats_user_id", table_name="chats", postgresql_using="hash")
+    op.drop_index(
+        "idx_messages_chat_id",
+        table_name="messages",
+        postgresql_using="hash",
+    )
+    op.drop_index(
+        "idx_chats_user_id",
+        table_name="chats",
+        postgresql_using="hash",
+    )
