@@ -74,8 +74,9 @@ class ToolManager(ContextProtocol):
 
         # we can manipulate the stack to add or remove tools
         async with self._async_exit_stack:
-            for tool in self._tools.values():
-                await self._async_exit_stack.enter_async_context(tool)
+            async with asyncio.TaskGroup() as tg:
+                for tool in self._tools.values():
+                    tg.create_task(self._async_exit_stack.enter_async_context(tool))
             yield self
 
 

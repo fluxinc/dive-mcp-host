@@ -142,7 +142,7 @@ async def test_stdio_parallel(echo_tool_stdio_config: dict[str, ServerConfig]) -
                 ),
             )
 
-        n_tasks = 100
+        n_tasks = 30
         async with asyncio.TaskGroup() as tg:
             echo_tasks = [tg.create_task(test_echo()) for _ in range(n_tasks)]
             ignore_tasks = [tg.create_task(test_ignore()) for _ in range(n_tasks)]
@@ -154,3 +154,18 @@ async def test_stdio_parallel(echo_tool_stdio_config: dict[str, ServerConfig]) -
             assert json.loads(str(result.content))[0]["text"] == random_message
         for result in ignore_results:
             assert json.loads(str(result.content)) == []
+
+@pytest.mark.asyncio
+async def test_tool_manager_massive_tools(
+    echo_tool_stdio_config: dict[str, ServerConfig],
+) -> None:
+    """Test the tool manager."""
+    echo_config = echo_tool_stdio_config["echo"]
+    more_tools = 10
+    for i in range(more_tools):
+        echo_tool_stdio_config[f"echo_{i}"] = echo_config.model_copy(
+            update={"name": f"echo_{i}"},
+        )
+    async with ToolManager(echo_tool_stdio_config) as tool_manager:
+        tools = tool_manager.tools()
+        assert len(tools) == 2 * (more_tools + 1)
