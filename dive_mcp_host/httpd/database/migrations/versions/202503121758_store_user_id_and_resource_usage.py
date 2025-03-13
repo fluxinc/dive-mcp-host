@@ -34,7 +34,12 @@ def upgrade() -> None:
         sa.Column("total_input_tokens", sa.BigInteger(), nullable=False),
         sa.Column("total_output_tokens", sa.BigInteger(), nullable=False),
         sa.Column("total_run_time", sa.BigInteger(), nullable=False),
-        sa.ForeignKeyConstraint(["message_id"], ["messages.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["message_id"],
+            ["messages.id"],
+            "resource_usage_message_id_fk",
+            ondelete="CASCADE",
+        ),
         sa.PrimaryKeyConstraint("id"),
         if_not_exists=True,
     )
@@ -65,7 +70,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Downgrade schema."""
     with op.batch_alter_table("messages") as batch_op:
-        batch_op.add_column(sa.Column("files", sa.TEXT(), nullable=False))
+        batch_op.add_column(sa.Column("files", sa.TEXT(), nullable=True))
         batch_op.alter_column(
             "id",
             existing_type=sa.BigInteger(),

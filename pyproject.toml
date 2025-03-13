@@ -30,8 +30,9 @@ dependencies = [
     "sqlite-vec>=0.1.0",
     "psycopg[binary]>=3.2.5",
     "alembic>=1.15.1,< 1.16", # Alembic doesn't use SemVer https://alembic.sqlalchemy.org/en/latest/front.html#versioning-scheme
-    "sqlalchemy>=2.0.38",
+    "sqlalchemy[asyncio]>=2.0.38",
     "psycopg2-binary>=2.9.10",
+    "asyncpg>=0.30.0",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
