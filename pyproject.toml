@@ -67,7 +67,7 @@ asyncio_default_fixture_loop_scope = "function"
 target-version = "py312"
 line-length = 88
 lint.select = ["E", "F", "B", "I", "W", "C90", "N", "D", "UP", "ANN", "S", "BLE", "A", "COM", "C4", "DTZ", "T10", "EM", "EXE", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "NPY", "RUF"]
-lint.ignore = ["ANN401", "D100", "D104", "D105", "EM", "ERA001"]
+lint.ignore = ["ANN401", "D100", "D104", "D105", "EM", "ERA001", "COM812"]
 # Follow Google Style Guide
 lint.extend-select = ["I"]
 
