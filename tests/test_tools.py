@@ -5,12 +5,16 @@ import secrets
 import signal
 from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import cast
 
 import pytest
 import pytest_asyncio
-from langchain_core.messages import ToolCall, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolCall, ToolMessage
 
+from dive_mcp_host.host.conf import HostConfig, LLMConfig
+from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.host.tools import ServerConfig, ToolManager
+from dive_mcp_host.models.fake import FakeMessageToolModel
 
 
 @pytest.fixture
@@ -155,11 +159,12 @@ async def test_stdio_parallel(echo_tool_stdio_config: dict[str, ServerConfig]) -
         for result in ignore_results:
             assert json.loads(str(result.content)) == []
 
+
 @pytest.mark.asyncio
 async def test_tool_manager_massive_tools(
     echo_tool_stdio_config: dict[str, ServerConfig],
 ) -> None:
-    """Test the tool manager."""
+    """Test starting the tool manager with a large number of tools."""
     echo_config = echo_tool_stdio_config["echo"]
     more_tools = 10
     for i in range(more_tools):
@@ -169,3 +174,44 @@ async def test_tool_manager_massive_tools(
     async with ToolManager(echo_tool_stdio_config) as tool_manager:
         tools = tool_manager.tools()
         assert len(tools) == 2 * (more_tools + 1)
+
+
+@pytest.mark.asyncio
+async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
+    """Test the host context initialization."""
+    config = HostConfig(
+        llm=LLMConfig(
+            model="fake",
+            provider="dive",
+        ),
+        mcp_servers=echo_tool_stdio_config,
+    )
+    async with DiveMcpHost(config) as mcp_host:
+        fake_responses = [
+            AIMessage(
+                content="Call echo tool",
+                tool_calls=[
+                    ToolCall(
+                        name="echo",
+                        args={"message": "Hello, world!"},
+                        id="123",
+                        type="tool_call",
+                    ),
+                ],
+            ),
+        ]
+        cast(FakeMessageToolModel, mcp_host._model).responses = fake_responses  # noqa: SLF001
+        async with mcp_host.conversation() as conversation:
+            responses = [
+                response
+                async for response in conversation.query(
+                    HumanMessage(content="Hello, world!"),
+                    stream_mode=["messages"],
+                )
+            ]
+            assert len(responses) == len(fake_responses) + 1  # plus one tool message
+            # need more understanding of the response structure
+            tool_message = responses[-1][1][0]  # type: ignore noqa: PGH003
+            assert isinstance(tool_message, ToolMessage)
+            assert tool_message.name == "echo"
+            assert json.loads(str(tool_message.content))[0]["text"] == "Hello, world!"

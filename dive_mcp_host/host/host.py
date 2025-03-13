@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
+from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Self
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -69,25 +70,21 @@ class DiveMcpHost(ContextProtocol):
         self._tools: Sequence[BaseTool] = []
         self._checkpointer: BaseCheckpointSaver[str] | None = None
         self._tool_manager: ToolManager = ToolManager(self._config.mcp_servers)
+        self._exit_stack: AsyncExitStack | None = None
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
-        try:
+        async with AsyncExitStack() as stack:
+            self._exit_stack = stack
+            await self._init_models()
             if self._config.checkpointer:
-                async with get_checkpointer(
-                    str(self._config.checkpointer.uri),
-                ) as checkpointer:
-                    self._checkpointer = checkpointer
-                    await self._init_models()
-                    yield self
-            else:
-                await self._init_models()
+                checkpointer = get_checkpointer(str(self._config.checkpointer.uri))
+                self._checkpointer = await stack.enter_async_context(checkpointer)
+            await stack.enter_async_context(self._tool_manager)
+            try:
+                self._tools = self._tool_manager.tools()
                 yield self
-        except Exception as e:
-            raise e
-
-    async def _init_tools(self) -> None:
-        if self._tools:
-            return
+            except Exception as e:
+                raise e
 
     async def _init_models(self) -> None:
         if self._model:

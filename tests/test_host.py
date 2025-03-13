@@ -1,4 +1,5 @@
 import pytest
+from langchain_core.messages import HumanMessage
 
 from dive_mcp_host.host.conf import HostConfig, LLMConfig
 from dive_mcp_host.host.host import DiveMcpHost
@@ -29,6 +30,16 @@ async def test_host_context() -> None:
                     stream_mode=None,
                 )
             ]
-            # assert len(responses) == len(espect_responses)
+            for res, expect in zip(responses, espect_responses, strict=True):
+                assert res.content == expect.content  # type: ignore[attr-defined]
+        conversation = mcp_host.conversation()
+        async with conversation:
+            responses = [
+                response["agent"]["messages"][0]
+                async for response in conversation.query(
+                    HumanMessage(content="Hello, world!"),
+                    stream_mode=None,
+                )
+            ]
             for res, expect in zip(responses, espect_responses, strict=True):
                 assert res.content == expect.content  # type: ignore[attr-defined]
