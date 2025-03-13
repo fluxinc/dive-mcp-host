@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
 
-
 class DiveMcpHost(ContextProtocol):
     """The Model Context Protocol (MCP) Host.
 

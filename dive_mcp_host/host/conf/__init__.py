@@ -53,6 +53,7 @@ class ServerConfig(BaseModel):
     exclude_tools: list[str] = Field(default_factory=list)
     url: str | None = None
 
+
 class HostConfig(BaseModel):
     """Configuration for the MCP host."""
 
