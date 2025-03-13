@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -17,7 +17,7 @@ config = APIRouter(prefix="/config", tags=["config"])
 T = TypeVar("T")
 
 
-class ConfigResult(ResultResponse, Generic[T]):
+class ConfigResult[T](ResultResponse):
     """Generic configuration result that extends ResultResponse with a config field."""
 
     config: T

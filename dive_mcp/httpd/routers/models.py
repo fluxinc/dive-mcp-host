@@ -2,7 +2,12 @@ from typing import Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..database.models import Chat, ChatMessage, Message  # noqa: F401, TID252
+from ..database.models import (  # noqa: F401, TID252
+    Chat,
+    ChatMessage,
+    Message,
+    QueryInput,
+)
 
 T = TypeVar("T")
 
@@ -100,3 +105,19 @@ class McpTool(BaseModel):
     description: str
     enabled: bool
     icon: str
+
+
+class UserInputError(Exception):
+    """User input error.
+
+    Args:
+        Exception (Exception): The exception.
+    """
+
+    def __init__(self, message: str) -> None:
+        """Initialize the error.
+
+        Args:
+            message (str): The error message.
+        """
+        self.message = message

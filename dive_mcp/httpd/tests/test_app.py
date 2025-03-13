@@ -5,13 +5,12 @@ import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
 
-from ..app import get_app  # noqa: TID252
+from ..app import app  # noqa: TID252
 
 
 @pytest_asyncio.fixture
 async def client() -> AsyncGenerator[TestClient, None]:
     """Setup the app for testing."""
-    app = await get_app()
     yield TestClient(app)
 
 
