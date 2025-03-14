@@ -41,21 +41,22 @@ class Role(StrEnum):
 class NewMessage(BaseModel):
     """Represents a message within a chat conversation."""
 
-    id: str = Field(alias="messageId")
     content: str
     role: Role
     chat_id: str = Field(alias="chatId")
+    message_id: str = Field(alias="messageId")
     resource_usage: ResourceUsage | None = None
 
 
 class Message(BaseModel):
     """Represents a message within a chat conversation."""
 
-    id: str = Field(alias="messageId")
-    created_at: datetime = Field(alias="createdAt")
+    id: int
+    create_at: datetime = Field(alias="createdAt")
     content: str
     role: Role
     chat_id: str = Field(alias="chatId")
+    message_id: str = Field(alias="messageId")
     resource_usage: ResourceUsage | None = None
 
 

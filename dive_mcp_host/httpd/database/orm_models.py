@@ -1,14 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import (
-    CHAR,
-    BigInteger,
-    DateTime,
-    Float,
-    ForeignKey,
-    Index,
-    Text,
-)
+from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Index, Integer, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -20,13 +12,11 @@ class Users(Base):
     """Users model.
 
     Attributes:
-        id: User ID
-        user_type: Optional user type
+        id: User ID or fingerprint, depending on the prefix.
     """
 
     __tablename__ = "users"
     id: Mapped[str] = mapped_column(Text(), primary_key=True)
-    user_type: Mapped[str | None] = mapped_column(CHAR(length=10))
 
     chats: Mapped[list["Chat"]] = relationship(
         back_populates="user",
@@ -42,7 +32,7 @@ class Chat(Base):
         id: Chat ID.
         title: Chat title.
         created_at: Chat creation timestamp.
-        user_id: User ID
+        user_id: User ID or fingerprint, depending on the prefix.
     """
 
     __tablename__ = "chats"
@@ -69,18 +59,25 @@ class Message(Base):
         content: Message content.
         role: Message role.
         chat_id: Chat ID.
+        message_id: Message ID.
     """
 
     __tablename__ = "messages"
     __table_args__ = (
+        Index("messages_message_id_index", "message_id", postgresql_using="hash"),
         Index("idx_messages_chat_id", "chat_id", postgresql_using="hash"),
     )
 
-    id: Mapped[str] = mapped_column(Text(), primary_key=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer(), "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     content: Mapped[str] = mapped_column(Text())
     role: Mapped[str] = mapped_column(Text())
     chat_id: Mapped[str] = mapped_column(ForeignKey("chats.id", ondelete="CASCADE"))
+    message_id: Mapped[str] = mapped_column(Text(), unique=True)
 
     chat: Mapped["Chat"] = relationship(foreign_keys=chat_id, back_populates="messages")
     resource_usage: Mapped["ResourceUsage"] = relationship(
@@ -92,7 +89,8 @@ class ResourceUsage(Base):
     """Resource usage model.
 
     Attributes:
-        id: Resource usage ID, same as message ID.
+        id: Resource usage ID.
+        message_id: Message ID.
         model: Model name.
         total_input_tokens: Total input tokens.
         total_output_tokens: Total output tokens.
@@ -100,9 +98,14 @@ class ResourceUsage(Base):
     """
 
     __tablename__ = "resource_usage"
-    id: Mapped[str] = mapped_column(
-        ForeignKey("messages.id", ondelete="CASCADE"),
+    __table_args__ = (Index("idx_resource_usage_message_id", "message_id"),)
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer(), "sqlite"),
         primary_key=True,
+        autoincrement=True,
+    )
+    message_id: Mapped[str] = mapped_column(
+        ForeignKey("messages.message_id", ondelete="CASCADE"),
     )
     model: Mapped[str] = mapped_column(Text())
     total_input_tokens: Mapped[int] = mapped_column(BigInteger())
@@ -110,6 +113,6 @@ class ResourceUsage(Base):
     total_run_time: Mapped[float] = mapped_column(Float())
 
     message: Mapped["Message"] = relationship(
-        foreign_keys=id,
+        foreign_keys=message_id,
         back_populates="resource_usage",
     )
