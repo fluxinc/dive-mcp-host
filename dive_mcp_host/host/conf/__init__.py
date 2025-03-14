@@ -5,7 +5,7 @@ from pydantic import AnyUrl, BaseModel, Field, UrlConstraints
 SpecialProvider = Literal["dive", "__load__"]
 """
 special providers:
-- dive: use the model in dive_mcp.models
+- dive: use the model in dive_mcp_host.models
 - __load__: load the model from the configuration
 """
 

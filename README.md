@@ -58,8 +58,8 @@ dive_cli -c THREADID "How are you?"
 ### Using in Code
 
 ```python
-from dive_mcp.host.conf import HostConfig
-from dive_mcp.host import DiveMcpHost
+from dive_mcp_host.host.conf import HostConfig
+from dive_mcp_host.host import DiveMcpHost
 
 # Initialize configuration
 config = HostConfig(...)

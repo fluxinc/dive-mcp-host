@@ -10,7 +10,7 @@ logger = getLogger(__name__)
 
 def db_migration(
     uri: str,
-    migrations_dir: str = "dive_mcp:httpd/database/migrations",
+    migrations_dir: str = "dive_mcp_host:httpd/database/migrations",
 ) -> Config:
     """Run database migrations.
 

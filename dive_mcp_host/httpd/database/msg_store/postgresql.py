@@ -2,9 +2,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy.dialects.postgresql import insert
 
-from dive_mcp.httpd.database.models import Chat
-from dive_mcp.httpd.database.msg_store.base import BaseMessageStore
-from dive_mcp.httpd.database.orm_models import Chat as ORMChat
+from dive_mcp_host.httpd.database.models import Chat
+from dive_mcp_host.httpd.database.msg_store.base import BaseMessageStore
+from dive_mcp_host.httpd.database.orm_models import Chat as ORMChat
 
 
 class PostgreSQLMessageStore(BaseMessageStore):
