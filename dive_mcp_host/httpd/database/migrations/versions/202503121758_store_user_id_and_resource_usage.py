@@ -71,13 +71,6 @@ def downgrade() -> None:
     """Downgrade schema."""
     with op.batch_alter_table("messages") as batch_op:
         batch_op.add_column(sa.Column("files", sa.TEXT(), nullable=True))
-        batch_op.alter_column(
-            "id",
-            existing_type=sa.BigInteger(),
-            type_=sa.INTEGER(),
-            existing_nullable=False,
-            autoincrement=True,
-        )
     with op.batch_alter_table("chats") as batch_op:
         batch_op.drop_constraint("fk_chats_user_id", type_="foreignkey")
         batch_op.drop_column("user_id")
