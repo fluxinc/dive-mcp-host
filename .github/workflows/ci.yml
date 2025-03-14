@@ -5,6 +5,10 @@ on: push
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version:
+          - "3.12"
 
     services:
       postgres:
@@ -16,15 +20,15 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v5
+    - name: Install uv and set the python version
+      uses: astral-sh/setup-uv@v5
       with:
-        python-version: '3.12'
+        python-version: ${{ matrix.python-version }}
 
+    # Pip will not respect uv.lock, use uv sync to make sure we have the same dependencies
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e .[dev]
+        uv sync --extra dev
 
     - name: Test with pytest
       env:
@@ -33,7 +37,7 @@ jobs:
         SQLITE_URI: sqlite:///dummy.db
         SQLITE_URI_ASYNC: sqlite+aiosqlite:///dummy.db
       run: |
-        pytest
+        uv run --extra dev pytest
 
     - name: Lint with Ruff
       run: |
