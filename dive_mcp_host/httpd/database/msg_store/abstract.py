@@ -17,7 +17,7 @@ class AbstractMessageStore(ABC):
     @abstractmethod
     async def get_all_chats(
         self,
-        user_id: str,
+        user_id: str | None = None,
     ) -> list[Chat]:
         """Retrieve all chats from the database.
 
@@ -32,7 +32,7 @@ class AbstractMessageStore(ABC):
     async def get_chat_with_messages(
         self,
         chat_id: str,
-        user_id: str,
+        user_id: str | None = None,
     ) -> ChatMessage | None:
         """Retrieve a chat with all its messages.
 
@@ -49,7 +49,7 @@ class AbstractMessageStore(ABC):
         self,
         chat_id: str,
         title: str,
-        user_id: str,
+        user_id: str | None = None,
         user_type: str | None = None,
     ) -> Chat | None:
         """Create a new chat.
@@ -83,7 +83,7 @@ class AbstractMessageStore(ABC):
     async def check_chat_exists(
         self,
         chat_id: str,
-        user_id: str,
+        user_id: str | None = None,
     ) -> bool:
         """Check if a chat exists in the database.
 
@@ -96,7 +96,11 @@ class AbstractMessageStore(ABC):
         """
 
     @abstractmethod
-    async def delete_chat(self, chat_id: str, user_id: str) -> None:
+    async def delete_chat(
+        self,
+        chat_id: str,
+        user_id: str | None = None,
+    ) -> None:
         """Delete a chat from the database.
 
         Args:
@@ -124,7 +128,7 @@ class AbstractMessageStore(ABC):
         self,
         message_id: str,
         data: QueryInput,
-        user_id: str,
+        user_id: str | None = None,
     ) -> Message:
         """Update the content of a message.
 
@@ -138,7 +142,11 @@ class AbstractMessageStore(ABC):
         """
 
     @abstractmethod
-    async def get_next_ai_message(self, chat_id: str, message_id: str) -> Message:
+    async def get_next_ai_message(
+        self,
+        chat_id: str,
+        message_id: str,
+    ) -> Message:
         """Get the next AI message after a specific message.
 
         Args:

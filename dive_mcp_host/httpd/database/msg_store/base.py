@@ -36,7 +36,7 @@ class BaseMessageStore(AbstractMessageStore):
 
     async def get_all_chats(
         self,
-        user_id: str,
+        user_id: str | None = None,
     ) -> list[Chat]:
         """Retrieve all chats from the database.
 
@@ -65,7 +65,7 @@ class BaseMessageStore(AbstractMessageStore):
     async def get_chat_with_messages(
         self,
         chat_id: str,
-        user_id: str,
+        user_id: str | None = None,
     ) -> ChatMessage | None:
         """Retrieve a chat with all its messages.
 
@@ -113,6 +113,7 @@ class BaseMessageStore(AbstractMessageStore):
                     role=Role(msg.role),
                     chatId=msg.chat_id,
                     messageId=msg.message_id,
+                    files=msg.files,
                     resource_usage=resource_usage,
                 ),
             )
@@ -122,7 +123,7 @@ class BaseMessageStore(AbstractMessageStore):
         self,
         chat_id: str,
         title: str,
-        user_id: str,
+        user_id: str | None = None,
         user_type: str | None = None,
     ) -> Chat | None:
         """Create a new chat.
@@ -158,6 +159,7 @@ class BaseMessageStore(AbstractMessageStore):
                     "role": message.role,
                     "chat_id": message.chat_id,
                     "message_id": message.message_id,
+                    "files": message.files,
                 },
             )
             .returning(ORMMessage)
@@ -201,13 +203,14 @@ class BaseMessageStore(AbstractMessageStore):
             role=Role(new_msg.role),
             chatId=new_msg.chat_id,
             messageId=new_msg.message_id,
+            files=new_msg.files,
             resource_usage=resource_usage,
         )
 
     async def check_chat_exists(
         self,
         chat_id: str,
-        user_id: str,
+        user_id: str | None = None,
     ) -> bool:
         """Check if a chat exists in the database.
 
@@ -227,7 +230,7 @@ class BaseMessageStore(AbstractMessageStore):
         exist = await self._session.scalar(query)
         return bool(exist)
 
-    async def delete_chat(self, chat_id: str, user_id: str) -> None:
+    async def delete_chat(self, chat_id: str, user_id: str | None = None) -> None:
         """Delete a chat from the database.
 
         Args:
@@ -267,7 +270,7 @@ class BaseMessageStore(AbstractMessageStore):
         self,
         message_id: str,
         data: QueryInput,
-        user_id: str,
+        user_id: str | None = None,
     ) -> Message:
         """Update the content of a message.
 
@@ -281,7 +284,11 @@ class BaseMessageStore(AbstractMessageStore):
         """
         raise NotImplementedError
 
-    async def get_next_ai_message(self, chat_id: str, message_id: str) -> Message:
+    async def get_next_ai_message(
+        self,
+        chat_id: str,
+        message_id: str,
+    ) -> Message:
         """Get the next AI message after a specific message.
 
         Args:
@@ -332,5 +339,6 @@ class BaseMessageStore(AbstractMessageStore):
             role=Role(message.role),
             chatId=message.chat_id,
             messageId=message.message_id,
+            files=message.files,
             resource_usage=resource_usage,
         )

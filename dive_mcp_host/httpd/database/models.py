@@ -47,7 +47,7 @@ class Chat(BaseModel):
     id: str
     title: str
     created_at: datetime = Field(alias="createdAt")
-    user_id: str
+    user_id: str | None
 
 
 class Role(StrEnum):
@@ -65,6 +65,7 @@ class NewMessage(BaseModel):
     chat_id: str = Field(alias="chatId")
     message_id: str = Field(alias="messageId")
     resource_usage: ResourceUsage | None = None
+    files: str
 
 
 class Message(BaseModel):
@@ -77,6 +78,7 @@ class Message(BaseModel):
     chat_id: str = Field(alias="chatId")
     message_id: str = Field(alias="messageId")
     resource_usage: ResourceUsage | None = None
+    files: str
 
 
 class ChatMessage(BaseModel):

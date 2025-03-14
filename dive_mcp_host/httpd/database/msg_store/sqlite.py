@@ -12,7 +12,11 @@ class SQLiteMessageStore(BaseMessageStore):
     """Message store for SQLite."""
 
     async def create_chat(
-        self, chat_id: str, title: str, user_id: str, user_type: str | None = None
+        self,
+        chat_id: str,
+        title: str,
+        user_id: str | None = None,
+        user_type: str | None = None,
     ) -> Chat | None:
         """Create a new chat.
 
@@ -25,17 +29,18 @@ class SQLiteMessageStore(BaseMessageStore):
         Returns:
             Created Chat object or None if creation failed.
         """
-        query = (
-            insert(ORMUsers)
-            .values(
-                {
-                    "id": user_id,
-                    "user_type": user_type,
-                }
+        if user_id is not None:
+            query = (
+                insert(ORMUsers)
+                .values(
+                    {
+                        "id": user_id,
+                        "user_type": user_type,
+                    }
+                )
+                .on_conflict_do_nothing()
             )
-            .on_conflict_do_nothing()
-        )
-        await self._session.execute(query)
+            await self._session.execute(query)
 
         query = (
             insert(ORMChat)
