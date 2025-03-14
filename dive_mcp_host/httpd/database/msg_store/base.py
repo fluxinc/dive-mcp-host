@@ -4,7 +4,7 @@ from sqlalchemy import delete, exists, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from dive_mcp.httpd.database.models import (
+from dive_mcp_host.httpd.database.models import (
     Chat,
     ChatMessage,
     Message,
@@ -13,9 +13,9 @@ from dive_mcp.httpd.database.models import (
     ResourceUsage,
     Role,
 )
-from dive_mcp.httpd.database.orm_models import Chat as ORMChat
-from dive_mcp.httpd.database.orm_models import Message as ORMMessage
-from dive_mcp.httpd.database.orm_models import ResourceUsage as ORMResourceUsage
+from dive_mcp_host.httpd.database.orm_models import Chat as ORMChat
+from dive_mcp_host.httpd.database.orm_models import Message as ORMMessage
+from dive_mcp_host.httpd.database.orm_models import ResourceUsage as ORMResourceUsage
 
 from .abstract import AbstractMessageStore
 

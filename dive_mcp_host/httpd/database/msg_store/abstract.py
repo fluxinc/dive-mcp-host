@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from dive_mcp.httpd.database.models import (
+from dive_mcp_host.httpd.database.models import (
     Chat,
     ChatMessage,
     Message,

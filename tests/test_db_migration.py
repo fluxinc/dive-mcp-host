@@ -1,6 +1,6 @@
 from alembic import command
 
-from dive_mcp.httpd.database.migrate import db_migration
+from dive_mcp_host.httpd.database.migrate import db_migration
 
 from .helper import POSTGRES_URI, SQLITE_URI
 

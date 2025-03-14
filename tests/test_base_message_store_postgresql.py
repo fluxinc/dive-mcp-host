@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from dive_mcp.httpd.database.migrate import db_migration
-from dive_mcp.httpd.database.models import (
+from dive_mcp_host.httpd.database.migrate import db_migration
+from dive_mcp_host.httpd.database.models import (
     Chat,
     ChatMessage,
     Message,
@@ -21,15 +21,15 @@ from dive_mcp.httpd.database.models import (
     ResourceUsage,
     Role,
 )
-from dive_mcp.httpd.database.msg_store.base import BaseMessageStore
-from dive_mcp.httpd.database.msg_store.postgresql import PostgreSQLMessageStore
-from dive_mcp.httpd.database.orm_models import (
+from dive_mcp_host.httpd.database.msg_store.base import BaseMessageStore
+from dive_mcp_host.httpd.database.msg_store.postgresql import PostgreSQLMessageStore
+from dive_mcp_host.httpd.database.orm_models import (
     Chat as ORMChat,
 )
-from dive_mcp.httpd.database.orm_models import (
+from dive_mcp_host.httpd.database.orm_models import (
     Message as ORMMessage,
 )
-from dive_mcp.httpd.database.orm_models import (
+from dive_mcp_host.httpd.database.orm_models import (
     Users as ORMUsers,
 )
 from tests.helper import POSTGRES_URI, POSTGRES_URI_ASYNC
