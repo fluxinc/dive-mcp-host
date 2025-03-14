@@ -29,6 +29,10 @@ dependencies = [
     "pywin32>=306; sys_platform == 'win32' or platform_system == 'Windows'",
     "sqlite-vec>=0.1.0",
     "psycopg[binary]>=3.2.5",
+    "alembic>=1.15.1,< 1.16", # Alembic doesn't use SemVer https://alembic.sqlalchemy.org/en/latest/front.html#versioning-scheme
+    "sqlalchemy[asyncio]>=2.0.38",
+    "psycopg2-binary>=2.9.10",
+    "asyncpg>=0.30.0",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -63,13 +67,13 @@ asyncio_default_fixture_loop_scope = "function"
 target-version = "py312"
 line-length = 88
 lint.select = ["E", "F", "B", "I", "W", "C90", "N", "D", "UP", "ANN", "S", "BLE", "A", "COM", "C4", "DTZ", "T10", "EM", "EXE", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "NPY", "RUF"]
-lint.ignore = ["ANN401", "D100", "D104", "D105", "EM", "ERA001"]
+lint.ignore = ["ANN401", "D100", "D104", "D105", "EM", "ERA001", "COM812"]
 # Follow Google Style Guide
 lint.extend-select = ["I"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "ANN", "D107"]  # Allow assert statements in test files
-"dive_mcp_host/cli/**/*.py" = ["S101", "ANN", "D107", "T201"]  # Allow assert statements in test files
+"tests/**/*.py" = ["S101", "ANN", "D107", "ARG001", "PLR2004"]  # Allow assert statements in test files
+"dive_mcp_host/cli/**/*.py" = ["S101", "ANN", "D107", "T201"]
 
 [tool.ruff.format]
 quote-style = "double"

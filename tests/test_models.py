@@ -52,7 +52,7 @@ async def test_fake_model_tool_call() -> None:
     )
 
     def check_results(results: list[dict[str, Any]], msg: str) -> None:
-        assert len(results) == 3, msg  # noqa: PLR2004
+        assert len(results) == 3, msg
         assert results[0]["agent"]["messages"][0].content == responses[0].content, msg
         assert (
             results[1]["tools"]["messages"][0].content
