@@ -38,7 +38,7 @@ class CheckpointerConfig(BaseModel):
     # more parameters in the future. like pool size, etc.
     uri: Annotated[
         AnyUrl,
-        UrlConstraints(allowed_schemes=["sqlite", "postgresql"]),
+        UrlConstraints(allowed_schemes=["sqlite", "postgres"]),
     ]
 
 
