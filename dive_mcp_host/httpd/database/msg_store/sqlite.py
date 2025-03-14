@@ -5,22 +5,44 @@ from sqlalchemy.dialects.sqlite import insert
 from dive_mcp_host.httpd.database.models import Chat
 from dive_mcp_host.httpd.database.msg_store.base import BaseMessageStore
 from dive_mcp_host.httpd.database.orm_models import Chat as ORMChat
+from dive_mcp_host.httpd.database.orm_models import Users as ORMUsers
 
 
 class SQLiteMessageStore(BaseMessageStore):
     """Message store for SQLite."""
 
-    async def create_chat(self, chat_id: str, title: str, user_id: str) -> Chat | None:
+    async def create_chat(
+        self,
+        chat_id: str,
+        title: str,
+        user_id: str,
+        user_type: str | None = None,
+    ) -> Chat | None:
         """Create a new chat.
 
         Args:
             chat_id: Unique identifier for the chat.
             title: Title of the chat.
             user_id: User ID or fingerprint, depending on the prefix.
+            user_type: Optional user type.
 
         Returns:
             Created Chat object or None if creation failed.
         """
+        # Create user if it doesn't exist
+        query = (
+            insert(ORMUsers)
+            .values(
+                {
+                    "id": user_id,
+                    "user_type": user_type,
+                }
+            )
+            .on_conflict_do_nothing()
+        )
+        await self._session.execute(query)
+
+        # Create chat
         query = (
             insert(ORMChat)
             .values(
