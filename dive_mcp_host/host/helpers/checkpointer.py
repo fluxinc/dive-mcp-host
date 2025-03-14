@@ -23,6 +23,6 @@ def get_checkpointer(
     if uri.startswith("sqlite"):
         path = uri.removeprefix("sqlite:///")
         return AsyncSqliteSaver.from_conn_string(path)
-    if uri.startswith("postgresql"):
+    if uri.startswith("postgres"):
         return AsyncPostgresSaver.from_conn_string(uri)
     raise ValueError(f"Unsupported database: {uri}")
