@@ -50,6 +50,7 @@ class AbstractMessageStore(ABC):
         chat_id: str,
         title: str,
         user_id: str,
+        user_type: str | None = None,
     ) -> Chat | None:
         """Create a new chat.
 
@@ -57,6 +58,7 @@ class AbstractMessageStore(ABC):
             chat_id: Unique identifier for the chat.
             title: Title of the chat.
             user_id: User ID or fingerprint, depending on the prefix.
+            user_type: Optional user type
 
         Returns:
             Created Chat object or None if creation failed.

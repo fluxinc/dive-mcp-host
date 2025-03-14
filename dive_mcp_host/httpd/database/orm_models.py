@@ -1,6 +1,15 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Index, Integer, Text
+from sqlalchemy import (
+    CHAR,
+    BigInteger,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    Text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -17,6 +26,7 @@ class Users(Base):
 
     __tablename__ = "users"
     id: Mapped[str] = mapped_column(Text(), primary_key=True)
+    user_type: Mapped[str | None] = mapped_column(CHAR(10))
 
     chats: Mapped[list["Chat"]] = relationship(
         back_populates="user",
