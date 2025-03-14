@@ -26,8 +26,11 @@ This project uses LangChain and LangGraph to build and manage language model wor
 # Using pip
 pip install -e .
 
-# Or using uv (recommended)
+# Or using uv pip
 uv pip install -e .
+
+# Or using uv sync (recommended, will respect uv.lock file) 
+uv sync
 ```
 
 ### Starting the HTTP Service
@@ -77,6 +80,10 @@ Install development dependencies:
 ```bash
 pip install -e ".[dev]"
 ```
+or
+```bash
+uv sync --extra dev
+```
 
 (Optional) Start local PostgreSQL
 ```
@@ -87,6 +94,10 @@ Run tests:
 
 ```bash
 pytest
+```
+or with uv, (no need to activate enviroment) 
+```bash
+uv run --extra dev pytest
 ```
 
 ## License
