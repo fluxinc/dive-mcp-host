@@ -15,7 +15,7 @@ class PostgreSQLMessageStore(BaseMessageStore):
         self,
         chat_id: str,
         title: str,
-        user_id: str,
+        user_id: str | None = None,
         user_type: str | None = None,
     ) -> Chat | None:
         """Create a new chat.
@@ -29,17 +29,18 @@ class PostgreSQLMessageStore(BaseMessageStore):
         Returns:
             Created Chat object or None if creation failed.
         """
-        query = (
-            insert(ORMUsers)
-            .values(
-                {
-                    "id": user_id,
-                    "user_type": user_type,
-                }
+        if user_id is not None:
+            query = (
+                insert(ORMUsers)
+                .values(
+                    {
+                        "id": user_id,
+                        "user_type": user_type,
+                    }
+                )
+                .on_conflict_do_nothing()
             )
-            .on_conflict_do_nothing()
-        )
-        await self._session.execute(query)
+            await self._session.execute(query)
 
         query = (
             insert(ORMChat)

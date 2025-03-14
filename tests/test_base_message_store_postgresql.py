@@ -103,6 +103,7 @@ async def sample_messages(session: AsyncSession, sample_chat: ORMChat):
         role=Role.USER,
         content="Hello, this is a test message",
         created_at=datetime.now(UTC),
+        files="",
     )
     session.add(user_msg)
 
@@ -113,6 +114,7 @@ async def sample_messages(session: AsyncSession, sample_chat: ORMChat):
         role=Role.ASSISTANT,
         content="Hello, I am an AI assistant",
         created_at=datetime.now(UTC),
+        files="",
     )
     session.add(assistant_msg)
 
@@ -210,6 +212,7 @@ async def test_create_message(
         chatId=sample_chat.id,
         role=Role.USER,
         content="This is a new test message",
+        files="",
     )
 
     # Create message
@@ -249,6 +252,7 @@ async def test_create_message_with_resource_usage(
         chatId=sample_chat.id,
         role=Role.ASSISTANT,
         content="This is an assistant message",
+        files="",
         resource_usage=resource_usage,
     )
 
@@ -322,6 +326,7 @@ async def test_delete_messages_after(
         role=Role.USER,
         content="This message should be deleted",
         created_at=datetime.now(UTC),
+        files="",
     )
     session.add(new_msg)
     await session.commit()
@@ -394,6 +399,7 @@ async def test_get_next_ai_message_not_found(
         role=Role.USER,
         content="Message without response",
         created_at=datetime.now(UTC),
+        files="",
     )
     session.add(user_msg)
     await session.commit()
