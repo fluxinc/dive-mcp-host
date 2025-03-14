@@ -107,11 +107,12 @@ class BaseMessageStore(AbstractMessageStore):
             )
             messages.append(
                 Message(
+                    id=msg.id,
                     createdAt=msg.created_at,
                     content=msg.content,
                     role=Role(msg.role),
                     chatId=msg.chat_id,
-                    messageId=msg.id,
+                    messageId=msg.message_id,
                     resource_usage=resource_usage,
                 ),
             )
@@ -122,7 +123,6 @@ class BaseMessageStore(AbstractMessageStore):
         chat_id: str,
         title: str,
         user_id: str,
-        user_type: str | None = None,
     ) -> Chat | None:
         """Create a new chat.
 
@@ -130,7 +130,6 @@ class BaseMessageStore(AbstractMessageStore):
             chat_id: Unique identifier for the chat.
             title: Title of the chat.
             user_id: User ID or fingerprint, depending on the prefix.
-            user_type: Optional user type.
 
         Returns:
             Created Chat object or None if creation failed.
@@ -156,7 +155,7 @@ class BaseMessageStore(AbstractMessageStore):
                     "content": message.content,
                     "role": message.role,
                     "chat_id": message.chat_id,
-                    "id": message.id,
+                    "message_id": message.message_id,
                 },
             )
             .returning(ORMMessage)
@@ -172,7 +171,7 @@ class BaseMessageStore(AbstractMessageStore):
                 insert(ORMResourceUsage)
                 .values(
                     {
-                        "id": message.id,
+                        "message_id": message.message_id,
                         "model": message.resource_usage.model,
                         "total_input_tokens": message.resource_usage.total_input_tokens,
                         "total_output_tokens": message.resource_usage.total_output_tokens,  # noqa: E501
@@ -194,11 +193,12 @@ class BaseMessageStore(AbstractMessageStore):
             else None
         )
         return Message(
+            id=new_msg.id,
             createdAt=new_msg.created_at,
             content=new_msg.content,
             role=Role(new_msg.role),
             chatId=new_msg.chat_id,
-            messageId=new_msg.id,
+            messageId=new_msg.message_id,
             resource_usage=resource_usage,
         )
 
@@ -246,17 +246,17 @@ class BaseMessageStore(AbstractMessageStore):
     ) -> None:
         """Delete all messages after a specific message in a chat."""
         query = (
-            select(ORMMessage)
-            .where(ORMMessage.id == message_id)
+            select(ORMMessage.id)
+            .where(ORMMessage.message_id == message_id)
             .where(ORMMessage.chat_id == chat_id)
         )
-        ancher_msg = await self._session.scalar(query)
+        anchor_id = await self._session.scalar(query)
 
-        if ancher_msg is not None:
+        if anchor_id is not None:
             query = (
                 delete(ORMMessage)
                 .where(ORMMessage.chat_id == chat_id)
-                .where(ORMMessage.created_at > ancher_msg.created_at)
+                .where(ORMMessage.id > anchor_id)
             )
             await self._session.execute(query)
 
@@ -291,7 +291,7 @@ class BaseMessageStore(AbstractMessageStore):
         """
         query = (
             select(ORMMessage)
-            .where(ORMMessage.id == message_id)
+            .where(ORMMessage.message_id == message_id)
             .where(ORMMessage.role == Role.USER)
         )
         user_message = await self._session.scalar(query)
@@ -304,7 +304,7 @@ class BaseMessageStore(AbstractMessageStore):
                 selectinload(ORMMessage.resource_usage),
             )
             .where(ORMMessage.chat_id == chat_id)
-            .where(ORMMessage.created_at > user_message.created_at)
+            .where(ORMMessage.id > user_message.id)
             .where(ORMMessage.role == Role.ASSISTANT)
             .limit(1)
         )
@@ -324,10 +324,11 @@ class BaseMessageStore(AbstractMessageStore):
             else None
         )
         return Message(
+            id=message.id,
             createdAt=message.created_at,
             content=message.content,
             role=Role(message.role),
             chatId=message.chat_id,
-            messageId=message.id,
+            messageId=message.message_id,
             resource_usage=resource_usage,
         )

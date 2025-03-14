@@ -98,7 +98,7 @@ async def sample_messages(session: AsyncSession, sample_chat: ORMChat):
     """Create sample messages for testing."""
     # User message
     user_msg = ORMMessage(
-        id=str(uuid.uuid4()),
+        message_id=str(uuid.uuid4()),
         chat_id=sample_chat.id,
         role=Role.USER,
         content="Hello, this is a test message",
@@ -108,7 +108,7 @@ async def sample_messages(session: AsyncSession, sample_chat: ORMChat):
 
     # Assistant message
     assistant_msg = ORMMessage(
-        id=str(uuid.uuid4()),
+        message_id=str(uuid.uuid4()),
         chat_id=sample_chat.id,
         role=Role.ASSISTANT,
         content="Hello, I am an AI assistant",
@@ -218,12 +218,12 @@ async def test_create_message(
     # Verify results
     assert created_message is not None
     assert isinstance(created_message, Message)
-    assert created_message.id == message_id
+    assert created_message.message_id == message_id
     assert created_message.content == "This is a new test message"
     assert created_message.role == Role.USER
 
     # Verify message was saved to database
-    query = select(ORMMessage).where(ORMMessage.id == message_id)
+    query = select(ORMMessage).where(ORMMessage.message_id == message_id)
     result = await session.scalar(query)
     assert result is not None
     assert result.content == "This is a new test message"
@@ -317,7 +317,7 @@ async def test_delete_messages_after(
     """Test deleting messages after a specific message."""
     # Add another message
     new_msg = ORMMessage(
-        id=str(uuid.uuid4()),
+        message_id=str(uuid.uuid4()),
         chat_id=sample_chat.id,
         role=Role.USER,
         content="This message should be deleted",
@@ -329,7 +329,7 @@ async def test_delete_messages_after(
     # Delete messages after the first user message
     await message_store.delete_messages_after(
         sample_chat.id,
-        sample_messages["user_message"].id,
+        sample_messages["user_message"].message_id,
     )
 
     # Verify messages were deleted
@@ -339,7 +339,7 @@ async def test_delete_messages_after(
 
     # Only the user message should remain
     assert len(messages) == 1
-    assert messages[0].id == sample_messages["user_message"].id
+    assert messages[0].message_id == sample_messages["user_message"].message_id
 
 
 @pytest.mark.asyncio
@@ -352,14 +352,14 @@ async def test_get_next_ai_message(
     # Get next AI message
     next_ai_message = await message_store.get_next_ai_message(
         sample_chat.id,
-        sample_messages["user_message"].id,
+        sample_messages["user_message"].message_id,
     )
 
     # Verify results
     assert next_ai_message is not None
     assert isinstance(next_ai_message, Message)
     assert next_ai_message.role == Role.ASSISTANT
-    assert next_ai_message.id == sample_messages["assistant_message"].id
+    assert next_ai_message.message_id == sample_messages["assistant_message"].message_id
 
 
 @pytest.mark.asyncio
@@ -376,7 +376,7 @@ async def test_get_next_ai_message_error(
     ):
         await message_store.get_next_ai_message(
             sample_chat.id,
-            sample_messages["assistant_message"].id,
+            sample_messages["assistant_message"].message_id,
         )
 
 
@@ -384,23 +384,25 @@ async def test_get_next_ai_message_error(
 async def test_get_next_ai_message_not_found(
     message_store: BaseMessageStore,
     sample_chat: ORMChat,
+    session: AsyncSession,
 ):
     """Test error when no next AI message is found."""
     # Create a user message without a following AI message
-    user_msg = await message_store.create_message(
-        NewMessage(
-            messageId=str(uuid.uuid4()),
-            content="Message without response",
-            role=Role.USER,
-            chatId=sample_chat.id,
-        )
+    user_msg = ORMMessage(
+        message_id=str(uuid.uuid4()),
+        chat_id=sample_chat.id,
+        role=Role.USER,
+        content="Message without response",
+        created_at=datetime.now(UTC),
     )
+    session.add(user_msg)
+    await session.commit()
 
     # Try to get next AI message
     with pytest.raises(ValueError, match="No AI message found after user message"):
         await message_store.get_next_ai_message(
             sample_chat.id,
-            user_msg.id,
+            user_msg.message_id,
         )
 
 
@@ -429,7 +431,6 @@ async def test_create_chat(
         chat_id=chat_id,
         title=title,
         user_id=sample_user.id,
-        user_type="registered",
     )
 
     # Verify results
@@ -463,7 +464,6 @@ async def test_create_chat_duplicate(
         chat_id=chat_id,
         title=title,
         user_id=sample_user.id,
-        user_type="registered",
     )
     assert first_chat is not None
 
@@ -472,7 +472,6 @@ async def test_create_chat_duplicate(
         chat_id=chat_id,
         title="Duplicate Chat",
         user_id=sample_user.id,
-        user_type="registered",
     )
 
     # Verify results - should return None for duplicate

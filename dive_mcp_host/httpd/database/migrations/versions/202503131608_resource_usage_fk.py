@@ -54,6 +54,13 @@ def downgrade() -> None:
             "resource_usage_message_id_fk",
             type_="foreignkey",
         )
+        batch_op.alter_column(
+            "message_id",
+            existing_type=sa.Text(),
+            type_=sa.BIGINT(),
+            existing_nullable=False,
+            postgresql_using="message_id::bigint",
+        )
         batch_op.create_foreign_key(
             "resource_usage_message_id_fk",
             "messages",
