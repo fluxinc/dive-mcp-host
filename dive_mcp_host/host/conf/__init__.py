@@ -5,7 +5,7 @@ from pydantic import AnyUrl, BaseModel, Field, UrlConstraints
 SpecialProvider = Literal["dive", "__load__"]
 """
 special providers:
-- dive: use the model in dive_mcp.models
+- dive: use the model in dive_mcp_host.models
 - __load__: load the model from the configuration
 """
 
@@ -38,7 +38,7 @@ class CheckpointerConfig(BaseModel):
     # more parameters in the future. like pool size, etc.
     uri: Annotated[
         AnyUrl,
-        UrlConstraints(allowed_schemes=["sqlite", "postgresql"]),
+        UrlConstraints(allowed_schemes=["sqlite", "postgres"]),
     ]
 
 

@@ -1,4 +1,5 @@
-from .database import Database
-from .sqlite import SqliteDatabase
+from .msg_store.abstract import AbstractMessageStore
+from .msg_store.postgresql import PostgreSQLMessageStore
+from .msg_store.sqlite import SQLiteMessageStore
 
-__all__ = ["Database", "SqliteDatabase"]
+__all__ = ["AbstractMessageStore", "PostgreSQLMessageStore", "SQLiteMessageStore"]
