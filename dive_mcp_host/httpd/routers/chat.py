@@ -44,7 +44,7 @@ async def list_chat(
     Returns:
         DataResult[list[Chat]]: List of available chats.
     """
-    async with app.sessionmaker() as session:
+    async with app.db_sessionmaker() as session:
         chats = await app.msg_store(session).get_all_chats(user_id)
     return DataResult(success=True, message=None, data=chats)
 
@@ -172,7 +172,7 @@ async def get_chat(
     Returns:
         DataResult[ChatMessage]: The chat and its messages.
     """
-    async with app.sessionmaker() as session:
+    async with app.db_sessionmaker() as session:
         chat = await app.msg_store(session).get_chat_with_messages(chat_id)
     return DataResult(success=True, message=None, data=chat)
 
@@ -191,7 +191,7 @@ async def delete_chat(
     Returns:
         ResultResponse: Result of the delete operation.
     """
-    async with app.sessionmaker() as session:
+    async with app.db_sessionmaker() as session:
         await app.msg_store(session).delete_chat(chat_id)
     return ResultResponse(success=True, message=None)
 

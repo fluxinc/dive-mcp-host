@@ -35,7 +35,7 @@ class DiveHostAPI(FastAPI):
             pool_recycle=60,  # close connection after 60 seconds
             max_overflow=10,  # burst connections
         )
-        self._sessionmaker = async_sessionmaker(self._engine, class_=AsyncSession)
+        self._db_sessionmaker = async_sessionmaker(self._engine, class_=AsyncSession)
         self._msg_store = SQLiteMessageStore
 
         self._store = LocalStore()
@@ -46,7 +46,7 @@ class DiveHostAPI(FastAPI):
         """Ready the DiveHostAPI."""
         try:
             # check db connection
-            async with self._sessionmaker() as session:
+            async with self._db_sessionmaker() as session:
                 await session.execute(text("SELECT 1"))
             return True
         except Exception:
@@ -60,9 +60,9 @@ class DiveHostAPI(FastAPI):
         logger.info("Server Cleanup Complete")
 
     @property
-    def sessionmaker(self) -> async_sessionmaker[AsyncSession]:
+    def db_sessionmaker(self) -> async_sessionmaker[AsyncSession]:
         """Get the database sessionmaker."""
-        return self._sessionmaker
+        return self._db_sessionmaker
 
     @property
     def msg_store(self) -> type[BaseMessageStore]:
