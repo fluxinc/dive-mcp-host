@@ -161,18 +161,23 @@ async def retry_chat(
 async def get_chat(
     chat_id: str,
     app: DiveHostAPI = Depends(get_app),
+    dive_user: "DiveUser" = Depends(get_dive_user),
 ) -> DataResult[ChatMessage]:
     """Get a specific chat by ID with its messages.
 
     Args:
         chat_id (str): The ID of the chat to retrieve.
         app (DiveHostAPI): The DiveHostAPI instance.
+        dive_user (DiveUser): The DiveUser instance.
 
     Returns:
         DataResult[ChatMessage]: The chat and its messages.
     """
     async with app.db_sessionmaker() as session:
-        chat = await app.msg_store(session).get_chat_with_messages(chat_id)
+        chat = await app.msg_store(session).get_chat_with_messages(
+            chat_id=chat_id,
+            user_id=dive_user["user_id"],
+        )
     return DataResult(success=True, message=None, data=chat)
 
 
@@ -180,18 +185,24 @@ async def get_chat(
 async def delete_chat(
     chat_id: str,
     app: DiveHostAPI = Depends(get_app),
+    dive_user: "DiveUser" = Depends(get_dive_user),
 ) -> ResultResponse:
     """Delete a specific chat by ID.
 
     Args:
         chat_id (str): The ID of the chat to delete.
         app (DiveHostAPI): The DiveHostAPI instance.
+        dive_user (DiveUser): The DiveUser instance.
 
     Returns:
         ResultResponse: Result of the delete operation.
     """
     async with app.db_sessionmaker() as session:
-        await app.msg_store(session).delete_chat(chat_id)
+        await app.msg_store(session).delete_chat(
+            chat_id=chat_id,
+            user_id=dive_user["user_id"],
+        )
+        await session.commit()
     return ResultResponse(success=True, message=None)
 
 
