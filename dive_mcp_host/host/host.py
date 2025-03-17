@@ -78,6 +78,7 @@ class DiveMcpHost(ContextProtocol):
             if self._config.checkpointer:
                 checkpointer = get_checkpointer(str(self._config.checkpointer.uri))
                 self._checkpointer = await stack.enter_async_context(checkpointer)
+                await self._checkpointer.setup()
             await stack.enter_async_context(self._tool_manager)
             try:
                 self._tools = self._tool_manager.tools()

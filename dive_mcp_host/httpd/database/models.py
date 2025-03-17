@@ -1,37 +1,19 @@
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class LLMModel(BaseModel):
+class ResourceUsage(BaseModel):
     """Represents information about a language model's usage statistics."""
 
     model: str
     total_input_tokens: int
     total_output_tokens: int
-    total_run_time: int
+    total_run_time: float
 
 
-class Options(BaseModel):
-    """Contains configuration options for user sessions and model usage."""
-
-    user_access_token: str | None
-    fingerprint: str | None
-    llm_model: LLMModel | None = Field(alias="LLM_Model")
-
-
-class NewMessage(BaseModel):
-    """Represents a newly created message in a chat conversation."""
-
-    role: str
-    content: str
-    created_at: datetime = Field(alias="createdAt")
-    chat_id: str = Field(alias="chatId")
-    message_id: str = Field(alias="messageId")
-    files: list[str]
-    id: int | None
-
-
+# NOTE: Currently not used
 class QueryInput(BaseModel):
     """User input for a query with text, images and documents."""
 
@@ -46,6 +28,25 @@ class Chat(BaseModel):
     id: str
     title: str
     created_at: datetime = Field(alias="createdAt")
+    user_id: str | None
+
+
+class Role(StrEnum):
+    """Role for Messages."""
+
+    ASSISTANT = "assistant"
+    USER = "user"
+
+
+class NewMessage(BaseModel):
+    """Represents a message within a chat conversation."""
+
+    content: str
+    role: Role
+    chat_id: str = Field(alias="chatId")
+    message_id: str = Field(alias="messageId")
+    resource_usage: ResourceUsage | None = None
+    files: str = "[]"
 
 
 class Message(BaseModel):
@@ -54,10 +55,11 @@ class Message(BaseModel):
     id: int
     create_at: datetime = Field(alias="createdAt")
     content: str
-    role: str
+    role: Role
     chat_id: str = Field(alias="chatId")
     message_id: str = Field(alias="messageId")
-    files: object  # TODO: define files
+    resource_usage: ResourceUsage | None = None
+    files: str = "[]"
 
 
 class ChatMessage(BaseModel):

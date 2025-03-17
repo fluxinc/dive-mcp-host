@@ -17,7 +17,7 @@ def load_model(
 
     Args:
         provider: provider name. Two special providers are supported:
-            - "dive": use the model in dive_mcp.models
+            - "dive": use the model in dive_mcp_host.models
             - "__load__": load the model from the configuration
         model_name: The name of the model to load.
         args: Additional arguments to pass to the model.
@@ -27,7 +27,7 @@ def load_model(
         The loaded model.
 
     If the provider is "dive", it should be like this:
-        import dive_mcp.models.model_name_in_lower_case as model_module
+        import dive_mcp_host.models.model_name_in_lower_case as model_module
         model = model_module.load_model(*args, **kwargs)
     If the provider is "__load__", the model_name is the class name of the model.
     For example, with model_name="package.module:ModelClass", it will be like this:
