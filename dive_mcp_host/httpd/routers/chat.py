@@ -32,13 +32,13 @@ class DataResult[T](ResultResponse):
 
 @chat.get("/list")
 async def list_chat(
-    user_id: str,
+    user_id: str | None = None,
     app: DiveHostAPI = Depends(get_app),
 ) -> DataResult[list[Chat]]:
     """List all available chats.
 
     Args:
-        user_id (str): The ID of the user to list chats for.
+        user_id (str | None): The ID of the user to list chats for.
         app (DiveHostAPI): The DiveHostAPI instance.
 
     Returns:
