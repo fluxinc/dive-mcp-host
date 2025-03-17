@@ -227,7 +227,3 @@ class TestModelManagerIntegration:
 
         # Check that the model was called
         mock_model.ainvoke.assert_called()
-
-
-if __name__ == "__main__":
-    pytest.main(["-xvs", __file__])
