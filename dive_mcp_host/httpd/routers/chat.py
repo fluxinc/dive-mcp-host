@@ -4,19 +4,18 @@ from typing import TYPE_CHECKING, Annotated, TypeVar
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
-from dive_mcp_host.httpd.dependencies import get_app
+from dive_mcp_host.httpd.database.models import Chat, ChatMessage, QueryInput
+from dive_mcp_host.httpd.dependencies import get_app, get_dive_user
 from dive_mcp_host.httpd.routers.utils import ChatProcessor, event_stream
 from dive_mcp_host.httpd.server import DiveHostAPI
 
 from .models import (
-    Chat,
-    ChatMessage,
-    QueryInput,
     ResultResponse,
     UserInputError,
 )
 
 if TYPE_CHECKING:
+    from dive_mcp_host.httpd.middlewares.general import DiveUser
     from dive_mcp_host.httpd.store import Store
 
 chat = APIRouter(prefix="/chat", tags=["chat"])
@@ -32,20 +31,20 @@ class DataResult[T](ResultResponse):
 
 @chat.get("/list")
 async def list_chat(
-    user_id: str | None = None,
     app: DiveHostAPI = Depends(get_app),
+    dive_user: "DiveUser" = Depends(get_dive_user),
 ) -> DataResult[list[Chat]]:
     """List all available chats.
 
     Args:
-        user_id (str | None): The ID of the user to list chats for.
         app (DiveHostAPI): The DiveHostAPI instance.
+        dive_user (DiveUser): The DiveUser instance.
 
     Returns:
         DataResult[list[Chat]]: List of available chats.
     """
     async with app.db_sessionmaker() as session:
-        chats = await app.msg_store(session).get_all_chats(user_id)
+        chats = await app.msg_store(session).get_all_chats(dive_user["user_id"])
     return DataResult(success=True, message=None, data=chats)
 
 
