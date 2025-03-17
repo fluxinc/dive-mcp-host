@@ -124,6 +124,54 @@ async def sample_messages(session: AsyncSession, sample_chat: ORMChat):
 
 
 @pytest_asyncio.fixture
+async def sample_chat_no_user(session: AsyncSession):
+    """Create a sample chat for testing."""
+    chat_id = str(uuid.uuid4())
+    title = "Test Chat"
+
+    chat = ORMChat(
+        id=chat_id,
+        title=title,
+        user_id=None,
+        created_at=datetime.now(UTC),
+    )
+    session.add(chat)
+    await session.commit()
+
+    return chat
+
+
+@pytest_asyncio.fixture
+async def sample_messages_no_user(session: AsyncSession, sample_chat_no_user: ORMChat):
+    """Create sample messages for testing."""
+    # User message
+    user_msg = ORMMessage(
+        message_id=str(uuid.uuid4()),
+        chat_id=sample_chat_no_user.id,
+        role=Role.USER,
+        content="Hello, this is a test message",
+        created_at=datetime.now(UTC),
+        files="",
+    )
+    session.add(user_msg)
+
+    # Assistant message
+    assistant_msg = ORMMessage(
+        message_id=str(uuid.uuid4()),
+        chat_id=sample_chat_no_user.id,
+        role=Role.ASSISTANT,
+        content="Hello, I am an AI assistant",
+        created_at=datetime.now(UTC),
+        files="",
+    )
+    session.add(assistant_msg)
+
+    await session.commit()
+
+    return {"user_message": user_msg, "assistant_message": assistant_msg}
+
+
+@pytest_asyncio.fixture
 async def insert_dummy_data(sample_messages: dict[str, ORMMessage]):
     """Create a sample resource usage for testing."""
     return sample_messages
@@ -154,6 +202,33 @@ async def test_get_all_chats(
     assert len(chats) == 2
     assert all(isinstance(chat, Chat) for chat in chats)
     assert any(chat.id == sample_chat.id for chat in chats)
+    assert any(chat.id == another_chat.id for chat in chats)
+
+
+@pytest.mark.asyncio
+async def test_get_all_chats_no_user(
+    message_store: BaseMessageStore,
+    sample_chat_no_user: ORMChat,
+    session: AsyncSession,
+):
+    """Test retrieving all chats for a user."""
+    # Create another chat for the same user
+    another_chat = ORMChat(
+        id=str(uuid.uuid4()),
+        title="Another Test Chat",
+        user_id=sample_chat_no_user.user_id,
+        created_at=datetime.now(UTC),
+    )
+    session.add(another_chat)
+    await session.commit()
+
+    # Get all chats
+    chats = await message_store.get_all_chats()
+
+    # Verify results
+    assert len(chats) == 2
+    assert all(isinstance(chat, Chat) for chat in chats)
+    assert any(chat.id == sample_chat_no_user.id for chat in chats)
     assert any(chat.id == another_chat.id for chat in chats)
 
 
