@@ -4,10 +4,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from .database import SqliteDatabase
-from .middlewares import KwargsMiddleware, error_handler
-from .routers import chat, config, model_verify, openai, tools
-from .store.local import LocalStore
+from dive_mcp_host.httpd.database import SqliteDatabase
+from dive_mcp_host.httpd.middlewares import (
+    KwargsMiddleware,
+    default_state,
+    error_handler,
+)
+from dive_mcp_host.httpd.routers import chat, config, model_verify, openai, tools
+from dive_mcp_host.httpd.store.local import LocalStore
 
 
 @asynccontextmanager
@@ -25,6 +29,7 @@ app = FastAPI(lifespan=lifespan)
 
 kwargs_func = {}
 
+app.add_middleware(BaseHTTPMiddleware, dispatch=default_state)
 app.add_middleware(BaseHTTPMiddleware, dispatch=error_handler)
 app.add_middleware(KwargsMiddleware, kwargs_func=kwargs_func)
 app.include_router(openai)

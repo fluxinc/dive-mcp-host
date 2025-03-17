@@ -28,7 +28,7 @@ class NewMessage(BaseModel):
     created_at: datetime = Field(alias="createdAt")
     chat_id: str = Field(alias="chatId")
     message_id: str = Field(alias="messageId")
-    files: object  # TODO unknown struct
+    files: list[str]
     id: int | None
 
 

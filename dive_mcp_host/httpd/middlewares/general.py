@@ -23,3 +23,9 @@ async def error_handler(request: Request, call_next: Callable) -> Response:
             status_code=400,
             content=ResultResponse(success=False, message=e.message),
         )
+
+
+async def default_state(request: Request, call_next: Callable) -> Response:
+    """Prefill default state."""
+    request.state.dive_user = {}
+    return await call_next(request)

@@ -1,11 +1,15 @@
+from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from typing import Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..database.models import (  # noqa: F401, TID252
+from dive_mcp_host.httpd.database.models import (
     Chat,
     ChatMessage,
+    LLMModel,
     Message,
+    NewMessage,
     QueryInput,
 )
 
@@ -107,6 +111,57 @@ class McpTool(BaseModel):
     icon: str
 
 
+class ToolCallsContent(BaseModel):
+    """Tool call content."""
+
+    name: str
+    arguments: object
+
+
+class ToolResultContent(BaseModel):
+    """Tool result content."""
+
+    name: str
+    result: object
+
+
+class ChatInfoContent(BaseModel):
+    """Chat info."""
+
+    id: str
+    title: str
+
+
+class MessageInfoContent(BaseModel):
+    """Message info."""
+
+    user_message_id: str = Field(alias="userMessageId")
+    assistant_message_id: str = Field(alias="assistantMessageId")
+
+
+class StreamMessage(BaseModel):
+    """Stream message."""
+
+    type: Literal[
+        "text", "tool_calls", "tool_result", "error", "chat_info", "message_info"
+    ]
+    content: (
+        str
+        | list[ToolCallsContent]
+        | ToolResultContent
+        | ChatInfoContent
+        | MessageInfoContent
+    )
+
+
+class TokenUsage(BaseModel):
+    """Token usage."""
+
+    total_input_tokens: int = Field(alias="totalInputTokens")
+    total_output_tokens: int = Field(alias="totalOutputTokens")
+    total_tokens: int = Field(alias="totalTokens")
+
+
 class UserInputError(Exception):
     """User input error.
 
@@ -121,3 +176,32 @@ class UserInputError(Exception):
             message (str): The error message.
         """
         self.message = message
+
+
+class FunctionDefinition(BaseModel):
+    """Function definition."""
+
+    name: str
+
+
+class ToolDefinition(BaseModel):
+    """Tool definition."""
+
+    type: Literal["function"]
+    function: FunctionDefinition
+
+
+class McpServerManager(ABC):
+    """Abstract base class for MCP server managers."""
+
+    @abstractmethod
+    async def get_available_tools(self) -> list[ToolDefinition]:
+        """Get available tools."""
+
+    @abstractmethod
+    async def get_tool_to_server_map(self) -> Mapping[str, object]:
+        """Get tool to server map."""
+
+    @abstractmethod
+    async def get_tool_infos(self) -> list[McpTool]:
+        """Get tool infos."""

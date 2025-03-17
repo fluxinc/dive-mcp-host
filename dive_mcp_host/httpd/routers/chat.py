@@ -1,18 +1,21 @@
 from collections.abc import AsyncGenerator
-from typing import Annotated, TypeVar
+from typing import TYPE_CHECKING, Annotated, TypeVar
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
-from ..database import Database  # noqa: TC001, TID252
-from ..store import Store  # noqa: TID252
-from .models import (
+from dive_mcp_host.httpd.routers.models import (
     Chat,
     ChatMessage,
     QueryInput,
     ResultResponse,
     UserInputError,
 )
+from dive_mcp_host.httpd.routers.utils import ChatProcessor, event_stream
+
+if TYPE_CHECKING:
+    from ..database import Database  # noqa: TID252
+    from ..store import Store  # noqa: TID252
 
 chat = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -38,26 +41,6 @@ async def list_chat(request: Request) -> DataResult[list[Chat]]:
     return DataResult(success=True, message=None, data=chats)
 
 
-def event_stream(
-    content: AsyncGenerator[str, None],
-) -> StreamingResponse:
-    """Event stream for chat.
-
-    Args:
-        content (AsyncGenerator[str, None]): The content to stream.
-    """
-
-    async def stream_content() -> AsyncGenerator[str, None]:
-        async for chunk in content:
-            yield "data: " + chunk + "\n\n"
-
-    return StreamingResponse(
-        content=stream_content(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-    )
-
-
 @chat.post("")
 async def create_chat(
     request: Request,
@@ -76,8 +59,6 @@ async def create_chat(
         filepaths (list[str] | None): The file paths to upload.
     """
     store: Store = request.app.state.store
-    db: Database = request.app.state.db
-    db_opts = request.state.get_kwargs("db_opts")
 
     if files is None:
         files = []
@@ -89,7 +70,9 @@ async def create_chat(
 
     async def process() -> AsyncGenerator[str, None]:
         query_input = QueryInput(text=message, images=images, documents=documents)
-        # TODO: send query to LLM
+        processor = ChatProcessor(request.app.state, request.state)
+        async for chunk in processor.handle_chat(chat_id, query_input, None):
+            yield chunk
 
         yield "[Done]"
 
@@ -212,4 +195,4 @@ async def abort_chat(request: Request, chat_id: str) -> ResultResponse:
     Returns:
         ResultResponse: Result of the abort operation.
     """
-    return ResultResponse(success=True, message=None)
+    return ResultResponse(success=True, message="Chat abort signal sent successfully")
