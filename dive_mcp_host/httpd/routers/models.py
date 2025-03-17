@@ -4,15 +4,6 @@ from typing import Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dive_mcp_host.httpd.database.models import (
-    Chat,
-    ChatMessage,
-    LLMModel,
-    Message,
-    NewMessage,
-    QueryInput,
-)
-
 T = TypeVar("T")
 
 

@@ -1,26 +1,19 @@
 from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import SystemMessage
 from starlette.datastructures import State
 
+from dive_mcp_host.httpd.database.models import Message, QueryInput
 from dive_mcp_host.httpd.routers.models import (
     ChatInfoContent,
-    LLMModel,
     McpServerManager,
-    Message,
     MessageInfoContent,
-    NewMessage,
-    QueryInput,
     StreamMessage,
     TokenUsage,
 )
-
-if TYPE_CHECKING:
-    from dive_mcp_host.httpd.database import Database
 
 
 def event_stream(
