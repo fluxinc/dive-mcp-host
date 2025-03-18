@@ -63,4 +63,5 @@ async def run() -> None:
             async for response in conversation.query(query, stream_mode="messages"):
                 print(response[0].content, end="")
 
+    print()
     print(f"Thread ID: {current_thread_id}")
