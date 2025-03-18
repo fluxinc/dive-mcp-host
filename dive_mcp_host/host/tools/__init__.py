@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Self
 from langchain_core.tools import BaseTool, ToolException
 from mcp import ClientSession, StdioServerParameters, stdio_client, types
 from mcp.client.sse import sse_client
+from pydantic import BaseModel
 from pydantic_core import to_json
 
 from dive_mcp_host.host.conf import ServerConfig  # noqa: TC001 Pydantic Need this
@@ -38,6 +39,21 @@ type StreamContextType = AbstractAsyncContextManager[
 ]
 
 
+class McpServerInfo(BaseModel):
+    """MCP server capability and tool list."""
+
+    name: str
+    """The name of the MCP server."""
+    tools: list[types.Tool]
+    """The tools provided by the MCP server."""
+    initialize_result: types.InitializeResult
+    """The result of the initialize method.
+
+    initialize_result.capabilities: Server capabilities.
+    initialize_result.instructions: Server instructions.
+    """
+
+
 class ToolManager(ContextProtocol):
     """Manager for the MCP Servers.
 
@@ -50,34 +66,48 @@ class ToolManager(ContextProtocol):
     def __init__(self, configs: dict[str, ServerConfig]) -> None:
         """Initialize the ToolManager."""
         self._configs = configs
-        self._tools = dict[str, McpToolKit]()
+        self._mcp_servers = dict[str, McpServer]()
         self._async_exit_stack = AsyncExitStack()
 
-    def tools(
+    def langchain_tools(
         self,
-        tool_filter: Callable[[McpToolKit], bool] = lambda _: True,
+        tool_filter: Callable[[McpServer], bool] = lambda _: True,
     ) -> list[McpTool]:
         """Get the langchain tools for the MCP servers."""
         return list(
             chain.from_iterable(
-                [i.get_tools() for i in self._tools.values() if tool_filter(i)],
+                [i.get_tools() for i in self._mcp_servers.values() if tool_filter(i)],
             ),
         )
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
         """Get the langchain tools for the MCP servers."""
         # start tools
-        self._tools = {
-            name: McpToolKit(name=name, config=config)
+        self._mcp_servers = {
+            name: McpServer(name=name, config=config)
             for name, config in self._configs.items()
         }
 
         # we can manipulate the stack to add or remove tools
         async with self._async_exit_stack:
             async with asyncio.TaskGroup() as tg:
-                for tool in self._tools.values():
+                for tool in self._mcp_servers.values():
                     tg.create_task(self._async_exit_stack.enter_async_context(tool))
             yield self
+
+    @property
+    def mcp_server_info(self) -> dict[str, McpServerInfo | None]:
+        """Get the MCP server capabilities and tools.
+
+        Returns:
+            A dictionary of MCP server name to server info.
+            If the mcp server is not initialized, the value will be `None`.
+        """
+        return {
+            name: i.server_info
+            for name, i in self._mcp_servers.items()
+            if i.server_info is not None
+        }
 
 
 class _S(Enum):
@@ -89,7 +119,7 @@ class _S(Enum):
     RESTARTING = auto()
 
 
-class McpToolKit(ContextProtocol):
+class McpServer(ContextProtocol):
     """McpServer Toolkit.
 
     A background task continuously monitors the client's state,
@@ -106,6 +136,7 @@ class McpToolKit(ContextProtocol):
         self._task: asyncio.Task[Awaitable[None]] | None = None
         self._session: ClientSession | None = None
         self._tool_results: types.ListToolsResult | None = None
+        self._initialize_result: types.InitializeResult | None = None
         self._session_count: int = 0
         self._exception: BaseException | None = None
         self._mcp_tools: list[McpTool] = []
@@ -118,14 +149,14 @@ class McpToolKit(ContextProtocol):
                     self._get_client() as streams,
                     ClientSession(*streams) as session,
                 ):
-                    await session.initialize()
+                    self._initialize_result = await session.initialize()
                     tool_results = await session.list_tools()
                     mcp_tools = [
                         McpTool(
                             toolkit_name=self.name,
                             name=tool.name,
                             description=tool.description or "",
-                            toolkit=self,
+                            mcp_server=self,
                         )
                         for tool in tool_results.tools
                     ]
@@ -226,13 +257,24 @@ class McpToolKit(ContextProtocol):
 
         return session_ctx()
 
+    @property
+    def server_info(self) -> McpServerInfo | None:
+        """Get the server info."""
+        if self._tool_results is not None and self._initialize_result is not None:
+            return McpServerInfo(
+                name=self.name,
+                initialize_result=self._initialize_result,
+                tools=self._tool_results.tools,
+            )
+        return None
+
 
 class McpTool(BaseTool):
     """A tool for the MCP."""
 
     toolkit_name: str
     description: str = ""
-    toolkit: McpToolKit
+    mcp_server: McpServer
 
     def _run(self, **kwargs: dict[str, Any]) -> str:
         """Run the tool."""
@@ -240,7 +282,7 @@ class McpTool(BaseTool):
 
     async def _arun(self, **kwargs: dict[str, Any]) -> str:
         """Run the tool."""
-        async with self.toolkit.session() as session:
+        async with self.mcp_server.session() as session:
             result = await session.call_tool(self.name, arguments=kwargs)  # type: ignore[arg-type]
         content = to_json(result.content).decode()
         if result.isError:

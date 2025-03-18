@@ -63,7 +63,7 @@ async def test_tool_manager_sse(
         echo_tool_sse_server as (port, configs),
         ToolManager(configs) as tool_manager,
     ):
-        tools = tool_manager.tools()
+        tools = tool_manager.langchain_tools()
         assert sorted([i.name for i in tools]) == ["echo", "ignore"]
         for tool in tools:
             result = await tool.ainvoke(
@@ -87,7 +87,7 @@ async def test_tool_manager_stdio(
 ) -> None:
     """Test the tool manager."""
     async with ToolManager(echo_tool_stdio_config) as tool_manager:
-        tools = tool_manager.tools()
+        tools = tool_manager.langchain_tools()
         assert sorted([i.name for i in tools]) == ["echo", "ignore"]
         for tool in tools:
             result = await tool.ainvoke(
@@ -113,7 +113,7 @@ async def test_stdio_parallel(echo_tool_stdio_config: dict[str, ServerConfig]) -
     simultaneously and respond correctly.
     """
     async with ToolManager(echo_tool_stdio_config) as tool_manager:
-        tools = tool_manager.tools()
+        tools = tool_manager.langchain_tools()
         echo_tool = None
         ignore_tool = None
         for tool in tools:
@@ -172,7 +172,7 @@ async def test_tool_manager_massive_tools(
             update={"name": f"echo_{i}"},
         )
     async with ToolManager(echo_tool_stdio_config) as tool_manager:
-        tools = tool_manager.tools()
+        tools = tool_manager.langchain_tools()
         assert len(tools) == 2 * (more_tools + 1)
 
 
@@ -215,3 +215,25 @@ async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) 
             assert isinstance(tool_message, ToolMessage)
             assert tool_message.name == "echo"
             assert json.loads(str(tool_message.content))[0]["text"] == "Hello, world!"
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_info(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
+    """Test the host context initialization."""
+    config = HostConfig(
+        llm=LLMConfig(
+            model="fake",
+            provider="dive",
+        ),
+        mcp_servers=echo_tool_stdio_config,
+    )
+    import dive_mcp_host.host.tools.echo as echo_tool
+
+    async with DiveMcpHost(config) as mcp_host:
+        assert list(mcp_host.mcp_server_info.keys()) == ["echo"]
+        assert mcp_host.mcp_server_info["echo"] is not None
+        assert mcp_host.mcp_server_info["echo"].initialize_result.capabilities
+        assert (
+            mcp_host.mcp_server_info["echo"].initialize_result.instructions
+            == echo_tool.Instructions
+        )
