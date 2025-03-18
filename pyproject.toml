@@ -8,9 +8,7 @@ version = "0.0.1"
 description = "A MCP host for Dive"
 readme = "README.md"
 requires-python = ">=3.12"
-authors = [
-    { name = "Louis Liu", email = "louis@funmula.com" }
-]
+authors = [{ name = "Louis Liu", email = "louis@funmula.com" }]
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
@@ -29,10 +27,11 @@ dependencies = [
     "pywin32>=306; sys_platform == 'win32' or platform_system == 'Windows'",
     "sqlite-vec>=0.1.0",
     "psycopg[binary]>=3.2.5",
-    "alembic>=1.15.1,< 1.16", # Alembic doesn't use SemVer https://alembic.sqlalchemy.org/en/latest/front.html#versioning-scheme
+    "alembic>=1.15.1,< 1.16",                                                # Alembic doesn't use SemVer https://alembic.sqlalchemy.org/en/latest/front.html#versioning-scheme
     "sqlalchemy[asyncio]>=2.0.38",
     "psycopg2-binary>=2.9.10",
     "asyncpg>=0.30.0",
+    "python-multipart>=0.0.20",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -42,12 +41,7 @@ classifiers = [
 
 [project.optional-dependencies]
 clipboard = []
-dev = [
-    "pytest",
-    "pytest-asyncio",
-    "langchain-community",
-    "ruff"
-]
+dev = ["pytest", "pytest-asyncio", "langchain-community", "ruff"]
 
 [project.urls]
 Homepage = "https://github.com/OpenAgentPlatform/dive-mcp-py"
@@ -66,13 +60,72 @@ asyncio_default_fixture_loop_scope = "function"
 [tool.ruff]
 target-version = "py312"
 line-length = 88
-lint.select = ["E", "F", "B", "I", "W", "C90", "N", "D", "UP", "ANN", "S", "BLE", "A", "COM", "C4", "DTZ", "T10", "EM", "EXE", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "NPY", "RUF"]
-lint.ignore = ["ANN401", "D100", "D104", "D105", "EM", "ERA001", "COM812"]
+lint.select = [
+    "E",
+    "F",
+    "B",
+    "I",
+    "W",
+    "C90",
+    "N",
+    "D",
+    "UP",
+    "ANN",
+    "S",
+    "BLE",
+    "A",
+    "COM",
+    "C4",
+    "DTZ",
+    "T10",
+    "EM",
+    "EXE",
+    "ISC",
+    "ICN",
+    "G",
+    "INP",
+    "PIE",
+    "T20",
+    "PYI",
+    "PT",
+    "Q",
+    "RSE",
+    "RET",
+    "SLF",
+    "SLOT",
+    "SIM",
+    "TID",
+    "TCH",
+    "ARG",
+    "PTH",
+    "ERA",
+    "PD",
+    "PGH",
+    "PL",
+    "NPY",
+    "RUF",
+]
+lint.ignore = [
+    "ANN401",
+    "D100",
+    "D104",
+    "D105",
+    "EM",
+    "ERA001",
+    "COM812",
+    "B008",   # For FastAPI 'Depends' usage
+]
 # Follow Google Style Guide
 lint.extend-select = ["I"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "ANN", "D107", "ARG001", "PLR2004"]  # Allow assert statements in test files
+"tests/**/*.py" = [
+    "S101",
+    "ANN",
+    "D107",
+    "ARG001",
+    "PLR2004",
+] # Allow assert statements in test files
 "dive_mcp_host/cli/**/*.py" = ["S101", "ANN", "D107", "T201"]
 
 [tool.ruff.format]
@@ -83,16 +136,21 @@ docstring-code-format = true
 docstring-code-line-length = 88
 
 [tool.ruff.lint.pydocstyle]
-convention = "google"  # Use Google-style docstrings
+convention = "google" # Use Google-style docstrings
 
 [tool.ruff.lint.isort]
 force-single-line = false
 known-first-party = ["dive_mcp_host"]
-section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder",
+]
 
 [tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"
 
 [tool.ruff.lint.pycodestyle]
 max-doc-length = 88
-

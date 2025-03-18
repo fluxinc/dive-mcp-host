@@ -1,15 +1,16 @@
-from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Annotated, TypeVar
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 from dive_mcp_host.httpd.database.models import Chat, ChatMessage, QueryInput
+from dive_mcp_host.httpd.dependencies import get_app, get_dive_user
 from dive_mcp_host.httpd.routers.models import (
     ResultResponse,
     UserInputError,
 )
 from dive_mcp_host.httpd.routers.utils import ChatProcessor, EventStreamContextManager
+from dive_mcp_host.httpd.server import DiveHostAPI
 
 if TYPE_CHECKING:
     from dive_mcp_host.httpd.database.msg_store.abstract import AbstractMessageStore
@@ -27,15 +28,21 @@ class DataResult[T](ResultResponse):
 
 
 @chat.get("/list")
-async def list_chat(request: Request) -> DataResult[list[Chat]]:
+async def list_chat(
+    app: DiveHostAPI = Depends(get_app),
+    dive_user: "DiveUser" = Depends(get_dive_user),
+) -> DataResult[list[Chat]]:
     """List all available chats.
+
+    Args:
+        app (DiveHostAPI): The DiveHostAPI instance.
+        dive_user (DiveUser): The DiveUser instance.
 
     Returns:
         DataResult[list[Chat]]: List of available chats.
     """
-    db: AbstractMessageStore = request.app.state.db
-    db_opts = request.state.get_kwargs("db_opts")
-    chats = await db.get_all_chats(**db_opts)
+    async with app.db_sessionmaker() as session:
+        chats = await app.msg_store(session).get_all_chats(dive_user["user_id"])
     return DataResult(success=True, message=None, data=chats)
 
 
@@ -167,36 +174,51 @@ async def retry_chat(
 
 
 @chat.get("/{chat_id}")
-async def get_chat(request: Request, chat_id: str) -> DataResult[ChatMessage]:
+async def get_chat(
+    chat_id: str,
+    app: DiveHostAPI = Depends(get_app),
+    dive_user: "DiveUser" = Depends(get_dive_user),
+) -> DataResult[ChatMessage]:
     """Get a specific chat by ID with its messages.
 
     Args:
-        request (Request): The request object.
         chat_id (str): The ID of the chat to retrieve.
+        app (DiveHostAPI): The DiveHostAPI instance.
+        dive_user (DiveUser): The DiveUser instance.
 
     Returns:
         DataResult[ChatMessage]: The chat and its messages.
     """
-    db: AbstractMessageStore = request.app.state.db
-    db_opts = request.state.get_kwargs("db_opts")
-    chat = await db.get_chat_with_messages(chat_id, **db_opts)
+    async with app.db_sessionmaker() as session:
+        chat = await app.msg_store(session).get_chat_with_messages(
+            chat_id=chat_id,
+            user_id=dive_user["user_id"],
+        )
     return DataResult(success=True, message=None, data=chat)
 
 
 @chat.delete("/{chat_id}")
-async def delete_chat(request: Request, chat_id: str) -> ResultResponse:
+async def delete_chat(
+    chat_id: str,
+    app: DiveHostAPI = Depends(get_app),
+    dive_user: "DiveUser" = Depends(get_dive_user),
+) -> ResultResponse:
     """Delete a specific chat by ID.
 
     Args:
-        request (Request): The request object.
         chat_id (str): The ID of the chat to delete.
+        app (DiveHostAPI): The DiveHostAPI instance.
+        dive_user (DiveUser): The DiveUser instance.
 
     Returns:
         ResultResponse: Result of the delete operation.
     """
-    db: AbstractMessageStore = request.app.state.db
-    db_opts = request.state.get_kwargs("db_opts")
-    await db.delete_chat(chat_id, **db_opts)
+    async with app.db_sessionmaker() as session:
+        await app.msg_store(session).delete_chat(
+            chat_id=chat_id,
+            user_id=dive_user["user_id"],
+        )
+        await session.commit()
     return ResultResponse(success=True, message=None)
 
 

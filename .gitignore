@@ -26,6 +26,7 @@ htmlcov/
 local_settings.py
 *.db
 *.sqlite3
+*.sqlite
 docs/_build/
 .mypy_cache/
 .dmypy.json
