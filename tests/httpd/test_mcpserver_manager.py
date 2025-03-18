@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import pytest_asyncio
 
-from dive_mcp_host.httpd.conf.mcpserver_config.manager import (
+from dive_mcp_host.httpd.conf.mcpserver.manager import (
     Config,
     FunctionDefinition,
     MCPServerManager,
@@ -83,8 +83,8 @@ class TestMCPServerManager:
             assert config.mcp_servers["test_server"].transport == "command"
 
     @pytest.mark.asyncio
-    @patch("dive_mcp_host.httpd.conf.mcpserver_config.manager.MockClient")
-    @patch("dive_mcp_host.httpd.conf.mcpserver_config.manager.MockTransport")
+    @patch("dive_mcp_host.httpd.conf.mcpserver.manager.MockClient")
+    @patch("dive_mcp_host.httpd.conf.mcpserver.manager.MockTransport")
     async def test_connect_single_server(
         self,
         mock_transport_class,
@@ -136,8 +136,8 @@ class TestMCPServerManager:
             assert "test_tool" in manager.tool_to_server_map
 
     @pytest.mark.asyncio
-    @patch("dive_mcp_host.httpd.conf.mcpserver_config.manager.MockClient")
-    @patch("dive_mcp_host.httpd.conf.mcpserver_config.manager.MockTransport")
+    @patch("dive_mcp_host.httpd.conf.mcpserver.manager.MockClient")
+    @patch("dive_mcp_host.httpd.conf.mcpserver.manager.MockTransport")
     async def test_disconnect_single_server(
         self,
         mock_transport_class,
@@ -227,7 +227,7 @@ class TestMCPServerManager:
 
     @pytest.mark.asyncio
     @patch(
-        "dive_mcp_host.httpd.conf.mcpserver_config.manager.MCPServerManager.connect_all_servers",
+        "dive_mcp_host.httpd.conf.mcpserver.manager.MCPServerManager.connect_all_servers",
     )
     async def test_initialize(self, mock_connect_all, mock_config_file):
         """Test manager initialization."""
@@ -246,10 +246,10 @@ class TestMCPServerManager:
 
     @pytest.mark.asyncio
     @patch(
-        "dive_mcp_host.httpd.conf.mcpserver_config.manager.MCPServerManager.disconnect_all_servers",
+        "dive_mcp_host.httpd.conf.mcpserver.manager.MCPServerManager.disconnect_all_servers",
     )
     @patch(
-        "dive_mcp_host.httpd.conf.mcpserver_config.manager.MCPServerManager.connect_all_servers",
+        "dive_mcp_host.httpd.conf.mcpserver.manager.MCPServerManager.connect_all_servers",
     )
     async def test_sync_servers_with_config(
         self,
@@ -313,11 +313,11 @@ class TestMCPServerManagerIntegration:
 
     @pytest.mark.asyncio
     @patch(
-        "dive_mcp_host.httpd.conf.mcpserver_config.manager.MockClient",
+        "dive_mcp_host.httpd.conf.mcpserver.manager.MockClient",
         new=AsyncMock,
     )
     @patch(
-        "dive_mcp_host.httpd.conf.mcpserver_config.manager.MockTransport",
+        "dive_mcp_host.httpd.conf.mcpserver.manager.MockTransport",
         new=AsyncMock,
     )
     async def test_full_workflow(self, test_config_path):

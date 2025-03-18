@@ -8,7 +8,7 @@ import pytest_asyncio
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 
-from dive_mcp_host.httpd.conf.model_config.manager import ModelManager
+from dive_mcp_host.httpd.conf.model.manager import ModelManager
 
 # Register custom mark
 integration = pytest.mark.integration
@@ -99,7 +99,7 @@ class TestModelManager:
         assert config.get("activeProvider") == "replaced_provider"
 
     @pytest.mark.asyncio
-    @patch("dive_mcp_host.httpd.conf.model_config.manager.init_chat_model")
+    @patch("dive_mcp_host.httpd.conf.model.manager.init_chat_model")
     async def test_initialize_model(self, mock_init_chat_model, mock_config_file):
         """Test initializing the model."""
         # Create a mock model instance
@@ -115,7 +115,7 @@ class TestModelManager:
         mock_init_chat_model.assert_called()
 
     @pytest.mark.asyncio
-    @patch("dive_mcp_host.httpd.conf.model_config.manager.init_chat_model")
+    @patch("dive_mcp_host.httpd.conf.model.manager.init_chat_model")
     async def test_get_model(self, mock_init_chat_model, mock_config_file):
         """Test getting the model instance."""
         # Create a mock model instance
@@ -129,7 +129,7 @@ class TestModelManager:
         assert model is mock_model
 
     @pytest.mark.asyncio
-    @patch("dive_mcp_host.httpd.conf.model_config.manager.init_chat_model")
+    @patch("dive_mcp_host.httpd.conf.model.manager.init_chat_model")
     async def test_reload_model(self, mock_init_chat_model, mock_config_file):
         """Test reloading the model."""
         # Create a mock model instance
@@ -143,7 +143,7 @@ class TestModelManager:
         assert manager.model is mock_model
 
     @pytest.mark.asyncio
-    @patch("dive_mcp_host.httpd.conf.model_config.manager.init_chat_model")
+    @patch("dive_mcp_host.httpd.conf.model.manager.init_chat_model")
     async def test_generate_title(self, mock_init_chat_model, mock_config_file):
         """Test generating a title."""
         # Create a mock model instance and response
@@ -188,7 +188,7 @@ class TestModelManagerIntegration:
             yield str(config_path)
 
     @pytest.mark.asyncio
-    @patch("dive_mcp_host.httpd.conf.model_config.manager.init_chat_model")
+    @patch("dive_mcp_host.httpd.conf.model.manager.init_chat_model")
     async def test_full_model_workflow(self, mock_init_chat_model, test_config_path):
         """Test the complete model configuration, initialization, and usage workflow."""
         # Create a mock model instance
