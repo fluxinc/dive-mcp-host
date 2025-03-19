@@ -11,7 +11,7 @@ from dive_mcp_host.host.conf import HostConfig
 from dive_mcp_host.host.conversation import Conversation
 from dive_mcp_host.host.helpers.checkpointer import get_checkpointer
 from dive_mcp_host.host.helpers.context import ContextProtocol
-from dive_mcp_host.host.tools import ToolManager
+from dive_mcp_host.host.tools import McpServerInfo, ToolManager
 from dive_mcp_host.models import load_model
 
 if TYPE_CHECKING:
@@ -81,7 +81,7 @@ class DiveMcpHost(ContextProtocol):
                 await self._checkpointer.setup()
             await stack.enter_async_context(self._tool_manager)
             try:
-                self._tools = self._tool_manager.tools()
+                self._tools = self._tool_manager.langchain_tools()
                 yield self
             except Exception as e:
                 raise e
@@ -129,7 +129,7 @@ class DiveMcpHost(ContextProtocol):
         if self._model is None:
             raise RuntimeError("Model not initialized")
         if tools is None:
-            tools = self._tool_manager.tools()
+            tools = self._tool_manager.langchain_tools()
         agent_factory = get_agent_factory_method(
             self._model,
             tools,
@@ -163,8 +163,18 @@ class DiveMcpHost(ContextProtocol):
 
     @property
     def tools(self) -> Sequence[BaseTool]:
-        """The tools available to the host.
+        """The ACTIVE tools to the host.
 
         This property is read-only. Call `reload` to change the tools.
         """
         return self._tools
+
+    @property
+    def mcp_server_info(self) -> dict[str, McpServerInfo | None]:
+        """Get information about active MCP servers.
+
+        Returns:
+            A dictionary mapping server names to their capabilities and tools.
+            The value will be None for any server that has not completed initialization.
+        """
+        return self._tool_manager.mcp_server_info

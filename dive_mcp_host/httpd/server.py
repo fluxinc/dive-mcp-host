@@ -1,3 +1,5 @@
+from collections.abc import AsyncGenerator
+from contextlib import AsyncExitStack, asynccontextmanager
 from logging import getLogger
 from typing import Any
 
@@ -5,6 +7,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from dive_mcp_host.host.conf import HostConfig, LLMConfig, ServerConfig
 from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.httpd.database.migrate import db_migration
 from dive_mcp_host.httpd.database.msg_store.base import BaseMessageStore
@@ -23,7 +26,8 @@ class DiveHostAPI(FastAPI):
         """Initialize the DiveHostAPI."""
         super().__init__(*args, **kwargs)
 
-    async def prepare(self) -> None:
+    @asynccontextmanager
+    async def prepare(self) -> AsyncGenerator[None, None]:
         """Setup the DiveHostAPI."""
         logger.info("Server Prepare")
 
@@ -43,7 +47,32 @@ class DiveHostAPI(FastAPI):
 
         self._store = LocalStore()
 
-        logger.info("Server Prepare Complete")
+        # temp host config
+        config = HostConfig(
+            llm=LLMConfig(
+                model="fake",
+                provider="dive",
+            ),
+            mcp_servers={
+                "echo": ServerConfig(
+                    name="echo",
+                    command="python3",
+                    args=[
+                        "-m",
+                        "dive_mcp_host.host.tools.echo",
+                        "--transport=stdio",
+                    ],
+                ),
+            },
+        )
+
+        async with AsyncExitStack() as stack:
+            default_host = DiveMcpHost(config)
+            await stack.enter_async_context(default_host)
+            self.dive_host["default"] = default_host
+
+            logger.info("Server Prepare Complete")
+            yield
 
     async def ready(self) -> bool:
         """Ready the DiveHostAPI."""

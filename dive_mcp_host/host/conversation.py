@@ -73,7 +73,7 @@ class Conversation[T](ContextProtocol):
 
     def query(
         self,
-        query: str | HumanMessage,
+        query: str | HumanMessage | list[HumanMessage],
         *,
         stream_mode: list[StreamMode] | StreamMode | None = "messages",
     ) -> AsyncIterator[dict[str, Any] | Any]:

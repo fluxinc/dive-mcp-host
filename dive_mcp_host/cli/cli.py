@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import HumanMessage
 
 from dive_mcp_host.cli.cli_types import CLIArgs
 from dive_mcp_host.host.conf import HostConfig
@@ -54,16 +54,14 @@ async def run() -> None:
     query = parse_query(args)
     config = load_config(args.config_path)
 
-    ai_responses: list[AIMessage] = []
     current_thread_id: str | None = args.thread_id
 
     async with DiveMcpHost(config) as mcp_host:
         conversation = mcp_host.conversation(thread_id=current_thread_id)
         current_thread_id = conversation.thread_id
         async with conversation:
-            async for response in conversation.query(query, stream_mode=None):
-                ai_message = response["agent"]["messages"][0]
-                ai_responses.append(ai_message)
-                print(ai_message.content)
+            async for response in conversation.query(query, stream_mode="messages"):
+                print(response[0].content, end="")
 
+    print()
     print(f"Thread ID: {current_thread_id}")
