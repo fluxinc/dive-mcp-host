@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request
 
-from .models import McpServerManager, McpTool, ResultResponse
+from dive_mcp_host.httpd.routers.models import McpTool, ResultResponse
 
 tools = APIRouter(prefix="/tools", tags=["tools"])
 
@@ -18,6 +18,6 @@ async def list_tools(request: Request) -> ToolsResult:
     Returns:
         ToolsResult: A list of available tools.
     """
-    mcp: McpServerManager = request.app.state.mcp
+    mcp = request.app.state.mcp
     tools = await mcp.get_tool_infos()
     return ToolsResult(success=True, message=None, tools=tools)

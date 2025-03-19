@@ -1,10 +1,9 @@
-from abc import ABC, abstractmethod
-from collections.abc import Mapping
 from enum import StrEnum
-from typing import Literal, TypeVar, TypedDict
+from typing import Literal, TypeVar
 
-from langchain_core.language_models import BaseChatModel
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
+
+from dive_mcp_host.host.conf import LLMConfig
 
 T = TypeVar("T")
 
@@ -58,48 +57,22 @@ class ModelType(StrEnum):
     DEEPSEEK = "deepseek"
     OTHER = "other"
 
+    @classmethod
+    def get_model_type(cls, llm_config: LLMConfig) -> "ModelType":
+        """Get model type from model name."""
+        if llm_config.provider == "ollama":
+            return cls.OLLAMA
 
-class ModelSettings(BaseModel):
-    """Model settings including provider, API key and parameters."""
+        if llm_config.provider == "mistralai":
+            return cls.MISTRAL
 
-    model: str
-    model_provider: str = Field(alias="modelProvider")
-    api_key: str | None = Field(alias="apiKey")
-    configuration: ModelConfiguration | None
-    temperature: float | None
-    top_p: float | None = Field(alias="topP")
-    max_tokens: int | None = Field(alias="maxTokens")
+        if llm_config.provider == "bedrock":
+            return cls.BEDROCK
 
-    model_config = ConfigDict(extra="allow")
+        if "deepseek" in llm_config.model.lower():
+            return cls.DEEPSEEK
 
-    @property
-    def model_type(self) -> ModelType:
-        """Model type."""
-        if self.model_provider == "ollama":
-            return ModelType.OLLAMA
-
-        if self.model_provider == "mistralai":
-            return ModelType.MISTRAL
-
-        if self.model_provider == "bedrock":
-            return ModelType.BEDROCK
-
-        if "deepseek" in self.model.lower() or (
-            "deepseek" in self.configuration.base_url.lower()
-            if self.configuration
-            else False
-        ):
-            return ModelType.DEEPSEEK
-
-        return ModelType.OTHER
-
-
-class ModelConfig(BaseModel):
-    """Overall model configuration including active provider and tool settings."""
-
-    active_provider: str = Field(alias="activeProvider")
-    enable_tools: bool = Field(alias="enableTools")
-    configs: dict[str, ModelSettings]
+        return cls.OTHER
 
 
 class ModelSettingsProperty(BaseModel):
@@ -200,69 +173,3 @@ class UserInputError(Exception):
             message (str): The error message.
         """
         self.message = message
-
-
-class FunctionDefinition(TypedDict):
-    """Function definition."""
-
-    name: str
-
-
-class ToolDefinition(TypedDict):
-    """Tool definition."""
-
-    type: Literal["function"]
-    function: FunctionDefinition
-
-
-class McpServerManager(ABC):
-    """Abstract base class for MCP server managers."""
-
-    @abstractmethod
-    async def get_available_tools(self) -> list[ToolDefinition]:
-        """Get available tools."""
-
-    @abstractmethod
-    async def get_tool_to_server_map(self) -> Mapping[str, object]:
-        """Get tool to server map."""
-
-    @abstractmethod
-    async def get_tool_infos(self) -> list[McpTool]:
-        """Get tool infos."""
-
-
-class ModelManager(ABC):
-    """Abstract base class for model managers."""
-
-    current_model_settings: ModelSettings | None = None
-    enable_tools: bool = True
-
-    @abstractmethod
-    async def get_model_config(self) -> ModelConfig:
-        """Get model."""
-
-    @abstractmethod
-    async def init_model(self) -> BaseChatModel | None:
-        """Initialize model."""
-
-    @abstractmethod
-    async def save_model_config(
-        self, provider: str, model_settings: ModelSettings, enable_tools: bool
-    ) -> None:
-        """Save model config."""
-
-    @abstractmethod
-    async def replace_all_model_config(self, model_config: ModelConfig) -> None:
-        """Replace all model config."""
-
-    @abstractmethod
-    async def generate_title(self, content: str) -> str:
-        """Generate title."""
-
-    @abstractmethod
-    def get_model(self) -> BaseChatModel | None:
-        """Get model."""
-
-    @abstractmethod
-    async def reload_model(self) -> None:
-        """Reload model."""

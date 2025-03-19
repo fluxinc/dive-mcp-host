@@ -77,6 +77,9 @@ class LocalStore(Store):
         image = Image.open(path)
 
         image.resize((800, 800))
+        if image.mode == "P":
+            image = image.convert("RGB")
+
         buffer = BytesIO()
         image.save(buffer, format="JPEG")
         base64_image = base64.b64encode(buffer.getvalue()).decode("utf-8")

@@ -1,7 +1,6 @@
 import asyncio
-import contextlib
 import json
-from collections.abc import AsyncGenerator, Callable, Coroutine, Iterator
+from collections.abc import AsyncGenerator, Callable, Coroutine
 from typing import TYPE_CHECKING, Any, Self
 from uuid import uuid4
 
@@ -10,7 +9,6 @@ from langchain_core.messages import (
     AIMessage,
     BaseMessage,
     HumanMessage,
-    SystemMessage,
 )
 from pydantic import BaseModel
 from starlette.datastructures import State
@@ -18,20 +16,18 @@ from starlette.datastructures import State
 from dive_mcp_host.httpd.database.models import Message, NewMessage, QueryInput, Role
 from dive_mcp_host.httpd.routers.models import (
     ChatInfoContent,
-    McpServerManager,
     MessageInfoContent,
-    ModelManager,
-    ModelType,
     StreamMessage,
     TokenUsage,
-    ToolCallsContent,
 )
+from dive_mcp_host.httpd.server import DiveHostAPI
 from dive_mcp_host.httpd.store.store import SUPPORTED_IMAGE_EXTENSIONS, Store
 
 if TYPE_CHECKING:
     from langchain_core.messages.ai import AIMessageChunk
 
-    from dive_mcp_host.httpd.database.msg_store.abstract import AbstractMessageStore
+    from dive_mcp_host.host.host import DiveMcpHost
+    from dive_mcp_host.httpd.middlewares.general import DiveUser
 
 
 class EventStreamContextManager:
@@ -44,6 +40,11 @@ class EventStreamContextManager:
     def __init__(self) -> None:
         """Initialize the event stream context manager."""
         self.queue = asyncio.Queue()
+
+    def __del__(self) -> None:
+        """Delete the event stream context manager."""
+        self.done = True
+        asyncio.create_task(self.queue.put(None))  # noqa: RUF006
 
     def add_task(
         self, func: Callable[[], Coroutine[Any, Any, None]], *args: Any, **kwargs: Any
@@ -107,17 +108,16 @@ class ChatProcessor:
 
     def __init__(
         self,
-        app_state: State,
+        app: DiveHostAPI,
         request_state: State,
         stream: EventStreamContextManager,
     ) -> None:
         """Initialize chat processor."""
-        self.app_state = app_state
+        self.app = app
         self.request_state = request_state
         self.stream = stream
-        self.db: AbstractMessageStore = app_state.db
-        self.mcp: McpServerManager = app_state.mcp
-        self.store: Store = app_state.store
+        self.store: Store = app.store
+        self.dive_host: DiveMcpHost = app.dive_host["default"]
 
     async def handle_chat(
         self,
@@ -126,45 +126,14 @@ class ChatProcessor:
         regenerate_message_id: str | None,
     ) -> str:
         """Handle chat."""
-        db_opts = self.request_state.get_kwargs("db_opts")
-
         if chat_id is None:
             chat_id = str(uuid4())
 
-        history: list[BaseMessage] = []
         title = "New Chat"
         title_await = None
-        system_prompt = None  # TODO: get system prompt
 
-        if system_prompt:
-            history.append(SystemMessage(content=system_prompt))
-
-        message_history = await self.db.get_chat_with_messages(chat_id, **db_opts)
-
-        if message_history:
-            title = message_history.chat.title
-
-            if regenerate_message_id:
-                target_index = next(
-                    (
-                        i
-                        for i, message in enumerate(message_history.messages)
-                        if message.id == regenerate_message_id
-                    ),
-                    None,
-                )
-                if target_index is not None:
-                    message_history.messages = message_history.messages[:target_index]
-
-            # TODO: max N history messages
-
-            history = await self.__process_history_messages(
-                message_history.messages, history
-            )
-        elif query_input.text:
-            # TODO: generate title
-            model_manager: ModelManager = self.app_state.model_manager
-            title_await = model_manager.generate_title(query_input.text)
+        if query_input.text:
+            title_await = self._generate_title(query_input.text)
 
         await self.stream.write(
             StreamMessage(
@@ -173,42 +142,45 @@ class ChatProcessor:
             ).model_dump_json()
         )
 
-        result, token_usage = await self.__process_chat(chat_id, query_input, history)
+        result, token_usage = await self._process_chat(chat_id, query_input)
 
         if title_await:
             title = await title_await
 
-        if not await self.db.check_chat_exists(chat_id, **db_opts):
-            await self.db.create_chat(chat_id, title, **db_opts)
+        dive_user: DiveUser = self.request_state.dive_user
+        async with self.app.db_sessionmaker() as session:
+            db = self.app.msg_store(session)
+            if not await db.check_chat_exists(chat_id, dive_user["user_id"]):
+                await db.create_chat(
+                    chat_id, title, dive_user["user_id"], dive_user["user_type"]
+                )
 
-        user_message_id = str(uuid4())
-        if regenerate_message_id:
-            await self.db.delete_messages_after(
-                chat_id, regenerate_message_id, **db_opts
-            )
-        else:
-            files = (query_input.images or []) + (query_input.documents or [])
-            await self.db.create_message(
+            user_message_id = str(uuid4())
+            if regenerate_message_id:
+                await db.delete_messages_after(chat_id, regenerate_message_id)
+            else:
+                files = (query_input.images or []) + (query_input.documents or [])
+                await db.create_message(
+                    NewMessage(
+                        chatId=chat_id,
+                        role=Role.USER,
+                        messageId=user_message_id,
+                        content=query_input.text or "",
+                        files=json.dumps(files),
+                    ),
+                )
+
+            assistant_message_id = str(uuid4())
+            await db.create_message(
                 NewMessage(
                     chatId=chat_id,
-                    role=Role.USER,
-                    messageId=user_message_id,
-                    content=query_input.text or "",
-                    files=json.dumps(files),
+                    role=Role.ASSISTANT,
+                    messageId=assistant_message_id,
+                    content=result,
                 ),
-                **db_opts,
             )
 
-        assistant_message_id = str(uuid4())
-        await self.db.create_message(
-            NewMessage(
-                chatId=chat_id,
-                role=Role.ASSISTANT,
-                messageId=assistant_message_id,
-                content=result,
-            ),
-            **db_opts,
-        )
+            await session.commit()
 
         await self.stream.write(
             StreamMessage(
@@ -229,11 +201,10 @@ class ChatProcessor:
 
         return result
 
-    async def __process_chat(
+    async def _process_chat(
         self,
         chat_id: str | None,
         query_input: str | QueryInput | None,
-        history: list[BaseMessage],
     ) -> tuple[str, TokenUsage]:
         """Process chat.
 
@@ -245,12 +216,6 @@ class ChatProcessor:
         Returns:
             tuple[str, TokenUsage]: Assistant message ID and token usage statistics.
         """
-        tool_client_map = await self.mcp.get_tool_to_server_map()
-        available_tools = await self.mcp.get_available_tools()
-        model_manager: ModelManager = self.app_state.model_manager
-        model = model_manager.get_model()
-        current_model_settings = model_manager.current_model_settings
-
         if chat_id:
             # TODO: abort controller
             ...
@@ -262,10 +227,7 @@ class ChatProcessor:
             totalTokens=0,
         )
 
-        messages = history
-
-        if not model:
-            raise ChatError("Model not initialized")
+        messages = []
 
         # if retry input is empty
         if query_input:
@@ -311,184 +273,30 @@ class ChatProcessor:
 
                 messages.append(HumanMessage(content=content))
 
-        has_tool_calls = True
-        tools = []  # TODO get tool definitions
-        run_model = model.bind_tools(tools) if model_manager.enable_tools else model
+        dive_user: DiveUser = self.request_state.dive_user
 
-        is_ollama = (
-            current_model_settings.model_type == ModelType.OLLAMA
-            if current_model_settings
-            else False
+        conversation = self.dive_host.conversation(
+            thread_id=chat_id, user_id=dive_user["user_id"] or "default"
         )
-        is_deepseek = (
-            current_model_settings.model_type == ModelType.DEEPSEEK
-            if current_model_settings
-            else False
-        )
-        is_mistral = (
-            current_model_settings.model_type == ModelType.MISTRAL
-            if current_model_settings
-            else False
-        )
-        is_bedrock = (
-            current_model_settings.model_type == ModelType.BEDROCK
-            if current_model_settings
-            else False
-        )
-
-        while has_tool_calls:
-            # TODO: abort controller
-            stream: Iterator[AIMessageChunk] = run_model.stream(messages)  # type: ignore  # noqa: PGH003
-            current_content = ""
-            tool_calls = []
-
-            for chunk in stream:
-                chunk: AIMessageChunk
-                # TODO: calc token usage
-
-                if chunk.content:
-                    chunk_message = ""
-                    if isinstance(chunk.content, list):
-                        # compatible Anthropic response format
-                        for item in chunk.content:
-                            if isinstance(item, dict) and (
-                                item.get("type") == "text"
-                                or item.get("type") == "text_delta"
-                            ):
-                                chunk_message = item.get("text", "")
-                                break
-                    else:
-                        chunk_message = chunk.content
-
-                    current_content += chunk_message
-                    await self.stream.write(
-                        StreamMessage(
-                            type="text",
-                            content=chunk_message,
-                        ).model_dump_json()
-                    )
-
-                is_tool_use = isinstance(chunk.content, list) and any(
-                    (isinstance(x, dict) and x.get("type") == "tool_use")
-                    for x in chunk.content
-                )
-
-                if chunk.tool_calls or chunk.tool_call_chunks or is_tool_use:
-                    tool_call_chunks = chunk.tool_call_chunks or []
-
-                    for chunks in tool_call_chunks:
-                        index = chunks["index"]
-                        if (
-                            is_ollama
-                            and index is not None
-                            and index > 0
-                            and len(tool_calls) >= index
-                        ):
-                            elems = list(
-                                filter(lambda x: x["id"] == chunks["id"], tool_calls)
-                            )
-                            if not elems:
-                                index = len(tool_calls)
-                            else:
-                                index = tool_calls.index(elems[0])
-
-                        if (
-                            index is not None
-                            and index >= 0
-                            and index >= len(tool_calls)
-                        ):
-                            call = {
-                                "id": chunks["id"],
-                                "type": "function",
-                                "function": {
-                                    "name": chunks["name"],
-                                    "arguments": "",
-                                },
-                            }
-                            tool_calls.append(call)
-                            index = tool_calls.index(call)
-
-                        if index is not None and index >= 0:
-                            if chunks["name"]:
-                                tool_calls[index]["function"]["name"] = chunks["name"]
-
-                            if chunks["args"]:  # or chunk["input"] not found
-                                tool_calls[index]["function"]["arguments"] += (
-                                    chunks["args"] or ""
-                                )
-
-                            args: str = tool_calls[index]["function"]["arguments"]
-                            if args.startswith("{") and args.endswith("}"):
-                                with contextlib.suppress(json.JSONDecodeError):
-                                    parsed_args = json.loads(args)
-                                    tool_calls[index]["function"]["arguments"] = (
-                                        json.dumps(parsed_args)
-                                    )
-            final_response += current_content
-
-            if not tool_calls:
-                has_tool_calls = False
-                break
-
-            ai_message_content: list[str | dict] = [
-                {
-                    "type": "text",
-                    "text": current_content or ".",
-                }
-            ]
-
-            if is_deepseek or is_mistral or is_bedrock:
-                for call in tool_calls:
-                    parsed_args = {}
-                    try:
-                        parsed_args = json.loads(call["function"]["arguments"])
-                    except json.JSONDecodeError:
-                        call["function"]["arguments"] = "{}"
-
-                    ai_message_content.append(
-                        {
-                            "type": "tool_use",
-                            "id": call["id"],
-                            "name": call["function"]["name"],
-                            "input": parsed_args,
-                        }
-                    )
-
-            mapped_tool_calls = []
-            for call in tool_calls:
-                args = call["function"]["arguments"]
-                mapped_tool_calls.append(
-                    {
-                        "id": call["id"],
-                        "type": "function",
-                        "function": {
-                            "name": call["function"]["name"],
-                            "arguments": args if args != "" else "{}",
-                        },
-                    }
-                )
-
-            messages.append(
-                AIMessage(content=ai_message_content, tool_calls=mapped_tool_calls)
-            )
-
-            if tool_calls:
+        async with conversation:
+            async for message_chunk, _ in conversation.query(  # type: ignore noqa: PGH003
+                messages[0], stream_mode="messages"
+            ):
+                message_chunk: AIMessageChunk
                 await self.stream.write(
                     StreamMessage(
-                        type="tool_calls",
-                        content=[
-                            ToolCallsContent(
-                                name=x["function"]["name"],
-                                arguments=x["function"]["arguments"] or "{}",
-                            )
-                            for x in tool_calls
-                        ],
+                        type="text",
+                        content=str(message_chunk.content),
                     )
                 )
 
-        raise NotImplementedError("Not implemented")
+        return final_response, token_usage
 
-    async def __process_history_messages(
+    async def _generate_title(self, query: str) -> str:
+        """Generate title."""
+        return "New Chat"  # TODO: generate title
+
+    async def _process_history_messages(
         self, history_messages: list[Message], history: list[BaseMessage]
     ) -> list[BaseMessage]:
         """Process history messages."""

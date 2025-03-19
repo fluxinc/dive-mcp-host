@@ -14,6 +14,7 @@ from dive_mcp_host.httpd.server import DiveHostAPI
 
 if TYPE_CHECKING:
     from dive_mcp_host.httpd.database.msg_store.abstract import AbstractMessageStore
+    from dive_mcp_host.httpd.middlewares.general import DiveUser
     from dive_mcp_host.httpd.store import Store
 
 chat = APIRouter(prefix="/chat", tags=["chat"])
@@ -47,9 +48,9 @@ async def list_chat(
 
 
 @chat.post("")
-async def create_chat(  # noqa: PLR0913
+async def create_chat(
     request: Request,
-    background_tasks: BackgroundTasks,
+    app: DiveHostAPI = Depends(get_app),
     chat_id: Annotated[str | None, Form(alias="chatId")] = None,
     message: Annotated[str | None, Form()] = None,
     files: Annotated[list[UploadFile] | None, File()] = None,
@@ -59,21 +60,18 @@ async def create_chat(  # noqa: PLR0913
 
     Args:
         request (Request): The request object.
-        background_tasks (BackgroundTasks): The background tasks to run.
         chat_id (str | None): The ID of the chat to create.
         message (str | None): The message to send.
         files (list[UploadFile] | None): The files to upload.
         filepaths (list[str] | None): The file paths to upload.
     """
-    store: Store = request.app.state.store
-
     if files is None:
         files = []
 
     if filepaths is None:
         filepaths = []
 
-    images, documents = await store.upload_files(files, filepaths)
+    images, documents = await app.store.upload_files(files, filepaths)
 
     stream = EventStreamContextManager()
     response = stream.get_response()
@@ -81,7 +79,7 @@ async def create_chat(  # noqa: PLR0913
     async def process() -> None:
         async with stream:
             query_input = QueryInput(text=message, images=images, documents=documents)
-            processor = ChatProcessor(request.app.state, request.state, stream)
+            processor = ChatProcessor(app, request.state, stream)
             await processor.handle_chat(chat_id, query_input, None)
 
     stream.add_task(process)
