@@ -3,7 +3,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 from dive_mcp_host.httpd.routers.models import (
     ModelConfig,
@@ -19,48 +19,15 @@ logging.basicConfig(level=logging.INFO)
 class ModelManager:
     """Model Manager."""
 
-    _instance: ClassVar[Any] = None
-
-    def __new__(cls) -> "ModelManager":
-        """Create a new instance or return existing instance of ModelManager.
-
-        Returns:
-            ModelManager instance.
-        """
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            # Initialize directly
-            cls._instance._initialized = False  # noqa: SLF001
-        return cls._instance
-
     def __init__(self, config_path: str | None = None) -> None:
         """Initialize the ModelManager.
 
         Args:
             config_path: Optional path to the model configuration file.
         """
-        if hasattr(self, "_initialized") and self._initialized:
-            return
-
         self.config_path: str = config_path or str(Path.cwd() / "modelConfig.json")
         self.current_settings: ModelSettings | None = None
         self.enable_tools: bool = True
-        self._initialized = True
-
-    @classmethod
-    def get_instance(cls, config_path: str | None = None) -> "ModelManager":
-        """Get the singleton instance of ModelManager.
-
-        Args:
-            config_path: Optional path to the model configuration file.
-
-        Returns:
-            ModelManager instance.
-        """
-        instance = cls()
-        if config_path:
-            instance.config_path = config_path
-        return instance
 
     async def initialize(self) -> bool:
         """Initialize the ModelManager."""
@@ -262,19 +229,16 @@ class ModelManager:
 
 
 if __name__ == "__main__":
-    asyncio.run(ModelManager.get_instance().initialize())
-    current_settings = ModelManager.get_instance().current_settings
+    model_manager = ModelManager()
+    asyncio.run(model_manager.initialize())
+    current_settings = model_manager.current_settings
     if current_settings is not None:
         logger.info("current_settings: %s", current_settings.model_dump(by_alias=False))
     else:
         logger.error("current_settings is None")
 
-    available_providers = asyncio.run(
-        ModelManager.get_instance().get_available_providers()
-    )
+    available_providers = asyncio.run(model_manager.get_available_providers())
     logger.info("available_providers: %s", available_providers)
 
-    settings_by_provider = asyncio.run(
-        ModelManager.get_instance().get_settings_by_provider("openai")
-    )
+    settings_by_provider = asyncio.run(model_manager.get_settings_by_provider("openai"))
     logger.info("settings_by_provider: %s", settings_by_provider)

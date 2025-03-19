@@ -44,22 +44,28 @@ class TestModelManager:
         # Clean up after test
         Path(config_path).unlink()
 
-    def test_singleton_pattern(self):
-        """Test if the singleton pattern works properly."""
-        instance1 = ModelManager.get_instance()
-        instance2 = ModelManager.get_instance()
-        assert instance1 is instance2
-
     def test_config_path_setting(self):
         """Test if the configuration path is set correctly."""
         test_path = "/test/path.json"
-        manager = ModelManager.get_instance(test_path)
+        manager = ModelManager(test_path)
         assert manager.config_path == test_path
+
+    def test_multiple_instances(self):
+        """Test that multiple instances can be created with different configurations."""
+        path1 = "/test/path1.json"
+        path2 = "/test/path2.json"
+
+        manager1 = ModelManager(path1)
+        manager2 = ModelManager(path2)
+
+        assert manager1 is not manager2
+        assert manager1.config_path == path1
+        assert manager2.config_path == path2
 
     @pytest.mark.asyncio
     async def test_get_config(self, mock_config_file):
         """Test retrieving model configuration."""
-        manager = ModelManager.get_instance(mock_config_file)
+        manager = ModelManager(mock_config_file)
         config = await manager.get_config()
         assert config is not None
         assert config.get("activeProvider") == "test_provider"
@@ -68,7 +74,7 @@ class TestModelManager:
     @patch("dive_mcp_host.httpd.conf.model.manager.ModelManager.save_single_settings")
     async def test_save_single_settings(self, mock_save, mock_config_file):
         """Test saving model configuration."""
-        manager = ModelManager.get_instance(mock_config_file)
+        manager = ModelManager(mock_config_file)
         # Create model settings
         test_settings = ModelSettings(
             model="new_model",
@@ -93,7 +99,7 @@ class TestModelManager:
     @patch("dive_mcp_host.httpd.conf.model.manager.ModelManager.replace_all_settings")
     async def test_replace_all_settings(self, mock_replace, mock_config_file):
         """Test replacing the entire model configuration."""
-        manager = ModelManager.get_instance(mock_config_file)
+        manager = ModelManager(mock_config_file)
         new_config = ModelConfig(
             activeProvider="replaced_provider",
             enableTools=True,
@@ -123,7 +129,7 @@ class TestModelManager:
     @pytest.mark.asyncio
     async def test_initialize(self, mock_config_file):
         """Test initializing the manager."""
-        manager = ModelManager.get_instance(mock_config_file)
+        manager = ModelManager(mock_config_file)
         result = await manager.initialize()
 
         assert result is True
@@ -134,7 +140,7 @@ class TestModelManager:
     @pytest.mark.asyncio
     async def test_get_active_settings(self, mock_config_file):
         """Test getting the active model settings."""
-        manager = ModelManager.get_instance(mock_config_file)
+        manager = ModelManager(mock_config_file)
         await manager.initialize()
         settings = await manager.get_active_settings()
 
@@ -145,7 +151,7 @@ class TestModelManager:
     @pytest.mark.asyncio
     async def test_get_available_providers(self, mock_config_file):
         """Test getting available providers."""
-        manager = ModelManager.get_instance(mock_config_file)
+        manager = ModelManager(mock_config_file)
         providers = await manager.get_available_providers()
 
         assert providers is not None
@@ -154,7 +160,7 @@ class TestModelManager:
     @pytest.mark.asyncio
     async def test_parse_settings(self, mock_config_file):
         """Test parsing model settings."""
-        manager = ModelManager.get_instance(mock_config_file)
+        manager = ModelManager(mock_config_file)
         config = await manager.get_config()
         if config is None:
             pytest.skip("Configuration not available")
@@ -173,7 +179,7 @@ class TestModelManager:
     @pytest.mark.asyncio
     async def test_get_settings_by_provider(self, mock_config_file):
         """Test getting model settings by specific provider."""
-        manager = ModelManager.get_instance(mock_config_file)
+        manager = ModelManager(mock_config_file)
 
         # Test existing provider
         settings = await manager.get_settings_by_provider("test_provider")
@@ -226,7 +232,7 @@ class TestModelManagerIntegration:
         mock_json_dump.return_value = None
 
         # Set up ModelManager instance
-        manager = ModelManager.get_instance(test_config_path)
+        manager = ModelManager(test_config_path)
 
         # Initialize the manager
         result = await manager.initialize()

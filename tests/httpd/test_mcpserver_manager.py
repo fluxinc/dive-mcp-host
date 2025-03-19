@@ -49,22 +49,16 @@ class TestMCPServerManager:
         # Clean up after test
         Path(config_path).unlink()
 
-    def test_singleton_pattern(self):
-        """Test if the singleton pattern works properly."""
-        instance1 = MCPServerManager.get_instance()
-        instance2 = MCPServerManager.get_instance()
-        assert instance1 is instance2
-
     def test_config_path_setting(self):
         """Test if the configuration path is set correctly."""
         test_path = "/test/path.json"
-        manager = MCPServerManager.get_instance(test_path)
+        manager = MCPServerManager(test_path)
         assert manager.config_path == test_path
 
     @pytest.mark.asyncio
     async def test_get_config(self, mock_config_file):
         """Test retrieving MCP server configuration."""
-        manager = MCPServerManager.get_instance(mock_config_file)
+        manager = MCPServerManager(mock_config_file)
         config = await manager.get_config()
         assert config is not None
         assert "test_server" in config.mcp_servers
@@ -73,7 +67,7 @@ class TestMCPServerManager:
     @pytest.mark.asyncio
     async def test_initialize(self, mock_config_file):
         """Test initializing the manager."""
-        manager = MCPServerManager.get_instance(mock_config_file)
+        manager = MCPServerManager(mock_config_file)
         result = await manager.initialize()
 
         assert result is True
@@ -85,7 +79,7 @@ class TestMCPServerManager:
     @pytest.mark.asyncio
     async def test_get_enabled_servers(self, mock_config_file):
         """Test getting enabled servers."""
-        manager = MCPServerManager.get_instance(mock_config_file)
+        manager = MCPServerManager(mock_config_file)
         await manager.initialize()
         enabled_servers = await manager.get_enabled_servers()
 
@@ -95,13 +89,53 @@ class TestMCPServerManager:
         assert "disabled_server" not in enabled_servers
 
     @pytest.mark.asyncio
+    async def test_multiple_instances(self, mock_config_file):
+        """Test that multiple instances can be created with different configs."""
+        manager1 = MCPServerManager(mock_config_file)
+        await manager1.initialize()
+
+        # Create a second config file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(
+                {
+                    "mcpServers": {
+                        "second_server": {
+                            "transport": "sse",
+                            "enabled": True,
+                            "url": "http://second.url",
+                        },
+                    },
+                },
+                f,
+            )
+            second_config_path = f.name
+
+        try:
+            manager2 = MCPServerManager(second_config_path)
+            await manager2.initialize()
+
+            # Verify managers have different configs
+            assert manager1.current_config is not None
+            assert manager2.current_config is not None
+            assert "test_server" in manager1.current_config.mcp_servers
+            assert "second_server" in manager2.current_config.mcp_servers
+            assert "second_server" not in manager1.current_config.mcp_servers
+            assert "test_server" not in manager2.current_config.mcp_servers
+
+            # Verify they are different instances
+            assert manager1 is not manager2
+        finally:
+            # Clean up
+            Path(second_config_path).unlink()
+
+    @pytest.mark.asyncio
     @patch("dive_mcp_host.httpd.conf.mcpserver.manager.json.dump")
     async def test_update_all_configs(self, mock_json_dump, mock_config_file):
         """Test updating all configurations."""
         # Mock json.dump to avoid writing to file
         mock_json_dump.return_value = None
 
-        manager = MCPServerManager.get_instance(mock_config_file)
+        manager = MCPServerManager(mock_config_file)
         await manager.initialize()
 
         # Create new configuration
@@ -161,7 +195,7 @@ class TestMCPServerManagerIntegration:
         mock_json_dump.return_value = None
 
         # Set up MCPServerManager instance
-        manager = MCPServerManager.get_instance(test_config_path)
+        manager = MCPServerManager(test_config_path)
 
         # Initialize the manager
         result = await manager.initialize()
