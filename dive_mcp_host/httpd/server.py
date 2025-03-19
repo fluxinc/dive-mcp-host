@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.httpd.database.migrate import db_migration
 from dive_mcp_host.httpd.database.msg_store.base import BaseMessageStore
 from dive_mcp_host.httpd.database.msg_store.sqlite import SQLiteMessageStore
@@ -15,6 +16,8 @@ logger = getLogger(__name__)
 
 class DiveHostAPI(FastAPI):
     """DiveHostAPI is a FastAPI application that is used to host the DiveHost API."""
+
+    dive_host: dict[str, DiveMcpHost]  # shoud init "default" when preapre stage
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the DiveHostAPI."""
