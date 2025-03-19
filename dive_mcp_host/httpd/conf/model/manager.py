@@ -185,6 +185,20 @@ class ModelManager:
         """
         return self.current_settings
 
+    async def get_settings_by_provider(self, provider: str) -> ModelSettings | None:
+        """Get the model settings by provider.
+
+        Args:
+            provider: Model provider name.
+        """
+        config_dict = await self.get_config()
+        if not config_dict:
+            return None
+        model_config = config_dict.get("configs", {}).get(provider, None)
+        if not model_config:
+            return None
+        return await self.parse_settings(model_config)
+
     async def get_available_providers(self) -> list[str]:
         """Get the available model providers.
 
@@ -259,3 +273,8 @@ if __name__ == "__main__":
         ModelManager.get_instance().get_available_providers()
     )
     logger.info("available_providers: %s", available_providers)
+
+    settings_by_provider = asyncio.run(
+        ModelManager.get_instance().get_settings_by_provider("openai")
+    )
+    logger.info("settings_by_provider: %s", settings_by_provider)

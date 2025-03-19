@@ -170,6 +170,26 @@ class TestModelManager:
         assert settings.configuration is not None
         assert settings.configuration.base_url == "http://test.url"
 
+    @pytest.mark.asyncio
+    async def test_get_settings_by_provider(self, mock_config_file):
+        """Test getting model settings by specific provider."""
+        manager = ModelManager.get_instance(mock_config_file)
+
+        # Test existing provider
+        settings = await manager.get_settings_by_provider("test_provider")
+        assert settings is not None
+        assert settings.model == "test_model"
+        assert settings.model_provider == "test_provider"
+        assert settings.api_key == "test_key"
+        assert settings.configuration is not None
+        assert settings.configuration.base_url == "http://test.url"
+
+        # Test non-existing provider
+        non_existing_settings = await manager.get_settings_by_provider(
+            "non_existing_provider"
+        )
+        assert non_existing_settings is None
+
 
 # Integration tests
 @pytest.mark.integration
