@@ -170,7 +170,7 @@ class DiveMcpHost(ContextProtocol):
         return self._tools
 
     @property
-    def mcp_server_info(self) -> dict[str, McpServerInfo | None]:
+    def mcp_server_info(self) -> dict[str, McpServerInfo]:
         """Get information about active MCP servers.
 
         Returns:
