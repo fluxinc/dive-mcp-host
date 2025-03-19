@@ -69,7 +69,7 @@ class DiveHostAPI(FastAPI):
         async with AsyncExitStack() as stack:
             default_host = DiveMcpHost(config)
             await stack.enter_async_context(default_host)
-            self.dive_host["default"] = default_host
+            self.dive_host = {"default": default_host}
 
             logger.info("Server Prepare Complete")
             yield
