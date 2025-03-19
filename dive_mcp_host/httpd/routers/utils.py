@@ -1,7 +1,8 @@
 import asyncio
+import contextlib
 import json
 from collections.abc import AsyncGenerator, Callable, Coroutine, Iterator
-from typing import TYPE_CHECKING, Any, Awaitable, Self
+from typing import TYPE_CHECKING, Any, Self
 from uuid import uuid4
 
 from fastapi.responses import StreamingResponse
@@ -23,8 +24,9 @@ from dive_mcp_host.httpd.routers.models import (
     ModelType,
     StreamMessage,
     TokenUsage,
+    ToolCallsContent,
 )
-from dive_mcp_host.httpd.store.store import SUPPORTED_IMAGE_EXTENSIONS
+from dive_mcp_host.httpd.store.store import SUPPORTED_IMAGE_EXTENSIONS, Store
 
 if TYPE_CHECKING:
     from langchain_core.messages.ai import AIMessageChunk
@@ -115,6 +117,7 @@ class ChatProcessor:
         self.stream = stream
         self.db: AbstractMessageStore = app_state.db
         self.mcp: McpServerManager = app_state.mcp
+        self.store: Store = app_state.store
 
     async def handle_chat(
         self,
@@ -131,7 +134,7 @@ class ChatProcessor:
         history: list[BaseMessage] = []
         title = "New Chat"
         title_await = None
-        system_prompt = ""  # TODO: get system prompt
+        system_prompt = None  # TODO: get system prompt
 
         if system_prompt:
             history.append(SystemMessage(content=system_prompt))
@@ -281,7 +284,7 @@ class ChatProcessor:
 
                 for image in query_input.images or []:
                     local_path = image
-                    base64_image = ""  # TODO: image to base64
+                    base64_image = await self.store.get_image(local_path)
                     content.append(
                         {
                             "type": "text",
@@ -377,11 +380,111 @@ class ChatProcessor:
                         index = chunks["index"]
                         if (
                             is_ollama
-                            and index
+                            and index is not None
                             and index > 0
                             and len(tool_calls) >= index
                         ):
-                            ...
+                            elems = list(
+                                filter(lambda x: x["id"] == chunks["id"], tool_calls)
+                            )
+                            if not elems:
+                                index = len(tool_calls)
+                            else:
+                                index = tool_calls.index(elems[0])
+
+                        if (
+                            index is not None
+                            and index >= 0
+                            and index >= len(tool_calls)
+                        ):
+                            call = {
+                                "id": chunks["id"],
+                                "type": "function",
+                                "function": {
+                                    "name": chunks["name"],
+                                    "arguments": "",
+                                },
+                            }
+                            tool_calls.append(call)
+                            index = tool_calls.index(call)
+
+                        if index is not None and index >= 0:
+                            if chunks["name"]:
+                                tool_calls[index]["function"]["name"] = chunks["name"]
+
+                            if chunks["args"]:  # or chunk["input"] not found
+                                tool_calls[index]["function"]["arguments"] += (
+                                    chunks["args"] or ""
+                                )
+
+                            args: str = tool_calls[index]["function"]["arguments"]
+                            if args.startswith("{") and args.endswith("}"):
+                                with contextlib.suppress(json.JSONDecodeError):
+                                    parsed_args = json.loads(args)
+                                    tool_calls[index]["function"]["arguments"] = (
+                                        json.dumps(parsed_args)
+                                    )
+            final_response += current_content
+
+            if not tool_calls:
+                has_tool_calls = False
+                break
+
+            ai_message_content: list[str | dict] = [
+                {
+                    "type": "text",
+                    "text": current_content or ".",
+                }
+            ]
+
+            if is_deepseek or is_mistral or is_bedrock:
+                for call in tool_calls:
+                    parsed_args = {}
+                    try:
+                        parsed_args = json.loads(call["function"]["arguments"])
+                    except json.JSONDecodeError:
+                        call["function"]["arguments"] = "{}"
+
+                    ai_message_content.append(
+                        {
+                            "type": "tool_use",
+                            "id": call["id"],
+                            "name": call["function"]["name"],
+                            "input": parsed_args,
+                        }
+                    )
+
+            mapped_tool_calls = []
+            for call in tool_calls:
+                args = call["function"]["arguments"]
+                mapped_tool_calls.append(
+                    {
+                        "id": call["id"],
+                        "type": "function",
+                        "function": {
+                            "name": call["function"]["name"],
+                            "arguments": args if args != "" else "{}",
+                        },
+                    }
+                )
+
+            messages.append(
+                AIMessage(content=ai_message_content, tool_calls=mapped_tool_calls)
+            )
+
+            if tool_calls:
+                await self.stream.write(
+                    StreamMessage(
+                        type="tool_calls",
+                        content=[
+                            ToolCallsContent(
+                                name=x["function"]["name"],
+                                arguments=x["function"]["arguments"] or "{}",
+                            )
+                            for x in tool_calls
+                        ],
+                    )
+                )
 
         raise NotImplementedError("Not implemented")
 
@@ -413,8 +516,22 @@ class ChatProcessor:
                         local_path.endswith(suffix)
                         for suffix in SUPPORTED_IMAGE_EXTENSIONS
                     ):
-                        # TODO: image to base64
-                        ...
+                        base64_image = await self.store.get_image(local_path)
+
+                        content.append(
+                            {
+                                "type": "text",
+                                "text": f"![Image]({base64_image})",
+                            }
+                        )
+                        content.append(
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": base64_image,
+                                },
+                            }
+                        )
                     else:
                         content.append(
                             {

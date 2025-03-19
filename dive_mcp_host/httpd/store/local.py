@@ -1,9 +1,12 @@
+import base64
+from io import BytesIO
 import time
 from hashlib import md5
 from pathlib import Path
 from random import randint
 
 from fastapi import UploadFile
+from PIL import Image
 
 from .store import SUPPORTED_DOCUMENT_EXTENSIONS, SUPPORTED_IMAGE_EXTENSIONS, Store
 
@@ -66,3 +69,16 @@ class LocalStore(Store):
                 documents.append(file_path)
 
         return images, documents
+
+    async def get_image(self, file_path: str) -> str:
+        """Get the base64 encoded image from the local store."""
+        path = Path(file_path)
+
+        image = Image.open(path)
+
+        image.resize((800, 800))
+        buffer = BytesIO()
+        image.save(buffer, format="JPEG")
+        base64_image = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+        return f"data:image/jpeg;base64,{base64_image}"
