@@ -247,6 +247,7 @@ async def test_mcp_server_info(echo_tool_stdio_config: dict[str, ServerConfig]) 
     async with DiveMcpHost(config) as mcp_host:
         assert list(mcp_host.mcp_server_info.keys()) == ["echo"]
         assert mcp_host.mcp_server_info["echo"] is not None
+        assert mcp_host.mcp_server_info["echo"].initialize_result is not None
         assert mcp_host.mcp_server_info["echo"].initialize_result.capabilities
         assert (
             mcp_host.mcp_server_info["echo"].initialize_result.instructions
