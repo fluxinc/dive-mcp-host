@@ -42,12 +42,6 @@ class McpServerError(BaseModel):
     error: object  # any
 
 
-class ModelConfiguration(BaseModel):
-    """Basic configuration for a model, including base URL."""
-
-    base_url: str = Field(alias="baseURL")
-
-
 class ModelType(StrEnum):
     """Model type."""
 
@@ -60,13 +54,13 @@ class ModelType(StrEnum):
     @classmethod
     def get_model_type(cls, llm_config: LLMConfig) -> "ModelType":
         """Get model type from model name."""
-        if llm_config.provider == "ollama":
+        if llm_config.modelProvider == "ollama":
             return cls.OLLAMA
 
-        if llm_config.provider == "mistralai":
+        if llm_config.modelProvider == "mistralai":
             return cls.MISTRAL
 
-        if llm_config.provider == "bedrock":
+        if llm_config.modelProvider == "bedrock":
             return cls.BEDROCK
 
         if "deepseek" in llm_config.model.lower():
@@ -157,6 +151,14 @@ class TokenUsage(BaseModel):
     total_input_tokens: int = Field(alias="totalInputTokens")
     total_output_tokens: int = Field(alias="totalOutputTokens")
     total_tokens: int = Field(alias="totalTokens")
+
+
+class ModelConfig(BaseModel):
+    """Configuration for the model."""
+
+    active_provider: str = Field(alias="activeProvider")
+    enable_tools: bool = Field(alias="enableTools")
+    configs: dict[str, LLMConfig]
 
 
 class UserInputError(Exception):

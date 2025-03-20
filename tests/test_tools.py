@@ -51,6 +51,7 @@ async def echo_tool_sse_server(
     proc.send_signal(signal.SIGKILL)
     await proc.wait()
 
+
 @pytest.fixture
 def no_such_file_mcp_server() -> dict[str, ServerConfig]:
     """MCP server that does not exist."""
@@ -196,7 +197,7 @@ async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) 
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            provider="dive",
+            modelProvider="dive",
         ),
         mcp_servers=echo_tool_stdio_config,
     )
@@ -237,7 +238,7 @@ async def test_mcp_server_info(echo_tool_stdio_config: dict[str, ServerConfig]) 
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            provider="dive",
+            modelProvider="dive",
         ),
         mcp_servers=echo_tool_stdio_config,
     )
@@ -246,6 +247,7 @@ async def test_mcp_server_info(echo_tool_stdio_config: dict[str, ServerConfig]) 
     async with DiveMcpHost(config) as mcp_host:
         assert list(mcp_host.mcp_server_info.keys()) == ["echo"]
         assert mcp_host.mcp_server_info["echo"] is not None
+        assert mcp_host.mcp_server_info["echo"].initialize_result is not None
         assert mcp_host.mcp_server_info["echo"].initialize_result.capabilities
         assert (
             mcp_host.mcp_server_info["echo"].initialize_result.instructions
@@ -261,7 +263,7 @@ async def test_mcp_server_info_no_such_file(
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            provider="dive",
+            modelProvider="dive",
         ),
         mcp_servers=no_such_file_mcp_server,
     )

@@ -338,6 +338,7 @@ dev = [
     { name = "langchain-community" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "pytest-integration" },
     { name = "ruff" },
 ]
 
@@ -363,6 +364,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.10" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-integration", marker = "extra == 'dev'" },
     { name = "python-multipart", specifier = ">=0.0.20" },
     { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=306" },
     { name = "ruff", marker = "extra == 'dev'" },
@@ -1504,6 +1506,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f2/a8/ecbc8ede70921dd2f544ab1cadd3ff3bf842af27f87bbdea774c7baa1d38/pytest_asyncio-0.25.3.tar.gz", hash = "sha256:fc1da2cf9f125ada7e710b4ddad05518d4cee187ae9412e9ac9271003497f07a", size = 54239 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/67/17/3493c5624e48fd97156ebaec380dcaafee9506d7e2c46218ceebbb57d7de/pytest_asyncio-0.25.3-py3-none-any.whl", hash = "sha256:9e89518e0f9bd08928f97a3482fdc4e244df17529460bc038291ccaf8f85c7c3", size = 19467 },
+]
+
+[[package]]
+name = "pytest-integration"
+version = "0.2.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/35/e0/c823048dc0866f2e0fa2e4a34cd6ec290697b238b7672b30cb07c65e59cc/pytest_integration-0.2.3.tar.gz", hash = "sha256:b00988a5de8a6826af82d4c7a3485b43fbf32c11235e9f4a8b7225eef5fbcf65", size = 3295 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/41/9b393be6252635e4d39c3e62805018c42bfcc486b42246b582b755ff9ad3/pytest_integration-0.2.3-py3-none-any.whl", hash = "sha256:7f59ed1fa1cc8cb240f9495b68bc02c0421cce48589f78e49b7b842231604b12", size = 4456 },
 ]
 
 [[package]]

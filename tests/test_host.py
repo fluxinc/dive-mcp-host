@@ -12,7 +12,7 @@ async def test_host_context() -> None:
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            provider="dive",
+            modelProvider="dive",
         ),
         mcp_servers={},
     )
@@ -51,7 +51,7 @@ async def test_query_two_messages() -> None:
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            provider="dive",
+            modelProvider="dive",
         ),
         mcp_servers={},
     )

@@ -42,7 +42,13 @@ classifiers = [
 
 [project.optional-dependencies]
 clipboard = []
-dev = ["pytest", "pytest-asyncio", "langchain-community", "ruff"]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+	"pytest-integration",
+    "langchain-community",
+    "ruff"
+]
 
 [project.urls]
 Homepage = "https://github.com/OpenAgentPlatform/dive-mcp-py"
@@ -120,7 +126,7 @@ lint.ignore = [
 lint.extend-select = ["I"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = [
+"**/test_*.py" = [
     "S101",
     "ANN",
     "D107",
