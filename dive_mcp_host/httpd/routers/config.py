@@ -3,12 +3,12 @@ from typing import TypeVar
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from dive_mcp_host.host.conf import LLMConfig
+
 from .models import (
     McpServerError,
     McpServers,
-    ModelConfig,
     ModelInterfaceDefinition,
-    ModelSettings,
     ResultResponse,
 )
 
@@ -45,7 +45,7 @@ class SaveModelSettingsRequest(BaseModel):
     """Request model for saving model settings."""
 
     provider: str
-    model_settings: ModelSettings = Field(alias="modelSettings")
+    model_settings: LLMConfig = Field(alias="modelSettings")
     enable_tools: bool = Field(alias="enableTools")
 
 
@@ -73,7 +73,7 @@ async def post_mcp_server(servers: McpServers) -> SaveConfigResult:
 
 
 @config.get("/model")
-async def get_model() -> ConfigResult[ModelConfig]:
+async def get_model() -> ConfigResult["ModelConfig"]:
     """Get current model configuration.
 
     Returns:
@@ -96,7 +96,7 @@ async def post_model(model_settings: SaveModelSettingsRequest) -> ResultResponse
 
 
 @config.post("/model/replaceAll")
-async def post_model_replace_all(model_config: ModelConfig) -> ResultResponse:
+async def post_model_replace_all(model_config: "ModelConfig") -> ResultResponse:
     """Replace all model configurations.
 
     Args:

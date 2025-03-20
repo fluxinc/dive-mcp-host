@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Self
 from langchain_core.tools import BaseTool, ToolException
 from mcp import ClientSession, StdioServerParameters, stdio_client, types
 from mcp.client.sse import sse_client
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_core import to_json
 
 from dive_mcp_host.host.conf import ServerConfig  # noqa: TC001 Pydantic Need this
@@ -38,6 +39,29 @@ type StreamContextType = AbstractAsyncContextManager[
 ]
 
 
+class McpServerInfo(BaseModel):
+    """MCP server capability and tool list."""
+
+    name: str
+    """The name of the MCP server."""
+    tools: list[types.Tool]
+    """The tools provided by the MCP server."""
+    initialize_result: types.InitializeResult | None
+    """The result of the initialize method.
+
+    initialize_result.capabilities: Server capabilities.
+    initialize_result.instructions: Server instructions.
+    """
+
+    error: BaseException | None
+    """The error that occurred of the MCP server."""
+
+    client_status: ClientState
+    """The status of the client: RUNNING, CLOSED, RESTARTING, or INIT."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
 class ToolManager(ContextProtocol):
     """Manager for the MCP Servers.
 
@@ -50,51 +74,68 @@ class ToolManager(ContextProtocol):
     def __init__(self, configs: dict[str, ServerConfig]) -> None:
         """Initialize the ToolManager."""
         self._configs = configs
-        self._tools = dict[str, McpToolKit]()
+        self._mcp_servers = dict[str, McpServer]()
         self._async_exit_stack = AsyncExitStack()
 
-    def tools(
+    def langchain_tools(
         self,
-        tool_filter: Callable[[McpToolKit], bool] = lambda _: True,
+        tool_filter: Callable[[McpServer], bool] = lambda _: True,
     ) -> list[McpTool]:
         """Get the langchain tools for the MCP servers."""
         return list(
             chain.from_iterable(
-                [i.get_tools() for i in self._tools.values() if tool_filter(i)],
+                [i.get_tools() for i in self._mcp_servers.values() if tool_filter(i)],
             ),
         )
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
         """Get the langchain tools for the MCP servers."""
         # start tools
-        self._tools = {
-            name: McpToolKit(name=name, config=config)
+        self._mcp_servers = {
+            name: McpServer(name=name, config=config)
             for name, config in self._configs.items()
         }
 
         # we can manipulate the stack to add or remove tools
         async with self._async_exit_stack:
             async with asyncio.TaskGroup() as tg:
-                for tool in self._tools.values():
+                for tool in self._mcp_servers.values():
                     tg.create_task(self._async_exit_stack.enter_async_context(tool))
             yield self
 
+    @property
+    def mcp_server_info(self) -> dict[str, McpServerInfo]:
+        """Get the MCP server capabilities and tools.
 
-class _S(Enum):
-    """The state of the client."""
+        Returns:
+            A dictionary of MCP server name to server info.
+            If the mcp server is not initialized, the value will be `None`.
+        """
+        return {name: i.server_info for name, i in self._mcp_servers.items()}
+
+
+class ClientState(Enum):
+    """The state of the client.
+
+    States and transitions:
+    """
 
     INIT = auto()
     RUNNING = auto()
     CLOSED = auto()
     RESTARTING = auto()
+    FAILED = auto()
 
 
-class McpToolKit(ContextProtocol):
+class McpServer(ContextProtocol):
     """McpServer Toolkit.
 
-    A background task continuously monitors the client's state,
-
+    A background task continuously monitors the client's state.
+    If the client is closed, the task will restart the client.
+    The task stops when the McpServer's status is CLOSED.
     """
+
+    RETRY_LIMIT: int = 3
 
     def __init__(self, name: str, config: ServerConfig) -> None:
         """Initialize the McpToolKit."""
@@ -102,13 +143,15 @@ class McpToolKit(ContextProtocol):
         self.config = config
         self._cond = asyncio.Condition()
         """The condition variable to synchronize access to shared variables."""
-        self._client_status: _S = _S.INIT
+        self._client_status: ClientState = ClientState.INIT
         self._task: asyncio.Task[Awaitable[None]] | None = None
         self._session: ClientSession | None = None
         self._tool_results: types.ListToolsResult | None = None
+        self._initialize_result: types.InitializeResult | None = None
         self._session_count: int = 0
         self._exception: BaseException | None = None
         self._mcp_tools: list[McpTool] = []
+        self._retries: int = 0
 
     async def _client_watcher(self) -> None:
         """Task watcher restart the client if it is closed."""
@@ -118,34 +161,46 @@ class McpToolKit(ContextProtocol):
                     self._get_client() as streams,
                     ClientSession(*streams) as session,
                 ):
-                    await session.initialize()
+                    self._initialize_result = await session.initialize()
                     tool_results = await session.list_tools()
                     mcp_tools = [
                         McpTool(
                             toolkit_name=self.name,
                             name=tool.name,
                             description=tool.description or "",
-                            toolkit=self,
+                            mcp_server=self,
                         )
                         for tool in tool_results.tools
                     ]
                     async with self._cond:
-                        self._client_status = _S.RUNNING
+                        self._client_status = ClientState.RUNNING
                         self._session = session
                         self._tool_results = tool_results
                         self._mcp_tools = mcp_tools
+                        self._exception = None
+                        self._retries = 0
                         self._cond.notify_all()
                         await self._cond.wait_for(
-                            lambda: self._client_status in [_S.CLOSED, _S.RESTARTING],
+                            lambda: self._client_status
+                            in [ClientState.CLOSED, ClientState.RESTARTING],
                         )
-                        if self._client_status == _S.CLOSED:  # type: ignore[unreachable]
-                            # raise CancelledError to stop the task
-                            raise CancelledError
-            except CancelledError:
-                return
-            except BaseException as e:  # noqa: BLE001
+                        if self._client_status == ClientState.CLOSED:  # type: ignore[unreachable]
+                            break
+            except* BaseException as e:  # noqa: BLE001
                 logging.error("unknown error in client watcher: %s", e)
                 self._exception = e
+                self._retries += 1
+
+            if self._retries > self.RETRY_LIMIT:
+                logging.warning(
+                    "client %s failed after %d retries",
+                    self.name,
+                    self._retries,
+                )
+                async with self._cond:
+                    self._client_status = ClientState.FAILED
+                    self._cond.notify_all()
+                    return
             await asyncio.sleep(1)
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
@@ -153,13 +208,14 @@ class McpToolKit(ContextProtocol):
         task = asyncio.create_task(self._client_watcher())
         async with self._cond:
             await self._cond.wait_for(
-                lambda: self._client_status in [_S.RUNNING, _S.CLOSED],
+                lambda: self._client_status
+                in [ClientState.RUNNING, ClientState.CLOSED, ClientState.FAILED]
             )
         try:
             yield self
         finally:
             async with self._cond:
-                self._client_status = _S.CLOSED
+                self._client_status = ClientState.CLOSED
                 self._session = None
                 self._cond.notify_all()
             await self._cond.wait_for(
@@ -215,8 +271,8 @@ class McpToolKit(ContextProtocol):
             except Exception as e:  # noqa: BLE001.
                 async with self._cond:
                     self._exception = e
-                    if self._client_status == _S.RUNNING:
-                        self._client_status = _S.RESTARTING
+                    if self._client_status == ClientState.RUNNING:
+                        self._client_status = ClientState.RESTARTING
                     self._session_count -= 1
                     self._cond.notify_all()
             else:
@@ -226,13 +282,24 @@ class McpToolKit(ContextProtocol):
 
         return session_ctx()
 
+    @property
+    def server_info(self) -> McpServerInfo:
+        """Get the server info."""
+        return McpServerInfo(
+            name=self.name,
+            initialize_result=self._initialize_result,
+            tools=self._tool_results.tools if self._tool_results is not None else [],
+            client_status=self._client_status,
+            error=self._exception,
+        )
+
 
 class McpTool(BaseTool):
     """A tool for the MCP."""
 
     toolkit_name: str
     description: str = ""
-    toolkit: McpToolKit
+    mcp_server: McpServer
 
     def _run(self, **kwargs: dict[str, Any]) -> str:
         """Run the tool."""
@@ -240,7 +307,7 @@ class McpTool(BaseTool):
 
     async def _arun(self, **kwargs: dict[str, Any]) -> str:
         """Run the tool."""
-        async with self.toolkit.session() as session:
+        async with self.mcp_server.session() as session:
             result = await session.call_tool(self.name, arguments=kwargs)  # type: ignore[arg-type]
         content = to_json(result.content).decode()
         if result.isError:

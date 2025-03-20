@@ -1,8 +1,9 @@
-from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from enum import StrEnum
 from typing import Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
+
+from dive_mcp_host.host.conf import LLMConfig
 
 T = TypeVar("T")
 
@@ -47,26 +48,31 @@ class ModelConfiguration(BaseModel):
     base_url: str = Field(alias="baseURL")
 
 
-class ModelSettings(BaseModel):
-    """Model settings including provider, API key and parameters."""
+class ModelType(StrEnum):
+    """Model type."""
 
-    model: str
-    model_provider: str = Field(alias="modelProvider")
-    api_key: str | None = Field(alias="apiKey")
-    configuration: ModelConfiguration | None
-    temperature: float | None
-    top_p: float | None = Field(alias="topP")
-    max_tokens: int | None = Field(alias="maxTokens")
+    OLLAMA = "ollama"
+    MISTRAL = "mistralai"
+    BEDROCK = "bedrock"
+    DEEPSEEK = "deepseek"
+    OTHER = "other"
 
-    model_config = ConfigDict(extra="allow")
+    @classmethod
+    def get_model_type(cls, llm_config: LLMConfig) -> "ModelType":
+        """Get model type from model name."""
+        if llm_config.provider == "ollama":
+            return cls.OLLAMA
 
+        if llm_config.provider == "mistralai":
+            return cls.MISTRAL
 
-class ModelConfig(BaseModel):
-    """Overall model configuration including active provider and tool settings."""
+        if llm_config.provider == "bedrock":
+            return cls.BEDROCK
 
-    active_provider: str = Field(alias="activeProvider")
-    enable_tools: bool = Field(alias="enableTools")
-    configs: dict[str, ModelSettings]
+        if "deepseek" in llm_config.model.lower():
+            return cls.DEEPSEEK
+
+        return cls.OTHER
 
 
 class ModelSettingsProperty(BaseModel):
@@ -167,32 +173,3 @@ class UserInputError(Exception):
             message (str): The error message.
         """
         self.message = message
-
-
-class FunctionDefinition(BaseModel):
-    """Function definition."""
-
-    name: str
-
-
-class ToolDefinition(BaseModel):
-    """Tool definition."""
-
-    type: Literal["function"]
-    function: FunctionDefinition
-
-
-class McpServerManager(ABC):
-    """Abstract base class for MCP server managers."""
-
-    @abstractmethod
-    async def get_available_tools(self) -> list[ToolDefinition]:
-        """Get available tools."""
-
-    @abstractmethod
-    async def get_tool_to_server_map(self) -> Mapping[str, object]:
-        """Get tool to server map."""
-
-    @abstractmethod
-    async def get_tool_infos(self) -> list[McpTool]:
-        """Get tool infos."""

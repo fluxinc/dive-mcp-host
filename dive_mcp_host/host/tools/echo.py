@@ -1,19 +1,32 @@
 """A simple echo mcp server for testing."""
 
+import asyncio
 from argparse import ArgumentParser
 from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
-mcp = FastMCP(name="echo")
+Instructions = """Echo a message."""
+
+mcp = FastMCP(name="echo", instructions=Instructions)
 
 
-@mcp.tool(name="echo", description="Echo a message.")
+@mcp.tool(
+    name="echo",
+    description="A simple echo tool to verify if the MCP server is working properly."
+    "It returns a characteristic response containing the input message.",
+)
 async def echo(
-    message: Annotated[str, Field(description="The message to echo.")],
+    message: Annotated[str, Field(description="Message to be echoed back")],
+    delay_ms: Annotated[
+        int | None,
+        Field(description="Optional delay in milliseconds before responding"),
+    ] = None,
 ) -> str:
     """Echo a message.i lalala."""
+    if delay_ms and delay_ms > 0:
+        await asyncio.sleep(delay_ms / 1000)
     return message
 
 

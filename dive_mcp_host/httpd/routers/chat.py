@@ -1,20 +1,19 @@
-from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Annotated, TypeVar
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 from dive_mcp_host.httpd.database.models import Chat, ChatMessage, QueryInput
 from dive_mcp_host.httpd.dependencies import get_app, get_dive_user
-from dive_mcp_host.httpd.routers.utils import ChatProcessor, event_stream
-from dive_mcp_host.httpd.server import DiveHostAPI
-
-from .models import (
+from dive_mcp_host.httpd.routers.models import (
     ResultResponse,
     UserInputError,
 )
+from dive_mcp_host.httpd.routers.utils import ChatProcessor, EventStreamContextManager
+from dive_mcp_host.httpd.server import DiveHostAPI
 
 if TYPE_CHECKING:
+    from dive_mcp_host.httpd.database.msg_store.abstract import AbstractMessageStore
     from dive_mcp_host.httpd.middlewares.general import DiveUser
     from dive_mcp_host.httpd.store import Store
 
@@ -51,6 +50,7 @@ async def list_chat(
 @chat.post("")
 async def create_chat(
     request: Request,
+    app: DiveHostAPI = Depends(get_app),
     chat_id: Annotated[str | None, Form(alias="chatId")] = None,
     message: Annotated[str | None, Form()] = None,
     files: Annotated[list[UploadFile] | None, File()] = None,
@@ -65,30 +65,31 @@ async def create_chat(
         files (list[UploadFile] | None): The files to upload.
         filepaths (list[str] | None): The file paths to upload.
     """
-    store: Store = request.app.state.store
-
     if files is None:
         files = []
 
     if filepaths is None:
         filepaths = []
 
-    images, documents = await store.upload_files(files, filepaths)
+    images, documents = await app.store.upload_files(files, filepaths)
 
-    async def process() -> AsyncGenerator[str, None]:
-        query_input = QueryInput(text=message, images=images, documents=documents)
-        processor = ChatProcessor(request.app.state, request.state)
-        async for chunk in processor.handle_chat(chat_id, query_input, None):
-            yield chunk
+    stream = EventStreamContextManager()
+    response = stream.get_response()
 
-        yield "[Done]"
+    async def process() -> None:
+        async with stream:
+            query_input = QueryInput(text=message, images=images, documents=documents)
+            processor = ChatProcessor(app, request.state, stream)
+            await processor.handle_chat(chat_id, query_input, None)
 
-    return event_stream(process())
+    stream.add_task(process)
+    return response
 
 
 @chat.post("/edit")
-async def edit_chat(
+async def edit_chat(  # noqa: PLR0913
     request: Request,
+    background_tasks: BackgroundTasks,
     chat_id: Annotated[str | None, Form(alias="chatId")] = None,
     message_id: Annotated[str | None, Form(alias="messageId")] = None,
     content: Annotated[str | None, Form()] = None,
@@ -99,6 +100,7 @@ async def edit_chat(
 
     Args:
         request (Request): The request object.
+        background_tasks (BackgroundTasks): The background tasks to run.
         chat_id (str | None): The ID of the chat to edit.
         message_id (str | None): The ID of the message to edit.
         content (str | None): The content to send.
@@ -106,7 +108,7 @@ async def edit_chat(
         filepaths (list[str] | None): The file paths to upload.
     """
     store: Store = request.app.state.store
-    db: Database = request.app.state.db
+    db: AbstractMessageStore = request.app.state.db
     db_opts = request.state.get_kwargs("db_opts")
 
     if chat_id is None or message_id is None:
@@ -120,20 +122,26 @@ async def edit_chat(
 
     images, documents = await store.upload_files(files, filepaths)
 
-    async def process() -> AsyncGenerator[str, None]:
-        query_input = QueryInput(text=content, images=images, documents=documents)
-        await db.update_message_content(message_id, query_input, **db_opts)
-        next_ai_message = await db.get_next_ai_message(chat_id, message_id, **db_opts)
-        # TODO: send query to LLM
+    stream = EventStreamContextManager()
+    response = stream.get_response()
 
-        yield "[Done]"
+    async def process() -> None:
+        async with stream:
+            query_input = QueryInput(text=content, images=images, documents=documents)
+            await db.update_message_content(message_id, query_input, **db_opts)
+            next_ai_message = await db.get_next_ai_message(
+                chat_id, message_id, **db_opts
+            )
+            # TODO: send query to LLM
 
-    return event_stream(process())
+    background_tasks.add_task(process)
+    return response
 
 
 @chat.post("/retry")
 async def retry_chat(
     request: Request,
+    background_tasks: BackgroundTasks,
     chat_id: Annotated[str | None, Form(alias="chatId")] = None,
     message_id: Annotated[str | None, Form(alias="messageId")] = None,
 ) -> StreamingResponse:
@@ -141,20 +149,26 @@ async def retry_chat(
 
     Args:
         request (Request): The request object.
+        background_tasks (BackgroundTasks): The background tasks to run.
         chat_id (str | None): The ID of the chat to retry.
         message_id (str | None): The ID of the message to retry.
     """
     store: Store = request.app.state.store
-    db: Database = request.app.state.db
+    db: AbstractMessageStore = request.app.state.db
     db_opts = request.state.get_kwargs("db_opts")
     if chat_id is None or message_id is None:
         raise UserInputError("Chat ID and Message ID are required")
 
-    async def content() -> AsyncGenerator[str, None]:
-        # TODO: send query to LLM
-        yield "[Done]"
+    stream = EventStreamContextManager()
+    response = stream.get_response()
 
-    return event_stream(content())
+    async def process() -> None:
+        async with stream:
+            # TODO: send query to LLM
+            pass
+
+    background_tasks.add_task(process)
+    return response
 
 
 @chat.get("/{chat_id}")

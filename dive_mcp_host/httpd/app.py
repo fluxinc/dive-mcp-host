@@ -12,8 +12,8 @@ from .routers import chat, config, model_verify, openai, tools
 @asynccontextmanager
 async def lifespan(app: DiveHostAPI) -> AsyncGenerator[None, None]:
     """Lifespan for the FastAPI app."""
-    await app.prepare()
-    yield
+    async with app.prepare():
+        yield
     await app.cleanup()
 
 

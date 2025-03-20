@@ -13,6 +13,7 @@ class ResourceUsage(BaseModel):
     total_run_time: float
 
 
+# NOTE: Currently not used
 class QueryInput(BaseModel):
     """User input for a query with text, images and documents."""
 

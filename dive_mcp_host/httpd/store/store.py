@@ -25,3 +25,7 @@ class Store(ABC):
         file_paths: list[str],
     ) -> tuple[list[str], list[str]]:
         """Upload files to the store."""
+
+    @abstractmethod
+    async def get_image(self, file_path: str) -> str:
+        """Get the base64 encoded image from the store."""

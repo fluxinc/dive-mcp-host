@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolCall, ToolMessa
 
 from dive_mcp_host.host.conf import HostConfig, LLMConfig
 from dive_mcp_host.host.host import DiveMcpHost
-from dive_mcp_host.host.tools import ServerConfig, ToolManager
+from dive_mcp_host.host.tools import ClientState, ServerConfig, ToolManager
 from dive_mcp_host.models.fake import FakeMessageToolModel
 
 
@@ -51,6 +51,20 @@ async def echo_tool_sse_server(
     proc.send_signal(signal.SIGKILL)
     await proc.wait()
 
+@pytest.fixture
+def no_such_file_mcp_server() -> dict[str, ServerConfig]:
+    """MCP server that does not exist."""
+    return {
+        "no_such_file": ServerConfig(
+            name="no_such_file",
+            command="no_such_file",
+        ),
+        "sse": ServerConfig(
+            name="sse_server",
+            url="http://localhost:2/sse",
+        ),
+    }
+
 
 @pytest.mark.asyncio
 async def test_tool_manager_sse(
@@ -63,7 +77,7 @@ async def test_tool_manager_sse(
         echo_tool_sse_server as (port, configs),
         ToolManager(configs) as tool_manager,
     ):
-        tools = tool_manager.tools()
+        tools = tool_manager.langchain_tools()
         assert sorted([i.name for i in tools]) == ["echo", "ignore"]
         for tool in tools:
             result = await tool.ainvoke(
@@ -87,7 +101,7 @@ async def test_tool_manager_stdio(
 ) -> None:
     """Test the tool manager."""
     async with ToolManager(echo_tool_stdio_config) as tool_manager:
-        tools = tool_manager.tools()
+        tools = tool_manager.langchain_tools()
         assert sorted([i.name for i in tools]) == ["echo", "ignore"]
         for tool in tools:
             result = await tool.ainvoke(
@@ -113,7 +127,7 @@ async def test_stdio_parallel(echo_tool_stdio_config: dict[str, ServerConfig]) -
     simultaneously and respond correctly.
     """
     async with ToolManager(echo_tool_stdio_config) as tool_manager:
-        tools = tool_manager.tools()
+        tools = tool_manager.langchain_tools()
         echo_tool = None
         ignore_tool = None
         for tool in tools:
@@ -172,7 +186,7 @@ async def test_tool_manager_massive_tools(
             update={"name": f"echo_{i}"},
         )
     async with ToolManager(echo_tool_stdio_config) as tool_manager:
-        tools = tool_manager.tools()
+        tools = tool_manager.langchain_tools()
         assert len(tools) == 2 * (more_tools + 1)
 
 
@@ -215,3 +229,54 @@ async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) 
             assert isinstance(tool_message, ToolMessage)
             assert tool_message.name == "echo"
             assert json.loads(str(tool_message.content))[0]["text"] == "Hello, world!"
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_info(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
+    """Test the host context initialization."""
+    config = HostConfig(
+        llm=LLMConfig(
+            model="fake",
+            provider="dive",
+        ),
+        mcp_servers=echo_tool_stdio_config,
+    )
+    import dive_mcp_host.host.tools.echo as echo_tool
+
+    async with DiveMcpHost(config) as mcp_host:
+        assert list(mcp_host.mcp_server_info.keys()) == ["echo"]
+        assert mcp_host.mcp_server_info["echo"] is not None
+        assert mcp_host.mcp_server_info["echo"].initialize_result.capabilities
+        assert (
+            mcp_host.mcp_server_info["echo"].initialize_result.instructions
+            == echo_tool.Instructions
+        )
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_info_no_such_file(
+    no_such_file_mcp_server: dict[str, ServerConfig],
+) -> None:
+    """Test the host context initialization."""
+    config = HostConfig(
+        llm=LLMConfig(
+            model="fake",
+            provider="dive",
+        ),
+        mcp_servers=no_such_file_mcp_server,
+    )
+    async with DiveMcpHost(config) as mcp_host:
+        assert list(mcp_host.mcp_server_info.keys()) == [
+            "no_such_file",
+            "sse",
+        ]
+        assert mcp_host.mcp_server_info["no_such_file"] is not None
+        assert mcp_host.mcp_server_info["no_such_file"].initialize_result is None
+        assert mcp_host.mcp_server_info["no_such_file"].error is not None
+        assert (
+            mcp_host.mcp_server_info["no_such_file"].client_status == ClientState.FAILED
+        )
+        assert mcp_host.mcp_server_info["sse"] is not None
+        assert mcp_host.mcp_server_info["sse"].initialize_result is None
+        assert mcp_host.mcp_server_info["sse"].error is not None
+        assert mcp_host.mcp_server_info["sse"].client_status == ClientState.FAILED
