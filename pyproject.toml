@@ -83,7 +83,7 @@ lint.ignore = [
 lint.extend-select = ["I"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "ANN", "D107", "ARG001", "PLR2004"]  # Allow assert statements in test files
+"**/test_*.py" = ["S101", "ANN", "D107", "ARG001", "PLR2004"]  # Allow assert statements in test files
 "dive_mcp_host/cli/**/*.py" = ["S101", "ANN", "D107", "T201"]
 
 [tool.ruff.format]
