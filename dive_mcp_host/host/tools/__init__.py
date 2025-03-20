@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Self
 from langchain_core.tools import BaseTool, ToolException
 from mcp import ClientSession, StdioServerParameters, stdio_client, types
 from mcp.client.sse import sse_client
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 from pydantic_core import to_json
 
 from dive_mcp_host.host.conf import ServerConfig  # noqa: TC001 Pydantic Need this
