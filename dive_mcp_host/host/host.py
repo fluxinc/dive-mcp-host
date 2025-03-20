@@ -102,7 +102,7 @@ class DiveMcpHost(ContextProtocol):
         )
         self._model = model
 
-    def conversation[T](
+    def conversation[T](  # noqa: PLR0913. Is there a better way to do this?
         self,
         *,
         thread_id: str | None = None,
@@ -112,6 +112,8 @@ class DiveMcpHost(ContextProtocol):
             [BaseChatModel, Sequence[BaseTool] | ToolNode],
             AgentFactory[T],
         ] = get_chat_agent_factory,
+        system_prompt: str | None = None,
+        volatile: bool = False,
     ) -> Conversation[T]:
         """Start or resume a conversation.
 
@@ -119,7 +121,9 @@ class DiveMcpHost(ContextProtocol):
             thread_id: The thread ID to use for the conversation.
             user_id: The user ID to use for the conversation.
             tools: The tools to use for the conversation.
+            system_prompt: Use a custom system prompt for the conversation.
             get_agent_factory_method: The method to get the agent factory.
+            volatile: if True, the conversation will not be saved.
 
         If the thread ID is not provided, a new thread will be created.
         Customize the agent factory to use a different model or tools.
@@ -137,9 +141,10 @@ class DiveMcpHost(ContextProtocol):
         return Conversation(
             model=self._model,
             agent_factory=agent_factory,
+            system_prompt=system_prompt,
             thread_id=thread_id,
             user_id=user_id,
-            checkpointer=self._checkpointer,
+            checkpointer=None if volatile else self._checkpointer,
         )
 
     async def reload(
@@ -170,7 +175,7 @@ class DiveMcpHost(ContextProtocol):
         return self._tools
 
     @property
-    def mcp_server_info(self) -> dict[str, McpServerInfo | None]:
+    def mcp_server_info(self) -> dict[str, McpServerInfo]:
         """Get information about active MCP servers.
 
         Returns:

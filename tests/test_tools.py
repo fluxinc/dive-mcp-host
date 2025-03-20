@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolCall, ToolMessa
 
 from dive_mcp_host.host.conf import HostConfig, LLMConfig
 from dive_mcp_host.host.host import DiveMcpHost
-from dive_mcp_host.host.tools import ServerConfig, ToolManager
+from dive_mcp_host.host.tools import ClientState, ServerConfig, ToolManager
 from dive_mcp_host.models.fake import FakeMessageToolModel
 
 
@@ -50,6 +50,20 @@ async def echo_tool_sse_server(
     yield port, {"echo": ServerConfig(name="echo", url=f"http://localhost:{port}/sse")}
     proc.send_signal(signal.SIGKILL)
     await proc.wait()
+
+@pytest.fixture
+def no_such_file_mcp_server() -> dict[str, ServerConfig]:
+    """MCP server that does not exist."""
+    return {
+        "no_such_file": ServerConfig(
+            name="no_such_file",
+            command="no_such_file",
+        ),
+        "sse": ServerConfig(
+            name="sse_server",
+            url="http://localhost:2/sse",
+        ),
+    }
 
 
 @pytest.mark.asyncio
@@ -237,3 +251,32 @@ async def test_mcp_server_info(echo_tool_stdio_config: dict[str, ServerConfig]) 
             mcp_host.mcp_server_info["echo"].initialize_result.instructions
             == echo_tool.Instructions
         )
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_info_no_such_file(
+    no_such_file_mcp_server: dict[str, ServerConfig],
+) -> None:
+    """Test the host context initialization."""
+    config = HostConfig(
+        llm=LLMConfig(
+            model="fake",
+            provider="dive",
+        ),
+        mcp_servers=no_such_file_mcp_server,
+    )
+    async with DiveMcpHost(config) as mcp_host:
+        assert list(mcp_host.mcp_server_info.keys()) == [
+            "no_such_file",
+            "sse",
+        ]
+        assert mcp_host.mcp_server_info["no_such_file"] is not None
+        assert mcp_host.mcp_server_info["no_such_file"].initialize_result is None
+        assert mcp_host.mcp_server_info["no_such_file"].error is not None
+        assert (
+            mcp_host.mcp_server_info["no_such_file"].client_status == ClientState.FAILED
+        )
+        assert mcp_host.mcp_server_info["sse"] is not None
+        assert mcp_host.mcp_server_info["sse"].initialize_result is None
+        assert mcp_host.mcp_server_info["sse"].error is not None
+        assert mcp_host.mcp_server_info["sse"].client_status == ClientState.FAILED
