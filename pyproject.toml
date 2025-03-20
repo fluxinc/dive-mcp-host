@@ -46,6 +46,7 @@ clipboard = []
 dev = [
     "pytest",
     "pytest-asyncio",
+	"pytest-integration",
     "langchain-community",
     "ruff"
 ]
