@@ -63,14 +63,6 @@ class TestModelManager:
         assert manager2.config_path == path2
 
     @pytest.mark.asyncio
-    async def test_get_config(self, mock_config_file):
-        """Test retrieving model configuration."""
-        manager = ModelManager(mock_config_file)
-        config = await manager.get_config()
-        assert config is not None
-        assert config.get("activeProvider") == "test_provider"
-
-    @pytest.mark.asyncio
     @patch("dive_mcp_host.httpd.conf.model.manager.ModelManager.save_single_settings")
     async def test_save_single_settings(self, mock_save, mock_config_file):
         """Test saving model configuration."""
@@ -90,7 +82,7 @@ class TestModelManager:
         mock_save.return_value = None
 
         # Call the method
-        await manager.save_single_settings("new_provider", test_settings, True)
+        manager.save_single_settings("new_provider", test_settings, True)
 
         # Verify the method was called
         mock_save.assert_called_once_with("new_provider", test_settings, True)
@@ -120,7 +112,7 @@ class TestModelManager:
         mock_replace.return_value = True
 
         # Call the method
-        result = await manager.replace_all_settings(new_config)
+        result = manager.replace_all_settings(new_config)
 
         # Verify
         assert result is True
@@ -130,19 +122,19 @@ class TestModelManager:
     async def test_initialize(self, mock_config_file):
         """Test initializing the manager."""
         manager = ModelManager(mock_config_file)
-        result = await manager.initialize()
+        result = manager.initialize()
 
         assert result is True
-        assert manager.current_settings is not None
-        assert manager.current_settings.model == "test_model"
-        assert manager.current_settings.model_provider == "test_provider"
+        assert manager.current_setting is not None
+        assert manager.current_setting.model == "test_model"
+        assert manager.current_setting.model_provider == "test_provider"
 
     @pytest.mark.asyncio
     async def test_get_active_settings(self, mock_config_file):
         """Test getting the active model settings."""
         manager = ModelManager(mock_config_file)
-        await manager.initialize()
-        settings = await manager.get_active_settings()
+        manager.initialize()
+        settings = manager.current_setting
 
         assert settings is not None
         assert settings.model == "test_model"
@@ -152,7 +144,8 @@ class TestModelManager:
     async def test_get_available_providers(self, mock_config_file):
         """Test getting available providers."""
         manager = ModelManager(mock_config_file)
-        providers = await manager.get_available_providers()
+        manager.initialize()
+        providers = manager.get_available_providers()
 
         assert providers is not None
         assert "test_provider" in providers
@@ -161,13 +154,11 @@ class TestModelManager:
     async def test_parse_settings(self, mock_config_file):
         """Test parsing model settings."""
         manager = ModelManager(mock_config_file)
-        config = await manager.get_config()
-        if config is None:
+        r = manager.initialize()
+        if not r:
             pytest.skip("Configuration not available")
 
-        model_config = config.get("configs", {}).get("test_provider", {})
-
-        settings = await manager.parse_settings(model_config)
+        settings = manager.get_settings_by_provider("test_provider")
 
         assert settings is not None
         assert settings.model == "test_model"
@@ -180,9 +171,9 @@ class TestModelManager:
     async def test_get_settings_by_provider(self, mock_config_file):
         """Test getting model settings by specific provider."""
         manager = ModelManager(mock_config_file)
-
+        manager.initialize()
         # Test existing provider
-        settings = await manager.get_settings_by_provider("test_provider")
+        settings = manager.get_settings_by_provider("test_provider")
         assert settings is not None
         assert settings.model == "test_model"
         assert settings.model_provider == "test_provider"
@@ -191,7 +182,7 @@ class TestModelManager:
         assert settings.configuration.base_url == "http://test.url"
 
         # Test non-existing provider
-        non_existing_settings = await manager.get_settings_by_provider(
+        non_existing_settings = manager.get_settings_by_provider(
             "non_existing_provider"
         )
         assert non_existing_settings is None
@@ -235,8 +226,8 @@ class TestModelManagerIntegration:
         manager = ModelManager(test_config_path)
 
         # Initialize the manager
-        result = await manager.initialize()
+        result = manager.initialize()
         assert result is True
-        assert manager.current_settings is not None
-        assert manager.current_settings.model == "fake-model"
-        assert manager.current_settings.model_provider == "fake"
+        assert manager.current_setting is not None
+        assert manager.current_setting.model == "fake-model"
+        assert manager.current_setting.model_provider == "fake"

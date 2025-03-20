@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 
-from dive_mcp_host.httpd.prompts.manager import PromptManager
+from dive_mcp_host.httpd.conf.prompts.manager import PromptManager
 
 # Register custom mark
 integration = pytest.mark.integration
