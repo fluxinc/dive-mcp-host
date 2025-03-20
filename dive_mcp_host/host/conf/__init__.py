@@ -34,6 +34,26 @@ class LLMConfig(BaseModel):
             else:
                 raise ValueError("invalid dims")
 
+    def to_load_model_kwargs(self) -> dict:
+        """Convert the LLM config to kwargs for load_model."""
+        if self.configuration:
+            kwargs = {
+                k: v
+                for k, v in self.configuration.items()
+                if not hasattr(self, k) and not k.startswith("_")
+            }
+        else:
+            kwargs = {}
+        if self.apiKey:
+            kwargs["api_key"] = self.apiKey
+        if self.temperature:
+            kwargs["temperature"] = self.temperature
+        if self.topP:
+            kwargs["top_p"] = self.topP
+        if self.maxTokens:
+            kwargs["max_tokens"] = self.maxTokens
+        return kwargs
+
 
 class CheckpointerConfig(BaseModel):
     """Configuration for the checkpointer."""

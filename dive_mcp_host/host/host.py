@@ -89,16 +89,10 @@ class DiveMcpHost(ContextProtocol):
     async def _init_models(self) -> None:
         if self._model:
             return
-        model_config = self._config.llm
-        kwargs = model_config.model_dump(exclude_unset=True)
-        if "model" in kwargs:
-            kwargs.pop("model")
-        if "modelProvider" in kwargs:
-            kwargs.pop("modelProvider")
         model = load_model(
-            model_config.modelProvider,
-            model_config.model,
-            **kwargs,
+            self._config.llm.modelProvider,
+            self._config.llm.model,
+            **self._config.llm.to_load_model_kwargs(),
         )
         self._model = model
 
