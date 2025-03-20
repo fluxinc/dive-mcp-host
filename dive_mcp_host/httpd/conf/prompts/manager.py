@@ -14,21 +14,22 @@ class PromptManager:
     def __init__(self, custom_rules_path: str | None = None) -> None:
         """Initialize the PromptManager.
 
+        The system prompt is set according to the following priority:
+        1. Environment variable DIVE_CUSTOM_RULES_CONTENT if present
+        2. File specified by custom_rules_path parameter if set
+        3. ".customrules" file in current working directory if exists
+        4. Default to empty string if no other source is available
+
         Args:
             custom_rules_path: Optional path to the custom rules file.
         """
         self.prompts: dict[str, str] = {}
         self.custom_rules_path = custom_rules_path or str(Path.cwd() / ".customrules")
-
-        # Read .customrules file
-        try:
-            custom_rules = os.environ.get("DIVE_CUSTOM_RULES_CONTENT") or Path(
-                self.custom_rules_path
-            ).read_text(encoding="utf-8")
-            # Combine system prompt and custom rules
+        if custom_rules := os.environ.get("DIVE_CUSTOM_RULES_CONTENT"):
             self.prompts["system"] = system_prompt(custom_rules)
-        except OSError as error:
-            logger.warning("Cannot read %s: %s", self.custom_rules_path, error)
+        elif (path := Path(self.custom_rules_path)) and path.exists():
+            self.prompts["system"] = system_prompt(path.read_text("utf-8"))
+        else:
             self.prompts["system"] = system_prompt("")
 
     def set_prompt(self, key: str, prompt: str) -> None:

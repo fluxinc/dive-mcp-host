@@ -22,6 +22,8 @@ class ModelManager:
 
         Args:
             config_path: Optional path to the model configuration file.
+                If not provided, it will be set to "modelConfig.json" in current
+                working directory.
         """
         self._config_path: str = config_path or str(Path.cwd() / "modelConfig.json")
         self._current_setting: ModelSettings | None = None

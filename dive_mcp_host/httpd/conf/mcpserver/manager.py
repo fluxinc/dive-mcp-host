@@ -37,6 +37,8 @@ class MCPServerManager:
 
         Args:
             config_path: Optional path to the configuration file.
+                If not provided, it will be set to "config.json" in current
+                working directory.
         """
         self._config_path: str = config_path or str(Path.cwd() / "config.json")
         self._current_config: Config | None = None
