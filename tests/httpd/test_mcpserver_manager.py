@@ -53,28 +53,27 @@ class TestMCPServerManager:
         """Test if the configuration path is set correctly."""
         test_path = "/test/path.json"
         manager = MCPServerManager(test_path)
-        assert manager._config_path == test_path
+        assert manager.config_path == test_path
 
     @pytest.mark.asyncio
     async def test_get_config(self, mock_config_file):
         """Test retrieving MCP server configuration."""
         manager = MCPServerManager(mock_config_file)
         manager.initialize()
-        assert manager._current_config is not None
-        assert "test_server" in manager._current_config.mcp_servers
-        assert manager._current_config.mcp_servers["test_server"].transport == "command"
+        assert manager.current_config is not None
+        assert "test_server" in manager.current_config.mcp_servers
+        assert manager.current_config.mcp_servers["test_server"].transport == "command"
 
     @pytest.mark.asyncio
     async def test_initialize(self, mock_config_file):
         """Test initializing the manager."""
         manager = MCPServerManager(mock_config_file)
-        result = manager.initialize()
+        manager.initialize()
 
-        assert result is True
-        assert manager._current_config is not None
-        assert "test_server" in manager._current_config.mcp_servers
-        assert manager._current_config.mcp_servers["test_server"].enabled is True
-        assert manager._current_config.mcp_servers["disabled_server"].enabled is False
+        assert manager.current_config is not None
+        assert "test_server" in manager.current_config.mcp_servers
+        assert manager.current_config.mcp_servers["test_server"].enabled is True
+        assert manager.current_config.mcp_servers["disabled_server"].enabled is False
 
     @pytest.mark.asyncio
     async def test_get_enabled_servers(self, mock_config_file):
@@ -115,12 +114,12 @@ class TestMCPServerManager:
             manager2.initialize()
 
             # Verify managers have different configs
-            assert manager1._current_config is not None
-            assert manager2._current_config is not None
-            assert "test_server" in manager1._current_config.mcp_servers
-            assert "second_server" in manager2._current_config.mcp_servers
-            assert "second_server" not in manager1._current_config.mcp_servers
-            assert "test_server" not in manager2._current_config.mcp_servers
+            assert manager1.current_config is not None
+            assert manager2.current_config is not None
+            assert "test_server" in manager1.current_config.mcp_servers
+            assert "second_server" in manager2.current_config.mcp_servers
+            assert "second_server" not in manager1.current_config.mcp_servers
+            assert "test_server" not in manager2.current_config.mcp_servers
 
             # Verify they are different instances
             assert manager1 is not manager2
@@ -154,13 +153,11 @@ class TestMCPServerManager:
         assert result is True
 
         # Manager's current_config should be updated
-        assert manager._current_config is not None
-        assert len(manager._current_config.mcp_servers) == 1
-        assert "new_server" in manager._current_config.mcp_servers
-        assert (
-            manager._current_config.mcp_servers["new_server"].transport == "websocket"
-        )
-        assert manager._current_config.mcp_servers["new_server"].url == "ws://new.url"
+        assert manager.current_config is not None
+        assert len(manager.current_config.mcp_servers) == 1
+        assert "new_server" in manager.current_config.mcp_servers
+        assert manager.current_config.mcp_servers["new_server"].transport == "websocket"
+        assert manager.current_config.mcp_servers["new_server"].url == "ws://new.url"
 
 
 # Integration tests
@@ -201,7 +198,6 @@ class TestMCPServerManagerIntegration:
 
         # Initialize the manager
         result = manager.initialize()
-        assert result is True
         assert manager.current_config is not None
         assert "test_server" in manager.current_config.mcp_servers
 
