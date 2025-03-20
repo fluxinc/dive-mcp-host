@@ -1,13 +1,11 @@
 import logging
 import os
 from pathlib import Path
-from typing import Any
 
-from dive_mcp_host.httpd.prompts.system import system_prompt
+from dive_mcp_host.httpd.conf.prompts.system import system_prompt
 
 # Logger setup
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 
 class PromptManager:
@@ -74,6 +72,7 @@ class PromptManager:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     prompt_manager = PromptManager()
     system_prompt_text = prompt_manager.get_prompt("system")
     logger.info("System prompt length: %d", len(system_prompt_text or ""))

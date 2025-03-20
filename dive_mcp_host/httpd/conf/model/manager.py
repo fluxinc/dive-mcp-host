@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import os
@@ -13,7 +12,6 @@ from dive_mcp_host.httpd.routers.models import (
 
 # Logger setup
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 
 class ModelManager:
@@ -25,44 +23,45 @@ class ModelManager:
         Args:
             config_path: Optional path to the model configuration file.
         """
-        self.config_path: str = config_path or str(Path.cwd() / "modelConfig.json")
-        self.current_settings: ModelSettings | None = None
-        self.enable_tools: bool = True
+        self._config_path: str = config_path or str(Path.cwd() / "modelConfig.json")
+        self._current_setting: ModelSettings | None = None
+        self._enable_tools: bool = True
+        self._config_dict: dict[str, Any] | None = None
 
-    async def initialize(self) -> bool:
+    def initialize(self) -> bool:
         """Initialize the ModelManager."""
-        config_dict = await self.get_config()
-
-        if not config_dict:
+        if env_config := os.environ.get("DIVE_MODEL_CONFIG_CONTENT"):
+            config_content = env_config
+        else:
+            with Path(self._config_path).open(encoding="utf-8") as f:
+                config_content = f.read()
+        self._config_dict = json.loads(config_content)
+        if not self._config_dict:
             logger.error("Model configuration not found")
             return False
 
-        active_provider = config_dict.get(
+        active_provider = self._config_dict.get(
             "activeProvider",
-            config_dict.get("active_provider", ""),
+            self._config_dict.get("active_provider", ""),
         )
-        configs = config_dict.get("configs", {})
-        self.enable_tools = config_dict.get(
+        configs = self._config_dict.get("configs", {})
+        self._enable_tools = self._config_dict.get(
             "enableTools",
-            config_dict.get("enable_tools", True),
+            self._config_dict.get("enable_tools", True),
         )
-        model_config = configs.get(active_provider, {}) if active_provider else {}
+        if model_config := (
+            configs.get(active_provider, {}) if active_provider else {}
+        ):
+            # Create model settings with models.py version
+            self._current_setting = self._parse_settings(model_config)
+            return True
+        logger.error(
+            "Model settings not found for active provider: %s",
+            active_provider,
+        )
+        return False
 
-        if not model_config:
-            logger.error(
-                "Model settings not found for active provider: %s",
-                active_provider,
-            )
-            return False
-
-        # Create model settings with models.py version
-        model_settings = await self.parse_settings(model_config)
-        self.current_settings = model_settings
-        return True
-
-    async def parse_settings(
-        self, model_config: dict[str, Any]
-    ) -> ModelSettings | None:
+    def _parse_settings(self, model_config: dict[str, Any]) -> ModelSettings | None:
         """Parse the model settings.
 
         Args:
@@ -121,63 +120,44 @@ class ModelManager:
             logger.error("Error parsing model settings: %s", e)
             return None
 
-    async def get_config(self) -> dict[str, Any] | None:
-        """Get model configuration.
-
-        Returns:
-            Model configuration dictionary or None if not found.
-        """
-        try:
-            env_config = os.environ.get("DIVE_MODEL_CONFIG_CONTENT")
-            logger.debug("[ModelManager] %s", "use env" if env_config else "use config")
-
-            config_path = self.config_path or str(Path.cwd() / "modelConfig.json")
-
-            if env_config:
-                config_content = env_config
-            else:
-                with Path(config_path).open(encoding="utf-8") as f:
-                    config_content = f.read()
-
-            return json.loads(config_content)
-        except (OSError, json.JSONDecodeError) as error:
-            logger.error("Error loading model configuration: %s", error)
-            return None
-
-    async def get_active_settings(self) -> ModelSettings | None:
+    @property
+    def current_setting(self) -> ModelSettings | None:
         """Get the active model settings.
 
         Returns:
             Model settings or None if configuration or active provider is not found.
         """
-        return self.current_settings
+        return self._current_setting
 
-    async def get_settings_by_provider(self, provider: str) -> ModelSettings | None:
+    @property
+    def config_path(self) -> str:
+        """Get the configuration path."""
+        return self._config_path
+
+    def get_settings_by_provider(self, provider: str) -> ModelSettings | None:
         """Get the model settings by provider.
 
         Args:
             provider: Model provider name.
         """
-        config_dict = await self.get_config()
-        if not config_dict:
+        if not self._config_dict:
             return None
-        model_config = config_dict.get("configs", {}).get(provider, None)
+        model_config = self._config_dict.get("configs", {}).get(provider, None)
         if not model_config:
             return None
-        return await self.parse_settings(model_config)
+        return self._parse_settings(model_config)
 
-    async def get_available_providers(self) -> list[str]:
+    def get_available_providers(self) -> list[str]:
         """Get the available model providers.
 
         Returns:
             List of model providers.
         """
-        config_dict = await self.get_config()
-        if not config_dict:
+        if not self._config_dict:
             return []
-        return list(config_dict.get("configs", {}).keys())
+        return list(self._config_dict.get("configs", {}).keys())
 
-    async def save_single_settings(
+    def save_single_settings(
         self,
         provider: str,
         upload_model_settings: ModelSettings,
@@ -190,11 +170,10 @@ class ModelManager:
             upload_model_settings: Model settings to upload.
             enable_tools_: Whether to enable tools.
         """
-        config_dict = await self.get_config()
         enable_tools = True if enable_tools_ is None else enable_tools_
 
-        if not config_dict:
-            config_dict = {
+        if not self._config_dict:
+            self._config_dict = {
                 "activeProvider": provider,
                 "enableTools": enable_tools,
                 "configs": {
@@ -202,19 +181,19 @@ class ModelManager:
                 },
             }
         else:
-            config_dict["activeProvider"] = provider
-            if "configs" not in config_dict:
-                config_dict["configs"] = {}
-            config_dict["configs"][provider] = upload_model_settings
-            config_dict["enableTools"] = enable_tools
+            self._config_dict["activeProvider"] = provider
+            if "configs" not in self._config_dict:
+                self._config_dict["configs"] = {}
+            self._config_dict["configs"][provider] = upload_model_settings
+            self._config_dict["enableTools"] = enable_tools
 
-        with Path(self.config_path).open("w", encoding="utf-8") as f:
-            json.dump(config_dict, f, indent=2)
+        with Path(self._config_path).open("w", encoding="utf-8") as f:
+            json.dump(self._config_dict, f, indent=2)
 
-    async def replace_all_settings(
+    def replace_all_settings(
         self,
         upload_model_settings: ModelConfig,
-    ) -> bool:
+    ) -> None:
         """Replace all model configurations.
 
         Args:
@@ -223,22 +202,22 @@ class ModelManager:
         Returns:
             True if successful.
         """
-        with Path(self.config_path).open("w", encoding="utf-8") as f:
+        with Path(self._config_path).open("w", encoding="utf-8") as f:
             json.dump(upload_model_settings, f, indent=2)
-        return True
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     model_manager = ModelManager()
-    asyncio.run(model_manager.initialize())
-    current_settings = model_manager.current_settings
+    model_manager.initialize()
+    current_settings = model_manager.current_setting
     if current_settings is not None:
         logger.info("current_settings: %s", current_settings.model_dump(by_alias=False))
     else:
         logger.error("current_settings is None")
 
-    available_providers = asyncio.run(model_manager.get_available_providers())
+    available_providers = model_manager.get_available_providers()
     logger.info("available_providers: %s", available_providers)
 
-    settings_by_provider = asyncio.run(model_manager.get_settings_by_provider("openai"))
+    settings_by_provider = model_manager.get_settings_by_provider("openai")
     logger.info("settings_by_provider: %s", settings_by_provider)

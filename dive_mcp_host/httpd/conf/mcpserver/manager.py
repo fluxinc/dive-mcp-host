@@ -1,9 +1,8 @@
-import asyncio
 import json
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -12,7 +11,7 @@ from pydantic import BaseModel, Field
 class ServerConfig(BaseModel):
     """Server configuration model."""
 
-    transport: str  # "command", "sse", "websocket"
+    transport: Literal["command", "sse", "websocket"]
     enabled: bool = True
     command: str | None = None
     args: list[str] | None = None
@@ -28,7 +27,6 @@ class Config(BaseModel):
 
 # Logger setup
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 
 class MCPServerManager:
@@ -40,61 +38,52 @@ class MCPServerManager:
         Args:
             config_path: Optional path to the configuration file.
         """
-        self.config_path: str = config_path or str(Path.cwd() / "config.json")
-        self.current_config: Config | None = None
+        self._config_path: str = config_path or str(Path.cwd() / "config.json")
+        self._current_config: Config | None = None
 
-    async def initialize(self) -> bool:
+    @property
+    def config_path(self) -> str:
+        """Get the configuration path."""
+        return self._config_path
+
+    @property
+    def current_config(self) -> Config | None:
+        """Get the current configuration."""
+        return self._current_config
+
+    def initialize(self) -> None:
         """Initialize the MCPServerManager.
 
         Returns:
             True if successful, False otherwise.
         """
-        config_result = await self.get_config()
+        env_config = os.environ.get("DIVE_MCP_CONFIG_CONTENT")
 
-        if not config_result:
-            logger.error("Server configuration not found")
-            return False
+        if env_config:
+            config_content = env_config
+        else:
+            with Path(self._config_path).open(encoding="utf-8") as f:
+                config_content = f.read()
 
-        self.current_config = config_result
-        return True
+        config_dict = json.loads(config_content)
+        self._current_config = Config(**config_dict)
 
-    async def get_config(self) -> Config | None:
-        """Get configuration.
-
-        Returns:
-            Config object or None if configuration is not found.
-        """
-        try:
-            env_config = os.environ.get("DIVE_MCP_CONFIG_CONTENT")
-
-            if env_config:
-                config_content = env_config
-            else:
-                with Path(self.config_path).open(encoding="utf-8") as f:
-                    config_content = f.read()
-
-            config_dict = json.loads(config_content)
-            return Config(**config_dict)
-        except (OSError, json.JSONDecodeError) as error:
-            logger.error("Error loading configuration: %s", error)
-            return None
-
-    async def get_enabled_servers(self) -> list[str]:
+    def get_enabled_servers(self) -> dict[str, ServerConfig]:
         """Get list of enabled server names.
 
         Returns:
-            List of enabled server names.
+            Dictionary of enabled server names and their configurations.
         """
-        if not self.current_config:
-            return []
+        if not self._current_config:
+            return {}
 
-        return [
-            server_name
-            for server_name, config in self.current_config.mcp_servers.items()
+        return {
+            server_name: config
+            for server_name, config in self._current_config.mcp_servers.items()
             if config.enabled
-        ]
+        }
 
-    async def update_all_configs(self, new_config: Config) -> bool:
+    def update_all_configs(self, new_config: Config) -> bool:
         """Replace all configurations.
 
         Args:
@@ -103,26 +92,23 @@ class MCPServerManager:
         Returns:
             True if successful, False otherwise.
         """
-        try:
-            with Path(self.config_path).open("w", encoding="utf-8") as f:
-                json_dict = new_config.model_dump(by_alias=True)
-                json.dump(json_dict, f, indent=2)
+        with Path(self._config_path).open("w", encoding="utf-8") as f:
+            json_dict = new_config.model_dump(by_alias=True)
+            json.dump(json_dict, f, indent=2)
 
-            self.current_config = new_config
-            return True
-        except (OSError, json.JSONDecodeError) as error:
-            logger.error("Error replacing all configurations: %s", error)
-            return False
+        self._current_config = new_config
+        return True
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     manager = MCPServerManager()
-    asyncio.run(manager.initialize())
-    configs = asyncio.run(manager.get_config())
-    if configs:
+    manager.initialize()
+    if manager.current_config:
         logger.info(
-            "Available server configurations: %s", list(configs.mcp_servers.keys())
+            "Available server configurations: %s",
+            list(manager.current_config.mcp_servers.keys()),
         )
 
-    enabled_servers = asyncio.run(manager.get_enabled_servers())
+    enabled_servers = manager.get_enabled_servers()
     logger.info("Enabled servers: %s", enabled_servers)
