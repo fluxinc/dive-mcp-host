@@ -6,8 +6,9 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 
-from dive_mcp_host.host.conf import LLMConfig, ModelConfig
+from dive_mcp_host.host.conf import LLMConfig
 from dive_mcp_host.httpd.conf.model.manager import ModelManager
+from dive_mcp_host.httpd.routers.models import ModelConfig
 
 # Register custom mark
 integration = pytest.mark.integration
@@ -124,7 +125,7 @@ class TestModelManager:
         assert result is True
         assert manager.current_setting is not None
         assert manager.current_setting.model == "test_model"
-        assert manager.current_setting.provider == "test_provider"
+        assert manager.current_setting.modelProvider == "test_provider"
 
     @pytest.mark.asyncio
     async def test_get_active_settings(self, mock_config_file):
@@ -135,7 +136,7 @@ class TestModelManager:
 
         assert settings is not None
         assert settings.model == "test_model"
-        assert settings.provider == "test_provider"
+        assert settings.modelProvider == "test_provider"
 
     @pytest.mark.asyncio
     async def test_get_available_providers(self, mock_config_file):
@@ -159,8 +160,8 @@ class TestModelManager:
 
         assert settings is not None
         assert settings.model == "test_model"
-        assert settings.provider == "test_provider"
-        assert settings.api_key == "test_key"
+        assert settings.modelProvider == "test_provider"
+        assert settings.apiKey == "test_key"
         assert settings.configuration is not None
         assert settings.configuration["base_url"] == "http://test.url"
 
@@ -173,8 +174,8 @@ class TestModelManager:
         settings = manager.get_settings_by_provider("test_provider")
         assert settings is not None
         assert settings.model == "test_model"
-        assert settings.provider == "test_provider"
-        assert settings.api_key == "test_key"
+        assert settings.modelProvider == "test_provider"
+        assert settings.apiKey == "test_key"
         assert settings.configuration is not None
         assert settings.configuration["base_url"] == "http://test.url"
 
@@ -227,4 +228,4 @@ class TestModelManagerIntegration:
         assert result is True
         assert manager.current_setting is not None
         assert manager.current_setting.model == "fake-model"
-        assert manager.current_setting.provider == "fake"
+        assert manager.current_setting.modelProvider == "fake"

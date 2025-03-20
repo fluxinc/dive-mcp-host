@@ -51,7 +51,7 @@ class DiveHostAPI(FastAPI):
         config = HostConfig(
             llm=LLMConfig(
                 model="fake",
-                provider="dive",
+                modelProvider="dive",
             ),
             mcp_servers={
                 "echo": ServerConfig(

@@ -14,14 +14,14 @@ class LLMConfig(BaseModel):
     """Configuration for the LLM model."""
 
     model: str = "gpt-4o"
-    provider: str | SpecialProvider = Field(default="openai", alias="modelProvider")
+    modelProvider: str | SpecialProvider = Field(default="openai")  # noqa: N815
     embed: str | None = None
     embed_dims: int = 0
-    api_key: str | None = Field(default=None, alias="apiKey")
+    apiKey: str | None = None  # noqa: N815
     temperature: float | None = 0
     vector_store: str | None = None
-    top_p: float | None = Field(default=None, alias="topP")
-    max_tokens: int | None = Field(default=None, alias="maxTokens")
+    topP: float | None = None  # noqa: N815
+    maxTokens: int | None = None  # noqa: N815
     configuration: dict | None = None
 
     def model_post_init(self, _: Any) -> None:
@@ -33,14 +33,6 @@ class LLMConfig(BaseModel):
                 self.embed_dims = 3072
             else:
                 raise ValueError("invalid dims")
-
-
-class ModelConfig(BaseModel):
-    """Configuration for the model."""
-
-    active_provider: str = Field(alias="activeProvider")
-    enable_tools: bool = Field(alias="enableTools")
-    configs: dict[str, LLMConfig]
 
 
 class CheckpointerConfig(BaseModel):

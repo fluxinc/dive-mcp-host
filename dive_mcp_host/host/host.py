@@ -93,10 +93,10 @@ class DiveMcpHost(ContextProtocol):
         kwargs = model_config.model_dump(exclude_unset=True)
         if "model" in kwargs:
             kwargs.pop("model")
-        if "provider" in kwargs:
-            kwargs.pop("provider")
+        if "modelProvider" in kwargs:
+            kwargs.pop("modelProvider")
         model = load_model(
-            model_config.provider,
+            model_config.modelProvider,
             model_config.model,
             **kwargs,
         )
