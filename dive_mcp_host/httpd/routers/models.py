@@ -42,12 +42,6 @@ class McpServerError(BaseModel):
     error: object  # any
 
 
-class ModelConfiguration(BaseModel):
-    """Basic configuration for a model, including base URL."""
-
-    base_url: str = Field(alias="baseURL")
-
-
 class ModelType(StrEnum):
     """Model type."""
 

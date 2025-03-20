@@ -4,11 +4,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from dive_mcp_host.httpd.routers.models import (
-    ModelConfig,
-    ModelConfiguration,
-    ModelSettings,
-)
+from dive_mcp_host.host.conf import ModelConfig
+from dive_mcp_host.httpd.routers.models import LLMConfig
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -26,7 +23,7 @@ class ModelManager:
                 working directory.
         """
         self._config_path: str = config_path or str(Path.cwd() / "modelConfig.json")
-        self._current_setting: ModelSettings | None = None
+        self._current_setting: LLMConfig | None = None
         self._enable_tools: bool = True
         self._config_dict: dict[str, Any] | None = None
 
@@ -63,7 +60,7 @@ class ModelManager:
         )
         return False
 
-    def _parse_settings(self, model_config: dict[str, Any]) -> ModelSettings | None:
+    def _parse_settings(self, model_config: dict[str, Any]) -> LLMConfig | None:
         """Parse the model settings.
 
         Args:
@@ -84,10 +81,10 @@ class ModelManager:
             )
             configuration = None
             if base_url:
-                configuration = ModelConfiguration(baseURL=base_url)
+                configuration = {"base_url": base_url}
 
             # Create model settings with models.py version
-            return ModelSettings(
+            return LLMConfig(
                 model=model_config.get("model", ""),
                 modelProvider=model_config.get(
                     "modelProvider",
@@ -123,7 +120,7 @@ class ModelManager:
             return None
 
     @property
-    def current_setting(self) -> ModelSettings | None:
+    def current_setting(self) -> LLMConfig | None:
         """Get the active model settings.
 
         Returns:
@@ -136,7 +133,7 @@ class ModelManager:
         """Get the configuration path."""
         return self._config_path
 
-    def get_settings_by_provider(self, provider: str) -> ModelSettings | None:
+    def get_settings_by_provider(self, provider: str) -> LLMConfig | None:
         """Get the model settings by provider.
 
         Args:
@@ -162,7 +159,7 @@ class ModelManager:
     def save_single_settings(
         self,
         provider: str,
-        upload_model_settings: ModelSettings,
+        upload_model_settings: LLMConfig,
         enable_tools_: bool | None = None,
     ) -> None:
         """Save single model configuration.

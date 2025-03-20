@@ -6,11 +6,8 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 
+from dive_mcp_host.host.conf import LLMConfig, ModelConfig
 from dive_mcp_host.httpd.conf.model.manager import ModelManager
-from dive_mcp_host.httpd.routers.models import (
-    ModelConfig,
-    ModelSettings,
-)
 
 # Register custom mark
 integration = pytest.mark.integration
@@ -68,7 +65,7 @@ class TestModelManager:
         """Test saving model configuration."""
         manager = ModelManager(mock_config_file)
         # Create model settings
-        test_settings = ModelSettings(
+        test_settings = LLMConfig(
             model="new_model",
             modelProvider="new_provider",
             apiKey=None,
@@ -96,7 +93,7 @@ class TestModelManager:
             activeProvider="replaced_provider",
             enableTools=True,
             configs={
-                "replaced_provider": ModelSettings(
+                "replaced_provider": LLMConfig(
                     model="replaced_model",
                     modelProvider="replaced_provider",
                     apiKey=None,
@@ -127,7 +124,7 @@ class TestModelManager:
         assert result is True
         assert manager.current_setting is not None
         assert manager.current_setting.model == "test_model"
-        assert manager.current_setting.model_provider == "test_provider"
+        assert manager.current_setting.provider == "test_provider"
 
     @pytest.mark.asyncio
     async def test_get_active_settings(self, mock_config_file):
@@ -138,7 +135,7 @@ class TestModelManager:
 
         assert settings is not None
         assert settings.model == "test_model"
-        assert settings.model_provider == "test_provider"
+        assert settings.provider == "test_provider"
 
     @pytest.mark.asyncio
     async def test_get_available_providers(self, mock_config_file):
@@ -162,10 +159,10 @@ class TestModelManager:
 
         assert settings is not None
         assert settings.model == "test_model"
-        assert settings.model_provider == "test_provider"
+        assert settings.provider == "test_provider"
         assert settings.api_key == "test_key"
         assert settings.configuration is not None
-        assert settings.configuration.base_url == "http://test.url"
+        assert settings.configuration["base_url"] == "http://test.url"
 
     @pytest.mark.asyncio
     async def test_get_settings_by_provider(self, mock_config_file):
@@ -176,10 +173,10 @@ class TestModelManager:
         settings = manager.get_settings_by_provider("test_provider")
         assert settings is not None
         assert settings.model == "test_model"
-        assert settings.model_provider == "test_provider"
+        assert settings.provider == "test_provider"
         assert settings.api_key == "test_key"
         assert settings.configuration is not None
-        assert settings.configuration.base_url == "http://test.url"
+        assert settings.configuration["base_url"] == "http://test.url"
 
         # Test non-existing provider
         non_existing_settings = manager.get_settings_by_provider(
@@ -230,4 +227,4 @@ class TestModelManagerIntegration:
         assert result is True
         assert manager.current_setting is not None
         assert manager.current_setting.model == "fake-model"
-        assert manager.current_setting.model_provider == "fake"
+        assert manager.current_setting.provider == "fake"
