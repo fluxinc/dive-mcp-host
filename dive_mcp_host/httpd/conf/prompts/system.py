@@ -1,6 +1,6 @@
 """System prompt module for Dive MCP host."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def system_prompt(custom_rules: str) -> str:
@@ -12,7 +12,7 @@ def system_prompt(custom_rules: str) -> str:
     Returns:
         A complete system prompt string with embedded custom rules.
     """
-    current_time = datetime.now(tz=timezone.utc).isoformat()  # noqa: UP017
+    current_time = datetime.now(tz=UTC).isoformat()
 
     return f"""
 <Dive_System_Thinking_Protocol>
@@ -151,7 +151,7 @@ def system_prompt(custom_rules: str) -> str:
           * For block formulas:
             - Use double dollar signs with displaystyle:
               \\( \\displaystyle [formula] \\)
-            - Example: \\( \\displaystyle \\int_{{a}}^{{b}} f(x) dx = F(b) - F(a) \\)
+            - Example: \\( \\displaystyle \\int_{{{{a}}}}^{{{{b}}}} f(x) dx = F(b) - F(a) \\)
           * Important notes:
             - Ensure proper KaTeX syntax in all formulas
             - Maintain consistent and professional mathematical typesetting
@@ -161,4 +161,4 @@ def system_prompt(custom_rules: str) -> str:
     </Response_Format>
   </System_Specific_Rules>
 </Dive_System_Thinking_Protocol>
-"""
+"""  # noqa: E501
