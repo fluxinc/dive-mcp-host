@@ -15,6 +15,8 @@ from contextlib import (
 )
 from enum import Enum, auto
 from itertools import chain
+from json import JSONDecodeError
+from json import loads as json_loads
 from typing import TYPE_CHECKING, Any, Self
 
 from langchain_core.tools import BaseTool, ToolException
@@ -169,6 +171,7 @@ class McpServer(ContextProtocol):
                             name=tool.name,
                             description=tool.description or "",
                             mcp_server=self,
+                            kwargs_arg="kwargs" in tool.inputSchema,
                         )
                         for tool in tool_results.tools
                     ]
@@ -300,6 +303,7 @@ class McpTool(BaseTool):
     toolkit_name: str
     description: str = ""
     mcp_server: McpServer
+    kwargs_arg: bool = False
 
     def _run(self, **kwargs: dict[str, Any]) -> str:
         """Run the tool."""
@@ -307,6 +311,12 @@ class McpTool(BaseTool):
 
     async def _arun(self, **kwargs: dict[str, Any]) -> str:
         """Run the tool."""
+        if not self.kwargs_arg and len(kwargs) == 1 and "kwargs" in kwargs:
+            if isinstance(kwargs["kwargs"], str):
+                with suppress(JSONDecodeError):
+                    kwargs = json_loads(kwargs["kwargs"])
+            else:
+                kwargs = kwargs["kwargs"]
         async with self.mcp_server.session() as session:
             result = await session.call_tool(self.name, arguments=kwargs)  # type: ignore[arg-type]
         content = to_json(result.content).decode()
