@@ -7,11 +7,16 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from dive_mcp_host.host.conf import HostConfig, LLMConfig, ServerConfig
+from dive_mcp_host.host.conf import HostConfig, ServerConfig
 from dive_mcp_host.host.host import DiveMcpHost
+from dive_mcp_host.httpd.conf.mcpserver.manager import MCPServerManager
+from dive_mcp_host.httpd.conf.model.manager import ModelManager
+from dive_mcp_host.httpd.conf.prompts.manager import PromptManager
+from dive_mcp_host.httpd.conf.service.manager import ServiceManager
 from dive_mcp_host.httpd.database.migrate import db_migration
 from dive_mcp_host.httpd.database.msg_store.base import BaseMessageStore
 from dive_mcp_host.httpd.database.msg_store.sqlite import SQLiteMessageStore
+from dive_mcp_host.httpd.store.cache import LocalFileCache
 from dive_mcp_host.httpd.store.local import LocalStore
 
 logger = getLogger(__name__)
@@ -22,47 +27,100 @@ class DiveHostAPI(FastAPI):
 
     dive_host: dict[str, DiveMcpHost]  # shoud init "default" when preapre stage
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        config_path: str | None = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """Initialize the DiveHostAPI."""
         super().__init__(*args, **kwargs)
+        self._config_path = config_path
+
+    def _load_configs(self) -> None:
+        """Load all configs."""
+        self._service_config_manager = ServiceManager(self._config_path)
+        self._service_config_manager.initialize()
+        if self._service_config_manager.current_setting is None:
+            raise ValueError("Service manager is not initialized")
+
+        self._mcp_server_config_manager = MCPServerManager(
+            self._service_config_manager.current_setting.config_location.mcp_server_config_path
+        )
+        self._mcp_server_config_manager.initialize()
+
+        self._model_config_manager = ModelManager(
+            self._service_config_manager.current_setting.config_location.model_config_path
+        )
+        self._model_config_manager.initialize()
+
+        self._prompt_config_manager = PromptManager(
+            self._service_config_manager.current_setting.config_location.prompt_config_path
+        )
 
     @asynccontextmanager
     async def prepare(self) -> AsyncGenerator[None, None]:
         """Setup the DiveHostAPI."""
         logger.info("Server Prepare")
 
-        # NOTE: migration should be optional
-        db_migration(uri="sqlite:///db.sqlite")
+        self._load_configs()
+
+        # ================================================
+        # Database
+        # ================================================
+        if self._service_config_manager.current_setting is None:
+            raise ValueError("Service manager is not initialized")
+
+        if self._service_config_manager.current_setting.db.migrate:
+            db_migration(uri=self._service_config_manager.current_setting.db.uri)
 
         self._engine = create_async_engine(
-            "sqlite+aiosqlite:///db.sqlite",
-            echo=False,
-            pool_pre_ping=True,  # check connection before using
-            pool_size=5,  # max connections
-            pool_recycle=60,  # close connection after 60 seconds
-            max_overflow=10,  # burst connections
+            self._service_config_manager.current_setting.db.async_uri,
+            echo=self._service_config_manager.current_setting.db.echo,
+            # check connection before using
+            pool_pre_ping=self._service_config_manager.current_setting.db.pool_pre_ping,
+            # max connections
+            pool_size=self._service_config_manager.current_setting.db.pool_size,
+            # close connection after 60 seconds
+            pool_recycle=self._service_config_manager.current_setting.db.pool_recycle,
+            # burst connections
+            max_overflow=self._service_config_manager.current_setting.db.max_overflow,
         )
         self._db_sessionmaker = async_sessionmaker(self._engine, class_=AsyncSession)
         self._msg_store = SQLiteMessageStore
 
-        self._store = LocalStore()
+        # ================================================
+        # Store
+        # ================================================
+        self._store = LocalStore(
+            self._service_config_manager.current_setting.upload_dir
+        )
+        self._local_file_cache = LocalFileCache(
+            self._service_config_manager.current_setting.local_file_cache_prefix
+        )
 
-        # temp host config
+        # ================================================
+        # Dive Host
+        # ================================================
+        if self._model_config_manager.current_setting is None:
+            raise ValueError("Model config manager is not initialized")
+
+        if self._mcp_server_config_manager.current_config is None:
+            raise ValueError("MCPServer config manager is not initialized")
+
         config = HostConfig(
-            llm=LLMConfig(
-                model="fake",
-                modelProvider="dive",
-            ),
+            llm=self._model_config_manager.current_setting,
+            checkpointer=self._service_config_manager.current_setting.checkpointer,
             mcp_servers={
-                "echo": ServerConfig(
-                    name="echo",
-                    command="python3",
-                    args=[
-                        "-m",
-                        "dive_mcp_host.host.tools.echo",
-                        "--transport=stdio",
-                    ],
-                ),
+                server_name: ServerConfig(
+                    name=server_name,
+                    command=server_config.command or "",
+                    args=server_config.args or [],
+                    env=server_config.env or {},
+                    enabled=server_config.enabled,
+                    url=server_config.url or None,
+                )
+                for server_name, server_config in self._mcp_server_config_manager.get_enabled_servers().items()  # noqa: E501
             },
         )
 
@@ -105,3 +163,28 @@ class DiveHostAPI(FastAPI):
     def store(self) -> LocalStore:
         """Get the store."""
         return self._store
+
+    @property
+    def local_file_cache(self) -> LocalFileCache:
+        """Get the local file cache."""
+        return self._local_file_cache
+
+    @property
+    def service_manager(self) -> ServiceManager:
+        """Get the service manager."""
+        return self._service_config_manager
+
+    @property
+    def mcp_server_config_manager(self) -> MCPServerManager:
+        """Get the MCP server config manager."""
+        return self._mcp_server_config_manager
+
+    @property
+    def model_config_manager(self) -> ModelManager:
+        """Get the model config manager."""
+        return self._model_config_manager
+
+    @property
+    def prompt_config_manager(self) -> PromptManager:
+        """Get the prompt config manager."""
+        return self._prompt_config_manager

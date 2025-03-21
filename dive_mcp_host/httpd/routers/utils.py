@@ -1,14 +1,13 @@
 import asyncio
 import json
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine
-from typing import TYPE_CHECKING, Any, Self, cast
-from uuid import uuid4
 from contextlib import suppress
+from typing import TYPE_CHECKING, Any, Self
+from uuid import uuid4
 
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langchain_core.messages.ai import AIMessageChunk
-from langchain_core.messages.tool import ToolMessage, ToolCall
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages.tool import ToolMessage
 from pydantic import BaseModel
 from starlette.datastructures import State
 
@@ -29,7 +28,6 @@ from dive_mcp_host.httpd.routers.models import (
 )
 from dive_mcp_host.httpd.server import DiveHostAPI
 from dive_mcp_host.httpd.store.store import SUPPORTED_IMAGE_EXTENSIONS, Store
-from dive_mcp_host.models.fake import FakeMessageToolModel
 
 if TYPE_CHECKING:
     from dive_mcp_host.host.host import DiveMcpHost

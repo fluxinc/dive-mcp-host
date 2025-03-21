@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import Any, Literal, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, RootModel
 
 from dive_mcp_host.host.conf import LLMConfig
 
@@ -92,14 +92,28 @@ class ModelInterfaceDefinition(BaseModel):
     model_settings: dict[str, ModelSettingsDefinition]
 
 
+class SimpleToolInfo(BaseModel):
+    """Represents an MCP tool with its properties and metadata."""
+
+    name: str
+    description: str
+
+
 class McpTool(BaseModel):
     """Represents an MCP tool with its properties and metadata."""
 
     name: str
-    tools: list
+    tools: list[SimpleToolInfo]
     description: str
     enabled: bool
     icon: str
+    error: str | None
+
+
+class ToolsCache(RootModel[dict[str, McpTool]]):
+    """Tools cache."""
+
+    root: dict[str, McpTool]
 
 
 class ToolCallsContent(BaseModel):
