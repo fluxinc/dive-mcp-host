@@ -79,17 +79,15 @@ def test_load_fake_model() -> None:
 
 def test_load_langchain_model() -> None:
     """Test the load langchain model."""
-    args = []
     config = LLMConfig(
         model="gpt-4o",
-        provider="openai",
-        api_key="API_KEY",
+        modelProvider="openai",
+        apiKey="API_KEY",
         temperature=0.5,
     )
-    kwargs = config.model_dump(exclude_unset=True)
-    provider = kwargs.pop("provider")
-    model_name = kwargs.pop("model")
-    model = load_model(provider, model_name, *args, **kwargs)
+    model = load_model(
+        config.modelProvider, config.model, **config.to_load_model_kwargs()
+    )
     assert isinstance(model, BaseChatModel)
 
 

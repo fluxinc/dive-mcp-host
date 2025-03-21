@@ -1,6 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
-from .models import McpTool, ResultResponse
+from dive_mcp_host.httpd.routers.models import McpTool, ResultResponse
 
 tools = APIRouter(prefix="/tools", tags=["tools"])
 
@@ -12,10 +12,12 @@ class ToolsResult(ResultResponse):
 
 
 @tools.get("/")
-async def list_tools() -> ToolsResult:
+async def list_tools(request: Request) -> ToolsResult:
     """Lists all available MCP tools.
 
     Returns:
         ToolsResult: A list of available tools.
     """
-    raise NotImplementedError
+    mcp = request.app.state.mcp
+    tools = await mcp.get_tool_infos()
+    return ToolsResult(success=True, message=None, tools=tools)

@@ -1,13 +1,9 @@
-from typing import Literal, TypeVar
+from enum import StrEnum
+from typing import Any, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
-from ..database.models import (  # noqa: F401, TID252
-    Chat,
-    ChatMessage,
-    Message,
-    QueryInput,
-)
+from dive_mcp_host.host.conf import LLMConfig
 
 T = TypeVar("T")
 
@@ -43,35 +39,34 @@ class McpServerError(BaseModel):
     """Represents an error from an MCP server."""
 
     server_name: str = Field(alias="serverName")
-    error: object  # any
+    error: Any  # any
 
 
-class ModelConfiguration(BaseModel):
-    """Basic configuration for a model, including base URL."""
+class ModelType(StrEnum):
+    """Model type."""
 
-    base_url: str = Field(alias="baseURL")
+    OLLAMA = "ollama"
+    MISTRAL = "mistralai"
+    BEDROCK = "bedrock"
+    DEEPSEEK = "deepseek"
+    OTHER = "other"
 
+    @classmethod
+    def get_model_type(cls, llm_config: LLMConfig) -> "ModelType":
+        """Get model type from model name."""
+        if llm_config.modelProvider == "ollama":
+            return cls.OLLAMA
 
-class ModelSettings(BaseModel):
-    """Model settings including provider, API key and parameters."""
+        if llm_config.modelProvider == "mistralai":
+            return cls.MISTRAL
 
-    model: str
-    model_provider: str = Field(alias="modelProvider")
-    api_key: str | None = Field(alias="apiKey")
-    configuration: ModelConfiguration | None
-    temperature: float | None
-    top_p: float | None = Field(alias="topP")
-    max_tokens: int | None = Field(alias="maxTokens")
+        if llm_config.modelProvider == "bedrock":
+            return cls.BEDROCK
 
-    model_config = ConfigDict(extra="allow")
+        if "deepseek" in llm_config.model.lower():
+            return cls.DEEPSEEK
 
-
-class ModelConfig(BaseModel):
-    """Overall model configuration including active provider and tool settings."""
-
-    active_provider: str = Field(alias="activeProvider")
-    enable_tools: bool = Field(alias="enableTools")
-    configs: dict[str, ModelSettings]
+        return cls.OTHER
 
 
 class ModelSettingsProperty(BaseModel):
@@ -80,8 +75,8 @@ class ModelSettingsProperty(BaseModel):
     type: Literal["string", "number"]
     description: str
     required: bool
-    default: object | None
-    placeholder: object | None
+    default: Any | None
+    placeholder: Any | None
 
 
 class ModelSettingsDefinition(ModelSettingsProperty):
@@ -105,6 +100,65 @@ class McpTool(BaseModel):
     description: str
     enabled: bool
     icon: str
+
+
+class ToolCallsContent(BaseModel):
+    """Tool call content."""
+
+    name: str
+    arguments: Any
+
+
+class ToolResultContent(BaseModel):
+    """Tool result content."""
+
+    name: str
+    result: Any
+
+
+class ChatInfoContent(BaseModel):
+    """Chat info."""
+
+    id: str
+    title: str
+
+
+class MessageInfoContent(BaseModel):
+    """Message info."""
+
+    user_message_id: str = Field(alias="userMessageId")
+    assistant_message_id: str = Field(alias="assistantMessageId")
+
+
+class StreamMessage(BaseModel):
+    """Stream message."""
+
+    type: Literal[
+        "text", "tool_calls", "tool_result", "error", "chat_info", "message_info"
+    ]
+    content: (
+        str
+        | list[ToolCallsContent]
+        | ToolResultContent
+        | ChatInfoContent
+        | MessageInfoContent
+    )
+
+
+class TokenUsage(BaseModel):
+    """Token usage."""
+
+    total_input_tokens: int = Field(default=0, alias="totalInputTokens")
+    total_output_tokens: int = Field(default=0, alias="totalOutputTokens")
+    total_tokens: int = Field(default=0, alias="totalTokens")
+
+
+class ModelConfig(BaseModel):
+    """Configuration for the model."""
+
+    active_provider: str = Field(alias="activeProvider")
+    enable_tools: bool = Field(alias="enableTools")
+    configs: dict[str, LLMConfig]
 
 
 class UserInputError(Exception):

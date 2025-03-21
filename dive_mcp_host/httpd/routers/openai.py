@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from .chat import event_stream
 from .models import ResultResponse
 
 openai = APIRouter(prefix="/v1/openai", tags=["openai"])

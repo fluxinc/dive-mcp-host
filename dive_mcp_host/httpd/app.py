@@ -1,32 +1,26 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from .database import SqliteDatabase
-from .middlewares import KwargsMiddleware, error_handler
+from dive_mcp_host.httpd.server import DiveHostAPI
+
+from .middlewares import default_state, error_handler
 from .routers import chat, config, model_verify, openai, tools
-from .store.local import LocalStore
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: DiveHostAPI) -> AsyncGenerator[None, None]:
     """Lifespan for the FastAPI app."""
-    if not hasattr(app.state, "db"):
-        app.state.db = SqliteDatabase("db.sqlite")
-    if not hasattr(app.state, "store"):
-        app.state.store = LocalStore()
-    yield
-    # shutdown
+    async with app.prepare():
+        yield
+    await app.cleanup()
 
 
-app = FastAPI(lifespan=lifespan)
+app = DiveHostAPI(lifespan=lifespan)
 
-kwargs_func = {}
-
+app.add_middleware(BaseHTTPMiddleware, dispatch=default_state)
 app.add_middleware(BaseHTTPMiddleware, dispatch=error_handler)
-app.add_middleware(KwargsMiddleware, kwargs_func=kwargs_func)
 app.include_router(openai)
 app.include_router(chat, prefix="/api")
 app.include_router(tools, prefix="/api")

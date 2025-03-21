@@ -8,9 +8,9 @@ __all__ = [
     "tools",
 ]
 
-from .chat import chat
-from .config import config
-from .model_verify import model_verify
-from .models import ResultResponse, UserInputError
-from .openai import openai
-from .tools import tools
+from dive_mcp_host.httpd.routers.chat import chat
+from dive_mcp_host.httpd.routers.config import config
+from dive_mcp_host.httpd.routers.model_verify import model_verify
+from dive_mcp_host.httpd.routers.models import ResultResponse, UserInputError
+from dive_mcp_host.httpd.routers.openai import openai
+from dive_mcp_host.httpd.routers.tools import tools

@@ -14,12 +14,15 @@ class LLMConfig(BaseModel):
     """Configuration for the LLM model."""
 
     model: str = "gpt-4o"
-    provider: str | SpecialProvider = "openai"
+    modelProvider: str | SpecialProvider = Field(default="openai")  # noqa: N815
     embed: str | None = None
     embed_dims: int = 0
-    api_key: str | None = None
-    temperature: float = 0
+    apiKey: str | None = None  # noqa: N815
+    temperature: float | None = 0
     vector_store: str | None = None
+    topP: float | None = None  # noqa: N815
+    maxTokens: int | None = None  # noqa: N815
+    configuration: dict | None = None
 
     def model_post_init(self, _: Any) -> None:
         """Set the default embed dimensions for known models."""
@@ -31,6 +34,26 @@ class LLMConfig(BaseModel):
             else:
                 raise ValueError("invalid dims")
 
+    def to_load_model_kwargs(self) -> dict:
+        """Convert the LLM config to kwargs for load_model."""
+        if self.configuration:
+            kwargs = {
+                k: v
+                for k, v in self.configuration.items()
+                if not hasattr(self, k) and not k.startswith("_")
+            }
+        else:
+            kwargs = {}
+        if self.apiKey:
+            kwargs["api_key"] = self.apiKey
+        if self.temperature:
+            kwargs["temperature"] = self.temperature
+        if self.topP:
+            kwargs["top_p"] = self.topP
+        if self.maxTokens:
+            kwargs["max_tokens"] = self.maxTokens
+        return kwargs
+
 
 class CheckpointerConfig(BaseModel):
     """Configuration for the checkpointer."""
@@ -38,7 +61,7 @@ class CheckpointerConfig(BaseModel):
     # more parameters in the future. like pool size, etc.
     uri: Annotated[
         AnyUrl,
-        UrlConstraints(allowed_schemes=["sqlite", "postgres"]),
+        UrlConstraints(allowed_schemes=["sqlite", "postgres", "postgresql"]),
     ]
 
 
