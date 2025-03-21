@@ -42,16 +42,18 @@ class FakeMessageToolModel(BaseChatModel):
     """
 
     responses: list[AIMessage] = Field(default_factory=default_responses)
+    query_history: list[BaseMessage] = Field(default_factory=list)
     sleep: float | None = None
     i: int = 0
 
     def _generate(
         self,
-        _messages: list[BaseMessage],
+        messages: list[BaseMessage],
         _stop: list[str] | None = None,
         _run_manager: CallbackManagerForLLMRun | None = None,
         **_kwargs: Any,
     ) -> ChatResult:
+        self.query_history.extend(messages)
         response = self.responses[self.i]
         if self.i < len(self.responses) - 1:
             self.i += 1

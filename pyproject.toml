@@ -137,7 +137,8 @@ lint.extend-select = ["I"]
     "D107",
     "ARG001",
     "PLR2004",
-] # Allow assert statements in test files
+    "SLF001",
+]
 "dive_mcp_host/cli/**/*.py" = ["S101", "ANN", "D107", "T201"]
 
 [tool.ruff.format]

@@ -20,7 +20,12 @@ from langchain_core.messages import (
 
 from dive_mcp_host.host.conf import HostConfig, LLMConfig
 from dive_mcp_host.host.host import DiveMcpHost
-from dive_mcp_host.host.tools import ClientState, ServerConfig, ToolManager
+from dive_mcp_host.host.tools import (
+    ClientState,
+    McpServerInfo,
+    ServerConfig,
+    ToolManager,
+)
 from dive_mcp_host.models.fake import FakeMessageToolModel
 
 
@@ -222,7 +227,7 @@ async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) 
                 ],
             ),
         ]
-        cast(FakeMessageToolModel, mcp_host._model).responses = fake_responses  # noqa: SLF001
+        cast(FakeMessageToolModel, mcp_host._model).responses = fake_responses
         async with mcp_host.conversation() as conversation:
             responses = [
                 response
@@ -253,7 +258,7 @@ async def test_mcp_server_info(echo_tool_stdio_config: dict[str, ServerConfig]) 
 
     async with DiveMcpHost(config) as mcp_host:
         assert list(mcp_host.mcp_server_info.keys()) == ["echo"]
-        assert mcp_host.mcp_server_info["echo"] is not None
+        assert isinstance(mcp_host.mcp_server_info["echo"], McpServerInfo)
         assert mcp_host.mcp_server_info["echo"].initialize_result is not None
         assert mcp_host.mcp_server_info["echo"].initialize_result.capabilities
         assert (
