@@ -199,9 +199,11 @@ class DiveMcpHost(ContextProtocol):
             async for checkpoint_tuple in self._checkpointer.alist(
                 {"configurable": {"thread_id": thread_id}}
             ):  # type: ignore[attr-defined]
-                checkpoint_messages = checkpoint_tuple.checkpoint.get(
-                    "channel_values", {}
-                ).get("messages", [])
+                checkpoint_messages: list[BaseMessage] = (
+                    checkpoint_tuple.checkpoint.get("channel_values", {}).get(
+                        "messages", []
+                    )
+                )
 
                 if not checkpoint_messages:
                     continue
@@ -216,7 +218,10 @@ class DiveMcpHost(ContextProtocol):
         return messages
 
     def _process_checkpoint_messages(
-        self, checkpoint_messages: Any, messages: list[Any], processed_msg_ids: set[str]
+        self,
+        checkpoint_messages: list[BaseMessage],
+        messages: list[BaseMessage],
+        processed_msg_ids: set[str],
     ) -> None:
         """Helper method to process messages from a checkpoint.
 
@@ -234,6 +239,6 @@ class DiveMcpHost(ContextProtocol):
                 continue
 
             # avoid duplicate messages
-            if msg_id not in processed_msg_ids:
+            if msg_id is not None and msg_id not in processed_msg_ids:
                 messages.append(msg)
                 processed_msg_ids.add(msg_id)
