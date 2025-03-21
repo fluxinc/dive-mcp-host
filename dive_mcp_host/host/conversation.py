@@ -1,9 +1,9 @@
 import uuid
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Mapping
 from typing import TYPE_CHECKING, Any, Self
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import BaseMessage, HumanMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.store.base import BaseStore
 from langgraph.types import StreamMode
@@ -16,15 +16,15 @@ from dive_mcp_host.host.helpers.context import ContextProtocol
 from dive_mcp_host.host.prompt import default_system_prompt
 
 
-class Conversation[T](ContextProtocol):
+class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
     """A conversation with a language model."""
 
     def __init__(  # noqa: PLR0913, too many arguments
         self,
         model: BaseChatModel,
-        agent_factory: AgentFactory[T],
+        agent_factory: AgentFactory[STATE_TYPE],
         *,
-        system_prompt: str | None = None,
+        system_prompt: str | Callable[[STATE_TYPE], list[BaseMessage]] | None = None,
         thread_id: str | None = None,
         user_id: str = "default",
         store: BaseStore | None = None,
@@ -49,7 +49,7 @@ class Conversation[T](ContextProtocol):
         self._model = model
         self._system_prompt = system_prompt
         self._agent: CompiledGraph | None = None
-        self._agent_factory: AgentFactory[T] = agent_factory
+        self._agent_factory: AgentFactory[STATE_TYPE] = agent_factory
 
     @property
     def thread_id(self) -> str:
@@ -61,7 +61,10 @@ class Conversation[T](ContextProtocol):
             system_prompt = default_system_prompt()
         else:
             system_prompt = self._system_prompt
-        prompt = self._agent_factory.create_prompt(system_prompt=system_prompt)
+        if callable(system_prompt):
+            prompt = system_prompt
+        else:
+            prompt = self._agent_factory.create_prompt(system_prompt=system_prompt)
         # we can do something to the prompt here.
         self._agent = self._agent_factory.create_agent(
             prompt=prompt,
@@ -73,7 +76,7 @@ class Conversation[T](ContextProtocol):
 
     def query(
         self,
-        query: str | HumanMessage | list[HumanMessage],
+        query: str | HumanMessage | list[BaseMessage],
         *,
         stream_mode: list[StreamMode] | StreamMode | None = "messages",
     ) -> AsyncIterator[dict[str, Any] | Any]:
