@@ -1,8 +1,10 @@
+import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool
 from langgraph.prebuilt.tool_node import ToolNode
 
@@ -177,3 +179,61 @@ class DiveMcpHost(ContextProtocol):
             The value will be None for any server that has not completed initialization.
         """
         return self._tool_manager.mcp_server_info
+
+    async def get_messages(self, thread_id: str) -> list[BaseMessage]:
+        """Get messages of a specific thread.
+
+        Args:
+            thread_id: The thread ID to retrieve messages for.
+
+        Returns:
+            A list of messages.
+        """
+        if self._checkpointer is None:
+            return []
+
+        try:
+            messages = []
+            processed_msg_ids = set()
+
+            async for checkpoint_tuple in self._checkpointer.alist(
+                {"configurable": {"thread_id": thread_id}}
+            ):  # type: ignore[attr-defined]
+                checkpoint_messages = checkpoint_tuple.checkpoint.get(
+                    "channel_values", {}
+                ).get("messages", [])
+
+                if not checkpoint_messages:
+                    continue
+
+                self._process_checkpoint_messages(
+                    checkpoint_messages, messages, processed_msg_ids
+                )
+
+        except (AttributeError, KeyError, TypeError, IndexError) as e:
+            logging.error("Error retrieving thread details for %s: %s", thread_id, e)
+
+        return messages
+
+    def _process_checkpoint_messages(
+        self, checkpoint_messages: Any, messages: list[Any], processed_msg_ids: set[str]
+    ) -> None:
+        """Helper method to process messages from a checkpoint.
+
+        Args:
+            checkpoint_messages: The checkpoint messages to process.
+            messages: The list to add messages to.
+            processed_msg_ids: Set of already processed message IDs.
+        """
+        for msg in checkpoint_messages:
+            if hasattr(msg, "id"):
+                msg_id = msg.id
+            elif isinstance(msg, dict) and "id" in msg:
+                msg_id = msg["id"]
+            else:
+                continue
+
+            # avoid duplicate messages
+            if msg_id not in processed_msg_ids:
+                messages.append(msg)
+                processed_msg_ids.add(msg_id)
