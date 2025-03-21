@@ -5,15 +5,22 @@ import secrets
 import signal
 from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from os import environ
 from typing import cast
 
 import pytest
 import pytest_asyncio
-from langchain_core.messages import AIMessage, HumanMessage, ToolCall, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    ToolCall,
+    ToolMessage,
+)
 
 from dive_mcp_host.host.conf import HostConfig, LLMConfig
 from dive_mcp_host.host.host import DiveMcpHost
-from dive_mcp_host.host.tools import ServerConfig, ToolManager
+from dive_mcp_host.host.tools import ClientState, ServerConfig, ToolManager
 from dive_mcp_host.models.fake import FakeMessageToolModel
 
 
@@ -52,6 +59,21 @@ async def echo_tool_sse_server(
     await proc.wait()
 
 
+@pytest.fixture
+def no_such_file_mcp_server() -> dict[str, ServerConfig]:
+    """MCP server that does not exist."""
+    return {
+        "no_such_file": ServerConfig(
+            name="no_such_file",
+            command="no_such_file",
+        ),
+        "sse": ServerConfig(
+            name="sse_server",
+            url="http://localhost:2/sse",
+        ),
+    }
+
+
 @pytest.mark.asyncio
 async def test_tool_manager_sse(
     echo_tool_sse_server: AbstractAsyncContextManager[
@@ -63,7 +85,7 @@ async def test_tool_manager_sse(
         echo_tool_sse_server as (port, configs),
         ToolManager(configs) as tool_manager,
     ):
-        tools = tool_manager.tools()
+        tools = tool_manager.langchain_tools()
         assert sorted([i.name for i in tools]) == ["echo", "ignore"]
         for tool in tools:
             result = await tool.ainvoke(
@@ -87,7 +109,7 @@ async def test_tool_manager_stdio(
 ) -> None:
     """Test the tool manager."""
     async with ToolManager(echo_tool_stdio_config) as tool_manager:
-        tools = tool_manager.tools()
+        tools = tool_manager.langchain_tools()
         assert sorted([i.name for i in tools]) == ["echo", "ignore"]
         for tool in tools:
             result = await tool.ainvoke(
@@ -113,7 +135,7 @@ async def test_stdio_parallel(echo_tool_stdio_config: dict[str, ServerConfig]) -
     simultaneously and respond correctly.
     """
     async with ToolManager(echo_tool_stdio_config) as tool_manager:
-        tools = tool_manager.tools()
+        tools = tool_manager.langchain_tools()
         echo_tool = None
         ignore_tool = None
         for tool in tools:
@@ -172,7 +194,7 @@ async def test_tool_manager_massive_tools(
             update={"name": f"echo_{i}"},
         )
     async with ToolManager(echo_tool_stdio_config) as tool_manager:
-        tools = tool_manager.tools()
+        tools = tool_manager.langchain_tools()
         assert len(tools) == 2 * (more_tools + 1)
 
 
@@ -182,7 +204,7 @@ async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) 
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            provider="dive",
+            modelProvider="dive",
         ),
         mcp_servers=echo_tool_stdio_config,
     )
@@ -215,3 +237,141 @@ async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) 
             assert isinstance(tool_message, ToolMessage)
             assert tool_message.name == "echo"
             assert json.loads(str(tool_message.content))[0]["text"] == "Hello, world!"
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_info(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
+    """Test the host context initialization."""
+    config = HostConfig(
+        llm=LLMConfig(
+            model="fake",
+            modelProvider="dive",
+        ),
+        mcp_servers=echo_tool_stdio_config,
+    )
+    import dive_mcp_host.host.tools.echo as echo_tool
+
+    async with DiveMcpHost(config) as mcp_host:
+        assert list(mcp_host.mcp_server_info.keys()) == ["echo"]
+        assert mcp_host.mcp_server_info["echo"] is not None
+        assert mcp_host.mcp_server_info["echo"].initialize_result is not None
+        assert mcp_host.mcp_server_info["echo"].initialize_result.capabilities
+        assert (
+            mcp_host.mcp_server_info["echo"].initialize_result.instructions
+            == echo_tool.Instructions
+        )
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_info_no_such_file(
+    no_such_file_mcp_server: dict[str, ServerConfig],
+) -> None:
+    """Test the host context initialization."""
+    config = HostConfig(
+        llm=LLMConfig(
+            model="fake",
+            modelProvider="dive",
+        ),
+        mcp_servers=no_such_file_mcp_server,
+    )
+    async with DiveMcpHost(config) as mcp_host:
+        assert list(mcp_host.mcp_server_info.keys()) == [
+            "no_such_file",
+            "sse",
+        ]
+        assert mcp_host.mcp_server_info["no_such_file"] is not None
+        assert mcp_host.mcp_server_info["no_such_file"].initialize_result is None
+        assert mcp_host.mcp_server_info["no_such_file"].error is not None
+        assert (
+            mcp_host.mcp_server_info["no_such_file"].client_status == ClientState.FAILED
+        )
+        assert mcp_host.mcp_server_info["sse"] is not None
+        assert mcp_host.mcp_server_info["sse"].initialize_result is None
+        assert mcp_host.mcp_server_info["sse"].error is not None
+        assert mcp_host.mcp_server_info["sse"].client_status == ClientState.FAILED
+
+
+@pytest.mark.asyncio
+async def test_host_ollama(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
+    """Test the host context initialization."""
+    if (base_url := environ.get("OLLAMA_URL")) and (
+        olama_model := environ.get("OLLAMA_MODEL")
+    ):
+        # quen2.5:14b
+        config = HostConfig(
+            llm=LLMConfig(
+                model=olama_model,
+                modelProvider="ollama",
+                configuration={"base_url": base_url},
+            ),
+            mcp_servers=echo_tool_stdio_config,
+        )
+    else:
+        pytest.skip(
+            "need environment variable OLLAMA_URL and OLLAMA_MODEL to run this test"
+        )
+
+    async with (
+        DiveMcpHost(config) as mcp_host,
+        mcp_host.conversation(
+            # system_prompt=system_prompt(""),
+        ) as conversation,
+    ):
+        # r = await conversation.invoke("test mcp tool echo with 'hello'")
+        async for response in conversation.query(
+            HumanMessage(content="test mcp tool to echo message 'helloXXX'."),
+            stream_mode=["updates"],
+        ):
+            response = cast(tuple[str, dict[str, dict[str, BaseMessage]]], response)
+            if msg_dict := response[1].get("tools"):
+                contents = list[str]()
+                for msg in msg_dict.get("messages", []):
+                    if isinstance(msg, ToolMessage):
+                        # XXX the content type is complex.
+                        if isinstance(msg.content, str):
+                            rep = json.loads(msg.content)
+                        else:
+                            rep = msg.content
+                        for r in rep:
+                            assert r["type"] == "text"  # type: ignore[index]
+                            contents.append(r["text"])  # type: ignore[index]
+                assert any("helloXXX" in c for c in contents)
+
+
+@pytest.mark.asyncio
+async def test_tool_kwargs(
+    echo_tool_stdio_config: dict[str, ServerConfig],
+) -> None:
+    """Some LLM set the tool call argument in kwargs."""
+    async with ToolManager(echo_tool_stdio_config) as tool_manager:
+        tools = tool_manager.langchain_tools()
+        assert sorted([i.name for i in tools]) == ["echo", "ignore"]
+        for tool in tools:
+            result = await tool.ainvoke(
+                ToolCall(
+                    name=tool.name,
+                    id="123",
+                    args={"kwargs": {"message": "Hello, world!"}},
+                    type="tool_call",
+                ),
+            )
+            assert isinstance(result, ToolMessage)
+            if tool.name == "echo":
+                assert json.loads(str(result.content))[0]["text"] == "Hello, world!"
+            else:
+                assert json.loads(str(result.content)) == []
+
+        for tool in tools:
+            result = await tool.ainvoke(
+                ToolCall(
+                    name=tool.name,
+                    id="123",
+                    args={"kwargs": """{"message": "Hello, world!"}"""},
+                    type="tool_call",
+                ),
+            )
+            assert isinstance(result, ToolMessage)
+            if tool.name == "echo":
+                assert json.loads(str(result.content))[0]["text"] == "Hello, world!"
+            else:
+                assert json.loads(str(result.content)) == []

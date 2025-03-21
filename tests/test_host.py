@@ -12,7 +12,7 @@ async def test_host_context() -> None:
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            provider="dive",
+            modelProvider="dive",
         ),
         mcp_servers={},
     )
@@ -43,3 +43,35 @@ async def test_host_context() -> None:
             ]
             for res, expect in zip(responses, espect_responses, strict=True):
                 assert res.content == expect.content  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_query_two_messages() -> None:
+    """Test that the query method can handle two or more messages."""
+    config = HostConfig(
+        llm=LLMConfig(
+            model="fake",
+            modelProvider="dive",
+        ),
+        mcp_servers={},
+    )
+    async with DiveMcpHost(config) as mcp_host, mcp_host.conversation() as conversation:
+        responses = [
+            response
+            async for response in conversation.query(
+                [
+                    HumanMessage(content="Attachment"),
+                    HumanMessage(content="Hello, world!"),
+                ],
+                stream_mode=["values"],
+            )
+        ]
+        for i in responses:
+            human_messages = [
+                i
+                for i in i[1]["messages"]  # type: ignore[index]
+                if isinstance(i, HumanMessage)
+            ]
+            assert len(human_messages) == 2
+            assert human_messages[0].content == "Attachment"
+            assert human_messages[1].content == "Hello, world!"

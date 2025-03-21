@@ -65,7 +65,7 @@ class ChatAgentFactory(AgentFactory[AgentState]):
     def create_initial_state(
         self,
         *,
-        query: str | HumanMessage,
+        query: str | HumanMessage | list[HumanMessage],
     ) -> AgentState:
         """Create an initial state for the query."""
         return AgentState(

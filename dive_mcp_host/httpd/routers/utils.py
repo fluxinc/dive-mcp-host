@@ -1,181 +1,403 @@
-from collections.abc import AsyncGenerator
-from datetime import datetime
-from typing import TYPE_CHECKING
+import asyncio
+import json
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine
+from typing import TYPE_CHECKING, Any, Self, cast
 from uuid import uuid4
+from contextlib import suppress
 
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages.ai import AIMessageChunk
+from langchain_core.messages.tool import ToolMessage, ToolCall
+from pydantic import BaseModel
 from starlette.datastructures import State
 
+from dive_mcp_host.httpd.database.models import Message, NewMessage, QueryInput, Role
 from dive_mcp_host.httpd.routers.models import (
     ChatInfoContent,
-    LLMModel,
-    McpServerManager,
-    Message,
     MessageInfoContent,
-    NewMessage,
-    QueryInput,
     StreamMessage,
     TokenUsage,
+    ToolCallsContent,
+    ToolResultContent,
 )
+from dive_mcp_host.httpd.server import DiveHostAPI
+from dive_mcp_host.httpd.store.store import SUPPORTED_IMAGE_EXTENSIONS, Store
+from dive_mcp_host.models.fake import FakeMessageToolModel
 
 if TYPE_CHECKING:
-    from dive_mcp_host.httpd.database import Database
+    from dive_mcp_host.host.host import DiveMcpHost
+    from dive_mcp_host.httpd.middlewares.general import DiveUser
+
+title_prompt = """You are a title generator from the user input.
+Your only task is to generate a short title based on the user input.
+IMPORTANT:
+- Output ONLY the title
+- DO NOT try to answer or resolve the user input query.
+- DO NOT try to use any tools to generate title
+- NO explanations, quotes, or extra text
+- NO punctuation at the end
+- If the input is URL only, output the description of the URL, for example, "the URL of xxx website"
+- If the input contains Traditional Chinese characters, use Traditional Chinese for the title.
+- For all other languages, generate the title in the same language as the input."""
 
 
-def event_stream(
-    content: AsyncGenerator[str, None],
-) -> StreamingResponse:
-    """Event stream for chat.
+class EventStreamContextManager:
+    """Context manager for event streaming."""
 
-    Args:
-        content (AsyncGenerator[str, None]): The content to stream.
-    """
+    task: asyncio.Task | None = None
+    done: bool = False
+    response: StreamingResponse | None = None
 
-    async def stream_content() -> AsyncGenerator[str, None]:
-        async for chunk in content:
+    def __init__(self) -> None:
+        """Initialize the event stream context manager."""
+        self.queue = asyncio.Queue()
+
+    def __del__(self) -> None:
+        """Delete the event stream context manager."""
+        self.done = True
+        asyncio.create_task(self.queue.put(None))  # noqa: RUF006
+
+    def add_task(
+        self, func: Callable[[], Coroutine[Any, Any, None]], *args: Any, **kwargs: Any
+    ) -> None:
+        """Add a task to the event stream."""
+        self.task = asyncio.create_task(func(*args, **kwargs))
+
+    async def __aenter__(self) -> Self:
+        """Enter the context manager."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:  # noqa: ANN001
+        """Exit the context manager."""
+        self.done = True
+        await self.queue.put(None)  # Signal completion
+
+    async def write(self, data: str | StreamMessage) -> None:
+        """Write data to the event stream.
+
+        Args:
+            data (str): The data to write to the stream.
+        """
+        if isinstance(data, BaseModel):
+            data = data.model_dump_json()
+        await self.queue.put(json.dumps({"message": data}))
+
+    async def _generate(self) -> AsyncGenerator[str, None]:
+        """Generate the event stream content."""
+        while not self.done or not self.queue.empty():
+            chunk = await self.queue.get()
+            if chunk is None:  # End signal
+                continue
             yield "data: " + chunk + "\n\n"
 
-    return StreamingResponse(
-        content=stream_content(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-    )
+        yield "[Done]"
+
+    def get_response(self) -> StreamingResponse:
+        """Get the streaming response.
+
+        Returns:
+            StreamingResponse: The streaming response.
+        """
+        self.response = StreamingResponse(
+            content=self._generate(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
+        return self.response
+
+
+class ChatError(Exception):
+    """Chat error."""
+
+    def __init__(self, message: str) -> None:
+        """Initialize chat error."""
+        self.message = message
 
 
 class ChatProcessor:
     """Chat processor."""
 
-    def __init__(self, app_state: State, request_state: State) -> None:
+    def __init__(
+        self,
+        app: DiveHostAPI,
+        request_state: State,
+        stream: EventStreamContextManager,
+    ) -> None:
         """Initialize chat processor."""
-        self.app_state = app_state
+        self.app = app
         self.request_state = request_state
-        self.db: Database = app_state.db
-        self.mcp: McpServerManager = app_state.mcp
+        self.stream = stream
+        self.store: Store = app.store
+        self.dive_host: DiveMcpHost = app.dive_host["default"]
 
     async def handle_chat(
         self,
         chat_id: str | None,
-        query_input: QueryInput,
+        query_input: str | QueryInput | None,
         regenerate_message_id: str | None,
-    ) -> AsyncGenerator[str, None]:
+    ) -> str:
         """Handle chat."""
-        db_opts = self.request_state.get_kwargs("db_opts")
-
         if chat_id is None:
             chat_id = str(uuid4())
 
-        history = []
         title = "New Chat"
-        system_prompt = ""  # TODO: get system prompt
+        title_await = None
 
-        if system_prompt:
-            history.append(SystemMessage(content=system_prompt))
+        if isinstance(query_input, QueryInput) and query_input.text:
+            title_await = self._generate_title(query_input.text)
 
-        message_history = await self.db.get_chat_with_messages(chat_id, **db_opts)
-
-        if message_history:
-            title = message_history.chat.title
-
-            if regenerate_message_id:
-                target_index = next(
-                    (
-                        i
-                        for i, message in enumerate(message_history.messages)
-                        if message.id == regenerate_message_id
-                    ),
-                    None,
-                )
-                if target_index is not None:
-                    history = message_history.messages[:target_index]
-
-            # TODO: process hostory
-        elif query_input.text:
-            # TODO: generate title
-            ...
-
-        yield StreamMessage(
-            type="chat_info",
-            content=ChatInfoContent(id=chat_id, title=title),
-        ).model_dump_json()
-
-        result, token_usage = await self.process_chat(chat_id, query_input, history)
-
-        # TODO: handle title promise
-
-        if not await self.db.check_chat_exists(chat_id, **db_opts):
-            await self.db.create_chat(chat_id, title, **db_opts)
-
-        user_message_id = str(uuid4())
-        if regenerate_message_id:
-            await self.db.delete_messages_after(
-                chat_id, regenerate_message_id, **db_opts
+        await self.stream.write(
+            StreamMessage(
+                type="chat_info",
+                content=ChatInfoContent(id=chat_id, title=title),
             )
-        else:
-            files = (query_input.images or []) + (query_input.documents or [])
-            await self.db.create_message(
+        )
+
+        result, token_usage = await self._process_chat(chat_id, query_input)
+
+        if title_await:
+            title = await title_await
+
+        dive_user: DiveUser = self.request_state.dive_user
+        async with self.app.db_sessionmaker() as session:
+            db = self.app.msg_store(session)
+            if not await db.check_chat_exists(chat_id, dive_user["user_id"]):
+                await db.create_chat(
+                    chat_id, title, dive_user["user_id"], dive_user["user_type"]
+                )
+
+            user_message_id = str(uuid4())
+            if regenerate_message_id:
+                await db.delete_messages_after(chat_id, regenerate_message_id)
+            elif isinstance(query_input, QueryInput):
+                files = (query_input.images or []) + (query_input.documents or [])
+                await db.create_message(
+                    NewMessage(
+                        chatId=chat_id,
+                        role=Role.USER,
+                        messageId=user_message_id,
+                        content=query_input.text or "",
+                        files=json.dumps(files),
+                    ),
+                )
+
+            assistant_message_id = str(uuid4())
+            await db.create_message(
                 NewMessage(
                     chatId=chat_id,
-                    role="user",
-                    messageId=user_message_id,
-                    content=query_input.text or "",
-                    files=files,
-                    createdAt=datetime.now().astimezone(),
-                    id=None,
+                    role=Role.ASSISTANT,
+                    messageId=assistant_message_id,
+                    content=result,
                 ),
-                **db_opts,
             )
 
-        assistant_message_id = str(uuid4())
-        db_opts["llm_model"] = LLMModel(
-            model="gpt-4o-mini",  # TODO: model manager get model
-            total_input_tokens=0,
-            total_output_tokens=0,
-            total_run_time=0,
-        )
-        await self.db.create_message(
-            NewMessage(
-                chatId=chat_id,
-                role="assistant",
-                messageId=assistant_message_id,
-                content="",
-                files=[],
-                createdAt=datetime.now().astimezone(),
-                id=None,
-            ),
-            **db_opts,
+            await session.commit()
+
+        await self.stream.write(
+            StreamMessage(
+                type="message_info",
+                content=MessageInfoContent(
+                    userMessageId=user_message_id,
+                    assistantMessageId=assistant_message_id,
+                ),
+            )
         )
 
-        yield StreamMessage(
-            type="message_info",
-            content=MessageInfoContent(
-                userMessageId=user_message_id,
-                assistantMessageId=assistant_message_id,
-            ),
-        ).model_dump_json()
+        await self.stream.write(
+            StreamMessage(
+                type="chat_info",
+                content=ChatInfoContent(id=chat_id, title=title),
+            )
+        )
 
-    async def process_chat(
+        return result
+
+    async def _process_chat(
         self,
         chat_id: str | None,
-        query_input: QueryInput,
-        history: list[Message],
+        query_input: str | QueryInput | None,
     ) -> tuple[str, TokenUsage]:
         """Process chat.
 
         Args:
             chat_id (str): The unique identifier of the chat.
             query_input (QueryInput): The input query containing text and/or files.
-            history (list[Message]): List of previous messages in the chat.
 
         Returns:
             tuple[str, TokenUsage]: Assistant message ID and token usage statistics.
         """
-        tool_client_map = await self.mcp.get_tool_to_server_map()
-        available_tools = await self.mcp.get_available_tools()
-
         if chat_id:
             # TODO: abort controller
             ...
 
+        messages = []
+
+        # if retry input is empty
+        if query_input:
+            if isinstance(query_input, str):
+                messages.append(HumanMessage(content=query_input))
+            else:
+                content = []
+
+                if query_input.text:
+                    content.append(
+                        {
+                            "type": "text",
+                            "text": query_input.text,
+                        }
+                    )
+
+                for image in query_input.images or []:
+                    local_path = image
+                    base64_image = await self.store.get_image(local_path)
+                    content.append(
+                        {
+                            "type": "text",
+                            "text": f"![Image]({base64_image})",
+                        }
+                    )
+                    content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": base64_image,
+                            },
+                        }
+                    )
+
+                for document in query_input.documents or []:
+                    local_path = document
+                    content.append(
+                        {
+                            "type": "text",
+                            "text": f"![Document]({local_path})",
+                        }
+                    )
+
+                messages.append(HumanMessage(content=content))
+
+        dive_user: DiveUser = self.request_state.dive_user
+
+        conversation = self.dive_host.conversation(
+            thread_id=chat_id, user_id=dive_user.get("user_id") or "default"
+        )
+        async with conversation:
+            response = conversation.query(messages, stream_mode=["messages", "updates"])
+            return await self._handle_response(response)
+
+    async def _handle_response(
+        self, response: AsyncIterator[dict[str, Any] | Any]
+    ) -> tuple[str, TokenUsage]:
         final_response = ""
-        raise NotImplementedError("Not implemented")
+        token_usage = TokenUsage()
+
+        async for res_type, res_content in response:
+            event_type = None
+            content = None
+            if res_type == "messages":
+                message, _ = res_content
+                if isinstance(message, AIMessage):
+                    event_type = "tool_calls"
+                    if calls := message.tool_calls:
+                        content = [
+                            ToolCallsContent(name=c["name"], arguments=c["args"])
+                            for c in calls
+                        ]
+                    else:
+                        event_type = "text"
+                        content = str(message.content)
+                elif isinstance(message, ToolMessage):
+                    event_type = "tool_result"
+                    result = message.content
+                    with suppress(json.JSONDecodeError):
+                        if isinstance(result, list):
+                            result = [
+                                json.loads(r) if isinstance(r, str) else r
+                                for r in result
+                            ]
+                        else:
+                            result = json.loads(result)
+                    content = ToolResultContent(name=message.name or "", result=result)
+                else:
+                    # idk what is this
+                    print(message)
+
+            if event_type and content:
+                await self.stream.write(StreamMessage(type=event_type, content=content))
+
+        return final_response, token_usage
+
+    async def _generate_title(self, query: str) -> str:
+        """Generate title."""
+        conversation = self.dive_host.conversation(
+            tools=[],  # do not use tools
+            system_prompt=title_prompt,
+            volatile=True,
+        )
+        async with conversation:
+            responses = [
+                response
+                async for response in conversation.query(query, stream_mode="updates")
+            ]
+            return responses[0]["agent"]["messages"][0].content
+        return "New Chat"
+
+    async def _process_history_messages(
+        self, history_messages: list[Message], history: list[BaseMessage]
+    ) -> list[BaseMessage]:
+        """Process history messages."""
+        for message in history_messages:
+            files: list[str] = json.loads(message.files)
+            if not files:
+                message_content = message.content.strip()
+                if message.role == Role.USER:
+                    history.append(HumanMessage(content=message_content))
+                else:
+                    history.append(AIMessage(content=message_content))
+            else:
+                content = []
+                if message.content:
+                    content.append(
+                        {
+                            "type": "text",
+                            "text": message.content,
+                        }
+                    )
+
+                for file_path in files:
+                    local_path = file_path
+                    if any(
+                        local_path.endswith(suffix)
+                        for suffix in SUPPORTED_IMAGE_EXTENSIONS
+                    ):
+                        base64_image = await self.store.get_image(local_path)
+
+                        content.append(
+                            {
+                                "type": "text",
+                                "text": f"![Image]({base64_image})",
+                            }
+                        )
+                        content.append(
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": base64_image,
+                                },
+                            }
+                        )
+                    else:
+                        content.append(
+                            {
+                                "type": "text",
+                                "text": f"![Document]({local_path})",
+                            }
+                        )
+
+                if message.role == Role.ASSISTANT:
+                    history.append(AIMessage(content=content))
+                else:
+                    history.append(HumanMessage(content=content))
+
+        return history

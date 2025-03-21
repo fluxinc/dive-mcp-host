@@ -68,7 +68,7 @@ class AgentFactory[T](Protocol):
     def create_initial_state(
         self,
         *,
-        query: str | HumanMessage,
+        query: str | HumanMessage | list[HumanMessage],
     ) -> T:
         """Create an initial state for the query."""
         ...
@@ -98,7 +98,7 @@ class AgentFactory[T](Protocol):
 
 
 def initial_messages(
-    query: str | HumanMessage,
+    query: str | HumanMessage | list[HumanMessage],
 ) -> list[HumanMessage]:
     """Create an initial message for your state.
 
@@ -113,4 +113,11 @@ def initial_messages(
         A list of HumanMessage objects.
 
     """
-    return [HumanMessage(content=query)] if isinstance(query, str) else [query]
+    if isinstance(query, list):
+        messages = []
+        for q in query:
+            messages.append(
+                q if isinstance(q, HumanMessage) else HumanMessage(content=q)
+            )
+        return messages
+    return [query] if isinstance(query, HumanMessage) else [HumanMessage(content=query)]
