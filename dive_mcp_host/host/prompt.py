@@ -1,10 +1,12 @@
 """Prompt for the host."""
 
-from langchain_core.messages import SystemMessage
+from collections.abc import Callable
+
+from langchain_core.messages import BaseMessage, SystemMessage
 
 from dive_mcp_host.host.helpers import today_datetime
 
-PromptType = SystemMessage | str
+PromptType = SystemMessage | str | Callable[..., list[BaseMessage]]
 
 SYSTEM_PROMPT = """You are an AI assistant helping a software engineer.
 Your user is a professional software engineer who works on various programming projects.

@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver, V
@@ -68,7 +68,7 @@ class AgentFactory[T](Protocol):
     def create_initial_state(
         self,
         *,
-        query: str | HumanMessage | list[HumanMessage],
+        query: str | HumanMessage | list[BaseMessage],
     ) -> T:
         """Create an initial state for the query."""
         ...
@@ -98,13 +98,13 @@ class AgentFactory[T](Protocol):
 
 
 def initial_messages(
-    query: str | HumanMessage | list[HumanMessage],
-) -> list[HumanMessage]:
+    query: str | HumanMessage | list[BaseMessage],
+) -> list[BaseMessage]:
     """Create an initial message for your state.
 
-    The state must contain a 'messages' key with type list[HumanMessage].
-    This utility helps convert the query into list[HumanMessage], regardless of whether
-    the query is a str or HumanMessage.
+    The state must contain a 'messages' key with type list[BaseMessage].
+    This utility helps convert the query into list[BaseMessage], regardless of whether
+    the query is a str or BaseMessage.
 
     Args:
         query: The query to create the initial message from.
@@ -117,7 +117,7 @@ def initial_messages(
         messages = []
         for q in query:
             messages.append(
-                q if isinstance(q, HumanMessage) else HumanMessage(content=q)
+                q if isinstance(q, BaseMessage) else HumanMessage(content=q)
             )
         return messages
-    return [query] if isinstance(query, HumanMessage) else [HumanMessage(content=query)]
+    return [query] if isinstance(query, BaseMessage) else [HumanMessage(content=query)]
