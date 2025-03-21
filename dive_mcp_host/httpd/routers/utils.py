@@ -91,8 +91,8 @@ class EventStreamContextManager:
             data (str): The data to write to the stream.
         """
         if isinstance(data, BaseModel):
-            data = data.model_dump_json()
-        await self.queue.put(json.dumps({"message": data}))
+            data = json.dumps({"message": data.model_dump(mode="json")})
+        await self.queue.put(data)
 
     async def _generate(self) -> AsyncGenerator[str, None]:
         """Generate the event stream content."""
@@ -102,7 +102,7 @@ class EventStreamContextManager:
                 continue
             yield "data: " + chunk + "\n\n"
 
-        yield "[Done]"
+        yield "data: [Done]"
 
     def get_response(self) -> StreamingResponse:
         """Get the streaming response.
@@ -147,7 +147,7 @@ class ChatProcessor:
         chat_id: str | None,
         query_input: str | QueryInput | None,
         regenerate_message_id: str | None,
-    ) -> str:
+    ) -> tuple[str, TokenUsage]:
         """Handle chat."""
         if chat_id is None:
             chat_id = str(uuid4())
@@ -231,7 +231,13 @@ class ChatProcessor:
             )
         )
 
-        return result
+        token_usage = TokenUsage(
+            totalInputTokens=ai_message.usage_metadata["input_tokens"],
+            totalOutputTokens=ai_message.usage_metadata["output_tokens"],
+            totalTokens=ai_message.usage_metadata["total_tokens"],
+        )
+
+        return result, token_usage
 
     async def _process_chat(
         self,
