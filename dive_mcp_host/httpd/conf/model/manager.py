@@ -4,7 +4,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from dive_mcp_host.httpd.routers.models import LLMConfig, ModelConfig
+from dive_mcp_host.host.conf import LLMConfig
+from dive_mcp_host.httpd.routers.models import ModelConfig
 
 # Logger setup
 logger = logging.getLogger(__name__)
