@@ -1,12 +1,13 @@
 import asyncio
 import json
+import logging
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any, Self
 from uuid import uuid4
 
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.messages.tool import ToolMessage
 from pydantic import BaseModel
 from starlette.datastructures import State
@@ -43,7 +44,10 @@ IMPORTANT:
 - NO punctuation at the end
 - If the input is URL only, output the description of the URL, for example, "the URL of xxx website"
 - If the input contains Traditional Chinese characters, use Traditional Chinese for the title.
-- For all other languages, generate the title in the same language as the input."""
+- For all other languages, generate the title in the same language as the input."""  # noqa: E501
+
+
+logger = logging.getLogger(__name__)
 
 
 class EventStreamContextManager:
@@ -77,7 +81,7 @@ class EventStreamContextManager:
         if exc_val:
             import traceback
 
-            print(traceback.format_exception(exc_type, exc_val, exc_tb))
+            logger.error(traceback.format_exception(exc_type, exc_val, exc_tb))
 
         self.done = True
         await self.queue.put(None)  # Signal completion
@@ -240,7 +244,7 @@ class ChatProcessor:
     async def handle_chat_with_history(
         self,
         chat_id: str,
-        query_input: BaseMessage,
+        query_input: BaseMessage | None,
         history: list[BaseMessage],
         tools: list | None = None,
     ) -> tuple[str, TokenUsage]:
@@ -248,7 +252,7 @@ class ChatProcessor:
 
         Args:
             chat_id (str): The chat ID.
-            query_input (BaseMessage): The query input.
+            query_input (BaseMessage | None): The query input.
             history (list[BaseMessage]): The history.
             tools (list | None): The tools.
 
@@ -274,8 +278,7 @@ class ChatProcessor:
         if chat_id:
             # TODO: abort controller
             ...
-
-        messages = []
+        messages = [*history] if history else []
 
         # if retry input is empty
         if query_input:
@@ -325,10 +328,18 @@ class ChatProcessor:
 
         dive_user: DiveUser = self.request_state.dive_user
 
+        def _prompt_cb(_: Any) -> list[BaseMessage]:
+            return messages
+
+        prompt: Callable[..., list[BaseMessage]] | None = None
+        if any(isinstance(m, SystemMessage) for m in messages):
+            prompt = _prompt_cb
+
         conversation = self.dive_host.conversation(
             thread_id=chat_id,
             user_id=dive_user.get("user_id") or "default",
             tools=tools,
+            system_prompt=prompt,
         )
         async with conversation:
             response = conversation.query(messages, stream_mode=["messages", "values"])
@@ -336,7 +347,7 @@ class ChatProcessor:
 
     async def _handle_response(
         self, response: AsyncIterator[dict[str, Any] | Any]
-    ) -> tuple[HumanMessage, AIMessage]:
+    ) -> tuple[HumanMessage | Any, AIMessage | Any]:
         user_message = None
         ai_message = None
 
@@ -355,9 +366,6 @@ class ChatProcessor:
                     else:
                         event_type = "text"
                         content = str(message.content)
-                if isinstance(message, AIMessageChunk):
-                    event_type = "text"
-                    content = str(message.content)
                 elif isinstance(message, ToolMessage):
                     event_type = "tool_result"
                     result = message.content
@@ -372,16 +380,16 @@ class ChatProcessor:
                     content = ToolResultContent(name=message.name or "", result=result)
                 else:
                     # idk what is this
-                    pass
-            elif res_type == "values" and len(res_content["messages"]) >= 2:  # type: ignore
-                user_message, ai_message = res_content["messages"][-2:]  # type: ignore
+                    logger.warning("Unknown message type: %s", message)
+            elif res_type == "values" and len(res_content["messages"]) >= 2:  # type: ignore[index]  # noqa: PLR2004
+                user_message, ai_message = res_content["messages"][-2:]  # type: ignore[index]
             else:
                 pass
 
             if event_type and content:
                 await self.stream.write(StreamMessage(type=event_type, content=content))
 
-        return user_message, ai_message  # type: ignore
+        return user_message, ai_message
 
     async def _generate_title(self, query: str) -> str:
         """Generate title."""

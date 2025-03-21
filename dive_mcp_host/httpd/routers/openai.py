@@ -164,8 +164,13 @@ async def create_chat_completion(
         else:
             messages.append(HumanMessage(content=message.content))
 
-    input_message = messages[-1]
-    history = messages[:-1]
+    if not has_system_message and (
+        system_prompt := app.prompt_config_manager.get_prompt("system")
+    ):
+        messages.insert(
+            0,
+            SystemMessage(content=system_prompt),
+        )
 
     dive_host = app.dive_host["default"]
 
@@ -178,8 +183,8 @@ async def create_chat_completion(
             processor = ChatProcessor(app, request.state, stream)
             result, usage = await processor.handle_chat_with_history(
                 chat_id,
-                input_message,
-                history,
+                None,
+                messages,
                 [] if params.tool_choice != "auto" else None,
             )
 

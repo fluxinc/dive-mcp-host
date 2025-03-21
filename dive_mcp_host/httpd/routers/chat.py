@@ -222,7 +222,7 @@ async def delete_chat(
 
 
 @chat.post("/{chat_id}/abort")
-async def abort_chat(request: Request, chat_id: str) -> ResultResponse:
+async def abort_chat(_request: Request, _chat_id: str) -> ResultResponse:
     """Abort an ongoing chat operation.
 
     Args:

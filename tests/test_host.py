@@ -1,7 +1,8 @@
-from typing import Any, cast
+from typing import cast
 from unittest.mock import MagicMock
+
 import pytest
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from dive_mcp_host.host.conf import HostConfig, LLMConfig
 from dive_mcp_host.host.host import DiveMcpHost
