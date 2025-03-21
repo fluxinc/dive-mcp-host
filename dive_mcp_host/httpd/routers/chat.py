@@ -48,7 +48,7 @@ async def list_chat(
 
 
 @chat.post("")
-async def create_chat(
+async def create_chat(  # noqa: PLR0913
     request: Request,
     app: DiveHostAPI = Depends(get_app),
     chat_id: Annotated[str | None, Form(alias="chatId")] = None,
@@ -60,6 +60,7 @@ async def create_chat(
 
     Args:
         request (Request): The request object.
+        app (DiveHostAPI): The DiveHostAPI instance.
         chat_id (str | None): The ID of the chat to create.
         message (str | None): The message to send.
         files (list[UploadFile] | None): The files to upload.
@@ -75,10 +76,10 @@ async def create_chat(
 
     stream = EventStreamContextManager()
     response = stream.get_response()
+    query_input = QueryInput(text=message, images=images, documents=documents)
 
     async def process() -> None:
         async with stream:
-            query_input = QueryInput(text=message, images=images, documents=documents)
             processor = ChatProcessor(app, request.state, stream)
             await processor.handle_chat(chat_id, query_input, None)
 
@@ -89,7 +90,7 @@ async def create_chat(
 @chat.post("/edit")
 async def edit_chat(  # noqa: PLR0913
     request: Request,
-    background_tasks: BackgroundTasks,
+    app: DiveHostAPI = Depends(get_app),
     chat_id: Annotated[str | None, Form(alias="chatId")] = None,
     message_id: Annotated[str | None, Form(alias="messageId")] = None,
     content: Annotated[str | None, Form()] = None,
@@ -100,17 +101,13 @@ async def edit_chat(  # noqa: PLR0913
 
     Args:
         request (Request): The request object.
-        background_tasks (BackgroundTasks): The background tasks to run.
+        app (DiveHostAPI): The DiveHostAPI instance.
         chat_id (str | None): The ID of the chat to edit.
         message_id (str | None): The ID of the message to edit.
         content (str | None): The content to send.
         files (list[UploadFile] | None): The files to upload.
         filepaths (list[str] | None): The file paths to upload.
     """
-    store: Store = request.app.state.store
-    db: AbstractMessageStore = request.app.state.db
-    db_opts = request.state.get_kwargs("db_opts")
-
     if chat_id is None or message_id is None:
         raise UserInputError("Chat ID and Message ID are required")
 
@@ -120,28 +117,37 @@ async def edit_chat(  # noqa: PLR0913
     if filepaths is None:
         filepaths = []
 
-    images, documents = await store.upload_files(files, filepaths)
+    images, documents = await app.store.upload_files(files, filepaths)
 
     stream = EventStreamContextManager()
     response = stream.get_response()
+    query_input = QueryInput(text=content, images=images, documents=documents)
 
     async def process() -> None:
         async with stream:
-            query_input = QueryInput(text=content, images=images, documents=documents)
-            await db.update_message_content(message_id, query_input, **db_opts)
-            next_ai_message = await db.get_next_ai_message(
-                chat_id, message_id, **db_opts
-            )
-            # TODO: send query to LLM
+            dive_user = request.state.dive_user
+            async with app.db_sessionmaker() as session:
+                await app.msg_store(session).update_message_content(
+                    message_id, query_input, dive_user["user_id"]
+                )
 
-    background_tasks.add_task(process)
+                next_ai_message = await app.msg_store(session).get_next_ai_message(
+                    chat_id, message_id
+                )
+                await session.commit()
+            processor = ChatProcessor(app, request.state, stream)
+            await processor.handle_chat(
+                chat_id, query_input, next_ai_message.message_id
+            )
+
+    stream.add_task(process)
     return response
 
 
 @chat.post("/retry")
 async def retry_chat(
     request: Request,
-    background_tasks: BackgroundTasks,
+    app: DiveHostAPI = Depends(get_app),
     chat_id: Annotated[str | None, Form(alias="chatId")] = None,
     message_id: Annotated[str | None, Form(alias="messageId")] = None,
 ) -> StreamingResponse:
@@ -149,13 +155,10 @@ async def retry_chat(
 
     Args:
         request (Request): The request object.
-        background_tasks (BackgroundTasks): The background tasks to run.
+        app (DiveHostAPI): The DiveHostAPI instance.
         chat_id (str | None): The ID of the chat to retry.
         message_id (str | None): The ID of the message to retry.
     """
-    store: Store = request.app.state.store
-    db: AbstractMessageStore = request.app.state.db
-    db_opts = request.state.get_kwargs("db_opts")
     if chat_id is None or message_id is None:
         raise UserInputError("Chat ID and Message ID are required")
 
@@ -164,10 +167,10 @@ async def retry_chat(
 
     async def process() -> None:
         async with stream:
-            # TODO: send query to LLM
-            pass
+            processor = ChatProcessor(app, request.state, stream)
+            await processor.handle_chat(chat_id, None, message_id)
 
-    background_tasks.add_task(process)
+    stream.add_task(process)
     return response
 
 
