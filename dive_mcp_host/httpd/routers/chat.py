@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Annotated, TypeVar
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 from dive_mcp_host.httpd.database.models import Chat, ChatMessage, QueryInput
@@ -13,9 +13,7 @@ from dive_mcp_host.httpd.routers.utils import ChatProcessor, EventStreamContextM
 from dive_mcp_host.httpd.server import DiveHostAPI
 
 if TYPE_CHECKING:
-    from dive_mcp_host.httpd.database.msg_store.abstract import AbstractMessageStore
     from dive_mcp_host.httpd.middlewares.general import DiveUser
-    from dive_mcp_host.httpd.store import Store
 
 chat = APIRouter(prefix="/chat", tags=["chat"])
 

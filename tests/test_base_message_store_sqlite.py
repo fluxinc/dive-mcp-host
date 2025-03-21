@@ -5,6 +5,7 @@ import pytest
 import pytest_asyncio
 from alembic import command
 from sqlalchemy import select
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -69,10 +70,13 @@ async def message_store(session: AsyncSession):
 async def sample_user(session: AsyncSession):
     """Create a sample user for testing."""
     user_id = "user123"
-    user = ORMUsers(id=user_id)
-    session.add(user)
-    await session.commit()
-    return user
+    query = (
+        insert(ORMUsers).values(id=user_id).on_conflict_do_nothing().returning(ORMUsers)
+    )
+    await session.execute(query)
+
+    query = select(ORMUsers).where(ORMUsers.id == user_id)
+    return await session.scalar(query)
 
 
 @pytest_asyncio.fixture
