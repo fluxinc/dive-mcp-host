@@ -3,10 +3,13 @@ from contextlib import asynccontextmanager
 
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from dive_mcp_host.httpd.middlewares import default_state, error_handler
+from dive_mcp_host.httpd.routers.chat import chat
+from dive_mcp_host.httpd.routers.config import config
+from dive_mcp_host.httpd.routers.model_verify import model_verify
+from dive_mcp_host.httpd.routers.openai import openai
+from dive_mcp_host.httpd.routers.tools import tools
 from dive_mcp_host.httpd.server import DiveHostAPI
-
-from .middlewares import default_state, error_handler
-from .routers import chat, config, model_verify, openai, tools
 
 
 @asynccontextmanager
@@ -17,14 +20,16 @@ async def lifespan(app: DiveHostAPI) -> AsyncGenerator[None, None]:
     await app.cleanup()
 
 
-app = DiveHostAPI(lifespan=lifespan)
+def create_app(config_path: str) -> DiveHostAPI:
+    """Create the FastAPI app."""
+    app = DiveHostAPI(lifespan=lifespan, config_path=config_path)
 
-app.add_middleware(BaseHTTPMiddleware, dispatch=default_state)
-app.add_middleware(BaseHTTPMiddleware, dispatch=error_handler)
-app.include_router(openai)
-app.include_router(chat, prefix="/api")
-app.include_router(tools, prefix="/api")
-app.include_router(config, prefix="/api")
-app.include_router(model_verify, prefix="/api")
+    app.add_middleware(BaseHTTPMiddleware, dispatch=default_state)
+    app.add_middleware(BaseHTTPMiddleware, dispatch=error_handler)
+    app.include_router(openai)
+    app.include_router(chat, prefix="/api")
+    app.include_router(tools, prefix="/api")
+    app.include_router(config, prefix="/api")
+    app.include_router(model_verify, prefix="/api")
 
-# memo: fastapi dev app.py
+    return app

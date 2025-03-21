@@ -1,5 +1,5 @@
 import logging
-from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any, Self
 
@@ -98,7 +98,7 @@ class DiveMcpHost(ContextProtocol):
         )
         self._model = model
 
-    def conversation[T](  # noqa: PLR0913. Is there a better way to do this?
+    def conversation[T: Mapping[str, Any]](  # noqa: PLR0913. Is there a better way to do this?
         self,
         *,
         thread_id: str | None = None,
@@ -108,7 +108,7 @@ class DiveMcpHost(ContextProtocol):
             [BaseChatModel, Sequence[BaseTool] | ToolNode],
             AgentFactory[T],
         ] = get_chat_agent_factory,
-        system_prompt: str | None = None,
+        system_prompt: str | Callable[[T], list[BaseMessage]] | None = None,
         volatile: bool = False,
     ) -> Conversation[T]:
         """Start or resume a conversation.

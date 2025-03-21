@@ -1,7 +1,7 @@
 from enum import StrEnum
-from typing import Literal, TypeVar
+from typing import Any, Literal, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, RootModel
 
 from dive_mcp_host.host.conf import LLMConfig
 
@@ -39,7 +39,7 @@ class McpServerError(BaseModel):
     """Represents an error from an MCP server."""
 
     server_name: str = Field(alias="serverName")
-    error: object  # any
+    error: Any  # any
 
 
 class ModelType(StrEnum):
@@ -75,8 +75,8 @@ class ModelSettingsProperty(BaseModel):
     type: Literal["string", "number"]
     description: str
     required: bool
-    default: object | None
-    placeholder: object | None
+    default: Any | None
+    placeholder: Any | None
 
 
 class ModelSettingsDefinition(ModelSettingsProperty):
@@ -92,28 +92,42 @@ class ModelInterfaceDefinition(BaseModel):
     model_settings: dict[str, ModelSettingsDefinition]
 
 
+class SimpleToolInfo(BaseModel):
+    """Represents an MCP tool with its properties and metadata."""
+
+    name: str
+    description: str
+
+
 class McpTool(BaseModel):
     """Represents an MCP tool with its properties and metadata."""
 
     name: str
-    tools: list
+    tools: list[SimpleToolInfo]
     description: str
     enabled: bool
     icon: str
+    error: str | None
+
+
+class ToolsCache(RootModel[dict[str, McpTool]]):
+    """Tools cache."""
+
+    root: dict[str, McpTool]
 
 
 class ToolCallsContent(BaseModel):
     """Tool call content."""
 
     name: str
-    arguments: object
+    arguments: Any
 
 
 class ToolResultContent(BaseModel):
     """Tool result content."""
 
     name: str
-    result: object
+    result: Any
 
 
 class ChatInfoContent(BaseModel):
@@ -148,9 +162,9 @@ class StreamMessage(BaseModel):
 class TokenUsage(BaseModel):
     """Token usage."""
 
-    total_input_tokens: int = Field(alias="totalInputTokens")
-    total_output_tokens: int = Field(alias="totalOutputTokens")
-    total_tokens: int = Field(alias="totalTokens")
+    total_input_tokens: int = Field(default=0, alias="totalInputTokens")
+    total_output_tokens: int = Field(default=0, alias="totalOutputTokens")
+    total_tokens: int = Field(default=0, alias="totalTokens")
 
 
 class ModelConfig(BaseModel):

@@ -1,8 +1,15 @@
 import json
 from typing import cast
+from unittest.mock import MagicMock
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, ToolCall, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolCall,
+    ToolMessage,
+)
 from pydantic import AnyUrl
 
 from dive_mcp_host.host.conf import CheckpointerConfig, HostConfig, LLMConfig
@@ -138,7 +145,9 @@ async def test_get_messages(echo_tool_stdio_config: dict[str, ServerConfig]) -> 
             assert len(messages) > 0
 
             human_messages = [msg for msg in messages if isinstance(msg, HumanMessage)]
-            assert any(msg.content == "Hello, world! 許個願望吧" for msg in human_messages)
+            assert any(
+                msg.content == "Hello, world! 許個願望吧" for msg in human_messages
+            )
 
             ai_messages = [msg for msg in messages if isinstance(msg, AIMessage)]
             assert any(msg.content == "Call echo tool" for msg in ai_messages)
@@ -152,3 +161,55 @@ async def test_get_messages(echo_tool_stdio_config: dict[str, ServerConfig]) -> 
 
             empty_messages = await mcp_host.get_messages("non_existent_thread_id")
             assert len(empty_messages) == 0
+
+
+@pytest.mark.asyncio
+async def test_callable_system_prompt() -> None:
+    """Test that the system prompt can be a callable."""
+    config = HostConfig(
+        llm=LLMConfig(
+            model="fake",
+            modelProvider="dive",
+        ),
+        mcp_servers={},
+    )
+    msgs = [
+        SystemMessage(content="You are a helpful assistant."),
+        HumanMessage(content="Line 1!"),
+    ]
+
+    mock_system_prompt = MagicMock(return_value=msgs)
+
+    async with (
+        DiveMcpHost(config) as mcp_host,
+        mcp_host.conversation(
+            system_prompt=mock_system_prompt, volatile=True
+        ) as conversation,
+    ):
+        assert mcp_host._model is not None
+        model = cast(FakeMessageToolModel, mcp_host._model)
+        async for _ in conversation.query(
+            msgs,
+        ):
+            ...
+        assert len(model.query_history) == 2
+        assert model.query_history[0].content == "You are a helpful assistant."
+        assert model.query_history[1].content == "Line 1!"
+
+        assert mock_system_prompt.call_count == 1
+        msgs = [
+            SystemMessage(content="You are a helpful assistant."),
+            HumanMessage(content="Line 2!"),
+        ]
+        model.query_history = []
+        mock_system_prompt.reset_mock()
+        mock_system_prompt.return_value = msgs
+
+        async for _ in conversation.query(
+            msgs,
+        ):
+            ...
+        assert len(model.query_history) == 2
+        assert model.query_history[0].content == "You are a helpful assistant."
+        assert model.query_history[1].content == "Line 2!"
+        assert mock_system_prompt.call_count == 1

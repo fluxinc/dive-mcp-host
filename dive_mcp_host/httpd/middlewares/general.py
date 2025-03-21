@@ -4,7 +4,7 @@ from typing import TypedDict
 from starlette.requests import Request
 from starlette.responses import Response
 
-from ..routers import ResultResponse, UserInputError  # noqa: TID252
+from dive_mcp_host.httpd.routers.models import ResultResponse, UserInputError
 
 
 async def error_handler(request: Request, call_next: Callable) -> Response:
