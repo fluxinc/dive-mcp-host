@@ -12,7 +12,7 @@ class ResultResponse(BaseModel):
     """Generic response model with success status and message."""
 
     success: bool
-    message: str | None
+    message: str | None = None
 
 
 Transport = Literal["command", "sse", "websocket"]

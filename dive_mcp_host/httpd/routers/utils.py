@@ -65,7 +65,7 @@ class EventStreamContextManager:
         asyncio.create_task(self.queue.put(None))  # noqa: RUF006
 
     def add_task(
-        self, func: Callable[[], Coroutine[Any, Any, None]], *args: Any, **kwargs: Any
+        self, func: Callable[[], Coroutine[Any, Any, Any]], *args: Any, **kwargs: Any
     ) -> None:
         """Add a task to the event stream."""
         self.task = asyncio.create_task(func(*args, **kwargs))
@@ -239,10 +239,39 @@ class ChatProcessor:
 
         return result, token_usage
 
+    async def handle_chat_with_history(
+        self,
+        chat_id: str,
+        query_input: BaseMessage,
+        history: list[BaseMessage],
+        tools: list | None = None,
+    ) -> tuple[str, TokenUsage]:
+        """Handle chat with history.
+
+        Args:
+            chat_id (str): The chat ID.
+            query_input (BaseMessage): The query input.
+            history (list[BaseMessage]): The history.
+            tools (list | None): The tools.
+
+        Returns:
+            tuple[str, TokenUsage]: The result and token usage.
+        """
+        _, ai_message = await self._process_chat(chat_id, query_input, history, tools)
+        assert ai_message.usage_metadata
+
+        return str(ai_message.content), TokenUsage(
+            totalInputTokens=ai_message.usage_metadata["input_tokens"],
+            totalOutputTokens=ai_message.usage_metadata["output_tokens"],
+            totalTokens=ai_message.usage_metadata["total_tokens"],
+        )
+
     async def _process_chat(
         self,
         chat_id: str | None,
-        query_input: str | QueryInput | None,
+        query_input: str | QueryInput | BaseMessage | None,
+        history: list[BaseMessage] | None = None,
+        tools: list | None = None,
     ) -> tuple[HumanMessage, AIMessage]:
         if chat_id:
             # TODO: abort controller
@@ -254,7 +283,7 @@ class ChatProcessor:
         if query_input:
             if isinstance(query_input, str):
                 messages.append(HumanMessage(content=query_input))
-            else:
+            elif isinstance(query_input, QueryInput):
                 content = []
 
                 if query_input.text:
@@ -293,11 +322,15 @@ class ChatProcessor:
                     )
 
                 messages.append(HumanMessage(content=content))
+            else:
+                messages.append(query_input)
 
         dive_user: DiveUser = self.request_state.dive_user
 
         conversation = self.dive_host.conversation(
-            thread_id=chat_id, user_id=dive_user.get("user_id") or "default"
+            thread_id=chat_id,
+            user_id=dive_user.get("user_id") or "default",
+            tools=tools,
         )
         async with conversation:
             response = conversation.query(messages, stream_mode=["messages", "values"])
