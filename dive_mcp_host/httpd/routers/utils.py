@@ -1,18 +1,23 @@
 import asyncio
 import json
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine
-from typing import TYPE_CHECKING, Any, Self, cast
-from uuid import uuid4
 from contextlib import suppress
+from typing import TYPE_CHECKING, Any, Self
+from uuid import uuid4
 
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langchain_core.messages.ai import AIMessageChunk
-from langchain_core.messages.tool import ToolMessage, ToolCall
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages.tool import ToolMessage
 from pydantic import BaseModel
 from starlette.datastructures import State
 
-from dive_mcp_host.httpd.database.models import Message, NewMessage, QueryInput, Role
+from dive_mcp_host.httpd.database.models import (
+    Message,
+    NewMessage,
+    QueryInput,
+    ResourceUsage,
+    Role,
+)
 from dive_mcp_host.httpd.routers.models import (
     ChatInfoContent,
     MessageInfoContent,
@@ -23,7 +28,6 @@ from dive_mcp_host.httpd.routers.models import (
 )
 from dive_mcp_host.httpd.server import DiveHostAPI
 from dive_mcp_host.httpd.store.store import SUPPORTED_IMAGE_EXTENSIONS, Store
-from dive_mcp_host.models.fake import FakeMessageToolModel
 
 if TYPE_CHECKING:
     from dive_mcp_host.host.host import DiveMcpHost
@@ -70,6 +74,11 @@ class EventStreamContextManager:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:  # noqa: ANN001
         """Exit the context manager."""
+        if exc_val:
+            import traceback
+
+            print(traceback.format_exception(exc_type, exc_val, exc_tb))
+
         self.done = True
         await self.queue.put(None)  # Signal completion
 
@@ -80,8 +89,8 @@ class EventStreamContextManager:
             data (str): The data to write to the stream.
         """
         if isinstance(data, BaseModel):
-            data = data.model_dump_json()
-        await self.queue.put(json.dumps({"message": data}))
+            data = json.dumps({"message": data.model_dump(mode="json")})
+        await self.queue.put(data)
 
     async def _generate(self) -> AsyncGenerator[str, None]:
         """Generate the event stream content."""
@@ -91,7 +100,7 @@ class EventStreamContextManager:
                 continue
             yield "data: " + chunk + "\n\n"
 
-        yield "[Done]"
+        yield "data: [Done]\n\n"
 
     def get_response(self) -> StreamingResponse:
         """Get the streaming response.
@@ -136,7 +145,7 @@ class ChatProcessor:
         chat_id: str | None,
         query_input: str | QueryInput | None,
         regenerate_message_id: str | None,
-    ) -> str:
+    ) -> tuple[str, TokenUsage]:
         """Handle chat."""
         if chat_id is None:
             chat_id = str(uuid4())
@@ -154,7 +163,11 @@ class ChatProcessor:
             )
         )
 
-        result, token_usage = await self._process_chat(chat_id, query_input)
+        user_message, ai_message = await self._process_chat(chat_id, query_input)
+        assert user_message.id
+        assert ai_message.id
+        assert ai_message.usage_metadata
+        result = str(ai_message.content)
 
         if title_await:
             title = await title_await
@@ -167,7 +180,6 @@ class ChatProcessor:
                     chat_id, title, dive_user["user_id"], dive_user["user_type"]
                 )
 
-            user_message_id = str(uuid4())
             if regenerate_message_id:
                 await db.delete_messages_after(chat_id, regenerate_message_id)
             elif isinstance(query_input, QueryInput):
@@ -176,19 +188,25 @@ class ChatProcessor:
                     NewMessage(
                         chatId=chat_id,
                         role=Role.USER,
-                        messageId=user_message_id,
+                        messageId=user_message.id,
                         content=query_input.text or "",
                         files=json.dumps(files),
                     ),
                 )
 
-            assistant_message_id = str(uuid4())
             await db.create_message(
                 NewMessage(
                     chatId=chat_id,
                     role=Role.ASSISTANT,
-                    messageId=assistant_message_id,
+                    messageId=ai_message.id,
                     content=result,
+                    resource_usage=ResourceUsage(
+                        model=ai_message.response_metadata["model"],
+                        total_input_tokens=ai_message.usage_metadata["input_tokens"],
+                        total_output_tokens=ai_message.usage_metadata["output_tokens"],
+                        total_run_time=ai_message.response_metadata["total_duration"]
+                        / (10**9),
+                    ),
                 ),
             )
 
@@ -198,8 +216,8 @@ class ChatProcessor:
             StreamMessage(
                 type="message_info",
                 content=MessageInfoContent(
-                    userMessageId=user_message_id,
-                    assistantMessageId=assistant_message_id,
+                    userMessageId=user_message.id,
+                    assistantMessageId=ai_message.id,
                 ),
             )
         )
@@ -211,22 +229,19 @@ class ChatProcessor:
             )
         )
 
-        return result
+        token_usage = TokenUsage(
+            totalInputTokens=ai_message.usage_metadata["input_tokens"],
+            totalOutputTokens=ai_message.usage_metadata["output_tokens"],
+            totalTokens=ai_message.usage_metadata["total_tokens"],
+        )
+
+        return result, token_usage
 
     async def _process_chat(
         self,
         chat_id: str | None,
         query_input: str | QueryInput | None,
-    ) -> tuple[str, TokenUsage]:
-        """Process chat.
-
-        Args:
-            chat_id (str): The unique identifier of the chat.
-            query_input (QueryInput): The input query containing text and/or files.
-
-        Returns:
-            tuple[str, TokenUsage]: Assistant message ID and token usage statistics.
-        """
+    ) -> tuple[HumanMessage, AIMessage]:
         if chat_id:
             # TODO: abort controller
             ...
@@ -283,14 +298,14 @@ class ChatProcessor:
             thread_id=chat_id, user_id=dive_user.get("user_id") or "default"
         )
         async with conversation:
-            response = conversation.query(messages, stream_mode=["messages", "updates"])
+            response = conversation.query(messages, stream_mode=["messages", "values"])
             return await self._handle_response(response)
 
     async def _handle_response(
         self, response: AsyncIterator[dict[str, Any] | Any]
-    ) -> tuple[str, TokenUsage]:
-        final_response = ""
-        token_usage = TokenUsage()
+    ) -> tuple[HumanMessage, AIMessage]:
+        user_message = None
+        ai_message = None
 
         async for res_type, res_content in response:
             event_type = None
@@ -307,6 +322,9 @@ class ChatProcessor:
                     else:
                         event_type = "text"
                         content = str(message.content)
+                if isinstance(message, AIMessageChunk):
+                    event_type = "text"
+                    content = str(message.content)
                 elif isinstance(message, ToolMessage):
                     event_type = "tool_result"
                     result = message.content
@@ -321,12 +339,16 @@ class ChatProcessor:
                     content = ToolResultContent(name=message.name or "", result=result)
                 else:
                     # idk what is this
-                    print(message)
+                    pass
+            elif res_type == "values" and len(res_content["messages"]) >= 2:  # type: ignore
+                user_message, ai_message = res_content["messages"][-2:]  # type: ignore
+            else:
+                pass
 
             if event_type and content:
                 await self.stream.write(StreamMessage(type=event_type, content=content))
 
-        return final_response, token_usage
+        return user_message, ai_message  # type: ignore
 
     async def _generate_title(self, query: str) -> str:
         """Generate title."""

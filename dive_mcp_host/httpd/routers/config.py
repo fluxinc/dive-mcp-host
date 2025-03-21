@@ -8,6 +8,7 @@ from dive_mcp_host.host.conf import LLMConfig
 from .models import (
     McpServerError,
     McpServers,
+    ModelConfig,
     ModelInterfaceDefinition,
     ResultResponse,
 )
