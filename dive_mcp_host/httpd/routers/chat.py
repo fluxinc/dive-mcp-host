@@ -15,7 +15,7 @@ from dive_mcp_host.httpd.server import DiveHostAPI
 if TYPE_CHECKING:
     from dive_mcp_host.httpd.middlewares.general import DiveUser
 
-chat = APIRouter(prefix="/chat", tags=["chat"])
+chat = APIRouter(tags=["chat"])
 
 T = TypeVar("T")
 
@@ -222,7 +222,7 @@ async def delete_chat(
 
 
 @chat.post("/{chat_id}/abort")
-async def abort_chat(request: Request, chat_id: str) -> ResultResponse:
+async def abort_chat(_request: Request, _chat_id: str) -> ResultResponse:
     """Abort an ongoing chat operation.
 
     Args:
