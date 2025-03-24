@@ -90,6 +90,7 @@ class CompletionEventStreamContextManager(EventStreamContextManager):
         """Initialize the completion event stream context manager."""
         self.chat_id = chat_id
         self.model = model
+        super().__init__()
 
     async def write(self, data: str | StreamMessage | CompletionsResult) -> None:
         """Write data to the stream."""
@@ -151,7 +152,7 @@ async def create_chat_completion(
     """Creates a chat completion using the OpenAI compatible API.
 
     Returns:
-        Not implemented yet.
+        The chat completion result.
     """
     has_system_message = False
     messages = []
