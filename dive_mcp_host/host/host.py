@@ -99,7 +99,7 @@ class DiveMcpHost(ContextProtocol):
         )
         self._model = model
 
-    def conversation[T: Mapping[str, Any]](  # noqa: PLR0913. Is there a better way to do this?
+    def conversation[T: Mapping[str, Any]](  # noqa: PLR0913 Is there a better way to do this?
         self,
         *,
         thread_id: str | None = None,
@@ -194,6 +194,7 @@ class DiveMcpHost(ContextProtocol):
             return []
 
         try:
+
             class State(TypedDict):
                 messages: list
 

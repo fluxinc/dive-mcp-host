@@ -6,7 +6,7 @@ import signal
 from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from os import environ
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 import pytest_asyncio
@@ -26,7 +26,9 @@ from dive_mcp_host.host.tools import (
     ServerConfig,
     ToolManager,
 )
-from dive_mcp_host.models.fake import FakeMessageToolModel
+
+if TYPE_CHECKING:
+    from dive_mcp_host.models.fake import FakeMessageToolModel
 
 
 @pytest.fixture
@@ -227,7 +229,7 @@ async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) 
                 ],
             ),
         ]
-        cast(FakeMessageToolModel, mcp_host._model).responses = fake_responses
+        cast("FakeMessageToolModel", mcp_host._model).responses = fake_responses
         async with mcp_host.conversation() as conversation:
             responses = [
                 response
@@ -327,7 +329,7 @@ async def test_host_ollama(echo_tool_stdio_config: dict[str, ServerConfig]) -> N
             HumanMessage(content="test mcp tool to echo message 'helloXXX'."),
             stream_mode=["updates"],
         ):
-            response = cast(tuple[str, dict[str, dict[str, BaseMessage]]], response)
+            response = cast("tuple[str, dict[str, dict[str, BaseMessage]]]", response)
             if msg_dict := response[1].get("tools"):
                 contents = list[str]()
                 for msg in msg_dict.get("messages", []):
