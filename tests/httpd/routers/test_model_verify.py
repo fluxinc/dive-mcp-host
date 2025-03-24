@@ -42,33 +42,32 @@ MOCK_MODEL_SETTING = {
     "configuration": {"baseURL": "https://api.openai.com/v1"},
 }
 
-client_type = "fastapi"
 
-
-@pytest.fixture
-def mock_dive_host():
+class MockDiveHostAPI:
     """Mock DiveHostAPI for testing."""
-    mock_host = Mock()
-    mock_conversation = AsyncMock()
-    mock_conversation.__aenter__ = AsyncMock()
-    mock_conversation.__aexit__ = AsyncMock()
 
-    # simulate streaming response
-    mock_conversation.query = AsyncMock()
-    mock_conversation.query.return_value = [{"content": "test response"}]
+    def __init__(self):
+        self.dive_host = Mock()
+        self.conversation = AsyncMock()
+        self.conversation.__aenter__ = AsyncMock()
+        self.conversation.__aexit__ = AsyncMock()
 
-    mock_host.conversation.return_value = mock_conversation
-    return mock_host
+        # simulate streaming response
+        self.conversation.query = AsyncMock()
+        self.conversation.query.return_value = [{"content": "test response"}]
+
+        self.dive_host.conversation.return_value = self.conversation
 
 
 @pytest.fixture
-def client(mock_dive_host):
+def client():
     """Create a test client with mocked dependencies."""
+    mock_api = MockDiveHostAPI()
     app = FastAPI()
     app.include_router(model_verify, prefix="/api/model_verify")
 
     async def get_mock_app():
-        return Mock(dive_host={"default": mock_dive_host})
+        return Mock(dive_host={"default": mock_api.dive_host})
 
     app.dependency_overrides[get_app] = get_mock_app
 
