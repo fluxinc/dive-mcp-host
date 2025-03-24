@@ -102,13 +102,24 @@ class DiveHostAPI(FastAPI):
         # ================================================
         # Dive Host
         # ================================================
+        config = self.load_host_config()
+        async with AsyncExitStack() as stack:
+            default_host = DiveMcpHost(config)
+            await stack.enter_async_context(default_host)
+            self.dive_host = {"default": default_host}
+
+            logger.info("Server Prepare Complete")
+            yield
+
+    def load_host_config(self) -> HostConfig:
+        """Generate all host configs."""
         if self._model_config_manager.current_setting is None:
             raise ValueError("Model config manager is not initialized")
 
-        if self._mcp_server_config_manager.current_config is None:
+        if self._service_config_manager.current_setting is None:
             raise ValueError("MCPServer config manager is not initialized")
 
-        config = HostConfig(
+        return HostConfig(
             llm=self._model_config_manager.current_setting,
             checkpointer=self._service_config_manager.current_setting.checkpointer,
             mcp_servers={
@@ -123,14 +134,6 @@ class DiveHostAPI(FastAPI):
                 for server_name, server_config in self._mcp_server_config_manager.get_enabled_servers().items()  # noqa: E501
             },
         )
-
-        async with AsyncExitStack() as stack:
-            default_host = DiveMcpHost(config)
-            await stack.enter_async_context(default_host)
-            self.dive_host = {"default": default_host}
-
-            logger.info("Server Prepare Complete")
-            yield
 
     async def ready(self) -> bool:
         """Ready the DiveHostAPI."""

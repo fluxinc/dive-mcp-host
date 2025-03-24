@@ -194,6 +194,7 @@ class DiveMcpHost(ContextProtocol):
             return []
 
         try:
+
             class State(TypedDict):
                 messages: list
 

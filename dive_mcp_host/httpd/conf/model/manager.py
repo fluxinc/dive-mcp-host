@@ -129,6 +129,26 @@ class ModelManager:
         return self._current_setting
 
     @property
+    def full_config(self) -> ModelConfig | None:
+        """Get the full model configuration.
+
+        Returns:
+            Model configuration or None if configuration is not found.
+        """
+        if not self._config_dict:
+            return None
+
+        return ModelConfig(
+            activeProvider=self._config_dict.get(
+                "activeProvider", self._config_dict.get("active_provider", "")
+            ),
+            enableTools=self._config_dict.get(
+                "enableTools", self._config_dict.get("enable_tools", True)
+            ),
+            configs=self._config_dict.get("configs", {}),
+        )
+
+    @property
     def config_path(self) -> str:
         """Get the configuration path."""
         return self._config_path
