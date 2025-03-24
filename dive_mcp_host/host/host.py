@@ -1,11 +1,12 @@
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Self, TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool
+from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt.tool_node import ToolNode
 
 from dive_mcp_host.host.agents import AgentFactory, get_chat_agent_factory
@@ -193,52 +194,29 @@ class DiveMcpHost(ContextProtocol):
             return []
 
         try:
-            messages = []
-            processed_msg_ids = set()
+            class State(TypedDict):
+                messages: list
 
-            async for checkpoint_tuple in self._checkpointer.alist(
-                {"configurable": {"thread_id": thread_id}}
-            ):  # type: ignore[attr-defined]
-                checkpoint_messages: list[BaseMessage] = (
-                    checkpoint_tuple.checkpoint.get("channel_values", {}).get(
-                        "messages", []
-                    )
-                )
+            def node(state: State) -> State:
+                return state
 
-                if not checkpoint_messages:
-                    continue
+            builder = StateGraph(State)
+            builder.add_node(node)
+            builder.add_edge(START, "node")
+            builder.add_edge("node", END)
+            graph = builder.compile(checkpointer=self._checkpointer)
 
-                self._process_checkpoint_messages(
-                    checkpoint_messages, messages, processed_msg_ids
-                )
+            state = await graph.aget_state(
+                {
+                    "configurable": {
+                        "thread_id": thread_id,
+                    }
+                },
+            )
+
+            return state.values.get("messages", [])
 
         except (AttributeError, KeyError, TypeError, IndexError) as e:
             logging.error("Error retrieving thread details for %s: %s", thread_id, e)
 
-        return messages
-
-    def _process_checkpoint_messages(
-        self,
-        checkpoint_messages: list[BaseMessage],
-        messages: list[BaseMessage],
-        processed_msg_ids: set[str],
-    ) -> None:
-        """Helper method to process messages from a checkpoint.
-
-        Args:
-            checkpoint_messages: The checkpoint messages to process.
-            messages: The list to add messages to.
-            processed_msg_ids: Set of already processed message IDs.
-        """
-        for msg in checkpoint_messages:
-            if hasattr(msg, "id"):
-                msg_id = msg.id
-            elif isinstance(msg, dict) and "id" in msg:
-                msg_id = msg["id"]
-            else:
-                continue
-
-            # avoid duplicate messages
-            if msg_id is not None and msg_id not in processed_msg_ids:
-                messages.append(msg)
-                processed_msg_ids.add(msg_id)
+        return []
