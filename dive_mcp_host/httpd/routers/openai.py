@@ -11,7 +11,7 @@ from dive_mcp_host.httpd.routers.models import ResultResponse, StreamMessage
 from dive_mcp_host.httpd.routers.utils import ChatProcessor, EventStreamContextManager
 from dive_mcp_host.httpd.server import DiveHostAPI
 
-openai = APIRouter(prefix="/v1/openai", tags=["openai"])
+openai = APIRouter(tags=["openai"])
 
 
 class OpenaiModel(BaseModel):

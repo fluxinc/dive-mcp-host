@@ -13,7 +13,7 @@ from dive_mcp_host.httpd.server import DiveHostAPI
 from dive_mcp_host.httpd.store.cache import CacheKeys
 
 logger = getLogger(__name__)
-tools = APIRouter(prefix="/tools", tags=["tools"])
+tools = APIRouter(tags=["tools"])
 
 
 class ToolsResult(ResultResponse):

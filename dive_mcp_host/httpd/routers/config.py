@@ -13,7 +13,7 @@ from .models import (
     ResultResponse,
 )
 
-config = APIRouter(prefix="/config", tags=["config"])
+config = APIRouter(tags=["config"])
 
 T = TypeVar("T")
 
