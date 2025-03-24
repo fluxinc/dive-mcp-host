@@ -271,7 +271,7 @@ class McpServer(ContextProtocol):
             except CancelledError:
                 pass
             # What kinds of exceptions will be raised by a mcp client?
-            except Exception as e:  # noqa: BLE001.
+            except Exception as e:  # noqa: BLE001
                 async with self._cond:
                     self._exception = e
                     if self._client_status == ClientState.RUNNING:
