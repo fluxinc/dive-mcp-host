@@ -3,8 +3,8 @@ import pytest
 from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
+from dive_mcp_host.host.conf import LLMConfig
 from dive_mcp_host.httpd.routers.config import (
-    ModelSettings,
     SaveModelSettingsRequest,
     config,
 )
@@ -26,7 +26,7 @@ MOCK_MODEL_CONFIG = ModelConfig(
     activeProvider="openai",
     enableTools=True,
     configs={
-        "openai": ModelSettings(
+        "openai": LLMConfig(
             model="gpt-4",
             modelProvider="openai",
             apiKey="sk-mock-key",
@@ -35,7 +35,7 @@ MOCK_MODEL_CONFIG = ModelConfig(
             maxTokens=4000,
             configuration=None,
         ),
-        "anthropic": ModelSettings(
+        "anthropic": LLMConfig(
             model="claude-3-opus-20240229",
             modelProvider="anthropic",
             apiKey="sk-ant-mock-key",
@@ -68,18 +68,18 @@ def client(request):
     """
     client_type = getattr(request.module, "client_type", "fastapi")
 
-
     if client_type == "nodejs":
         return httpx.Client(base_url="http://localhost:4321/api")
     app = FastAPI()
-    app.include_router(config)
-    return TestClient(app)
+    app.include_router(config, prefix="/api/config")
+    with TestClient(app) as client:
+        yield client
 
 
 def test_get_mcp_server(client):
-    """Test the /config/mcpserver GET endpoint."""
+    """Test the /api/config/mcpserver GET endpoint."""
     # Send request
-    response = client.get("/config/mcpserver")
+    response = client.get("/api/config/mcpserver")
 
     # Verify response status code
     assert response.status_code == SUCCESS_CODE
@@ -115,7 +115,7 @@ def test_get_mcp_server(client):
 
 
 def test_post_mcp_server(client):
-    """Test the /config/mcpserver POST endpoint."""
+    """Test the /api/config/mcpserver POST endpoint."""
     # Prepare request data - convert McpServerConfig objects to dict
     mock_server_dict = {}
     for key, value in MOCK_MCP_CONFIG.items():
@@ -125,7 +125,7 @@ def test_post_mcp_server(client):
 
     # Send request
     response = client.post(
-        "/config/mcpserver",
+        "/api/config/mcpserver",
         json=server_data,
     )
 
@@ -143,9 +143,9 @@ def test_post_mcp_server(client):
 
 
 def test_get_model(client):
-    """Test the /config/model GET endpoint."""
+    """Test the /api/config/model GET endpoint."""
     # Send request
-    response = client.get("/config/model")
+    response = client.get("/api/config/model")
 
     # Verify response status code
     assert response.status_code == SUCCESS_CODE
@@ -175,11 +175,11 @@ def test_get_model(client):
 
 
 def test_post_model(client):
-    """Test the /config/model POST endpoint."""
+    """Test the /api/config/model POST endpoint."""
     # Prepare request data
     model_settings = SaveModelSettingsRequest(
         provider=TEST_PROVIDER,
-        modelSettings=ModelSettings(
+        modelSettings=LLMConfig(
             model="gpt-4o-mini",
             modelProvider=TEST_PROVIDER,
             apiKey="openai-api-key",
@@ -193,7 +193,7 @@ def test_post_model(client):
 
     # Send request
     response = client.post(
-        "/config/model",
+        "/api/config/model",
         json=model_settings.model_dump(by_alias=True),
     )
 
@@ -209,13 +209,13 @@ def test_post_model(client):
 
 
 def test_post_model_replace_all(client):
-    """Test the /config/model/replaceAll POST endpoint."""
+    """Test the /api/config/model/replaceAll POST endpoint."""
     # Prepare request data - use the mock model config for simplicity
     model_config_data = MOCK_MODEL_CONFIG.model_dump(by_alias=True)
 
     # Send request
     response = client.post(
-        "/config/model/replaceAll",
+        "/api/config/model/replaceAll",
         json=model_config_data,
     )
 
@@ -229,10 +229,11 @@ def test_post_model_replace_all(client):
     assert "success" in response_data
     assert response_data["success"] is True
 
+
 def test_get_custom_rules(client):
-    """Test the /config/customrules GET endpoint."""
+    """Test the /api/config/customrules GET endpoint."""
     # Send request
-    response = client.get("/config/customrules")
+    response = client.get("/api/config/customrules")
 
     # Verify response status code
     assert response.status_code == SUCCESS_CODE
@@ -247,15 +248,14 @@ def test_get_custom_rules(client):
     assert isinstance(response_data["rules"], str)
 
 
-
 def test_post_custom_rules(client):
-    """Test the /config/customrules POST endpoint."""
+    """Test the /api/config/customrules POST endpoint."""
     # Prepare custom rules data
     custom_rules = "# New Custom Rules\n1. Be concise\n2. Use simple language"
 
     # Send request - This endpoint expects raw text, not JSON
     response = client.post(
-        "/config/customrules",
+        "/api/config/customrules",
         content=custom_rules.encode("utf-8"),
         headers={"Content-Type": "text/plain"},
     )

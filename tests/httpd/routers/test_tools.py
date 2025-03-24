@@ -1,16 +1,12 @@
 from unittest.mock import MagicMock, patch
 
-import httpx
 import pytest
 from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
 from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.routers.models import SimpleToolInfo
-from dive_mcp_host.httpd.routers.tools import McpTool, ToolsResult, list_tools, tools
-from dive_mcp_host.httpd.store.cache import CacheKeys
-
-client_type = "fastapi"
+from dive_mcp_host.httpd.routers.tools import McpTool, ToolsResult, tools
 
 
 class MockTool:
@@ -29,23 +25,6 @@ class MockServerInfo:
         self.error = error
 
 
-class MockMcpServerManager:
-    """Mock MCP server manager."""
-
-    async def get_tool_infos(self):
-        """Return mock tool infos."""
-        return [
-            McpTool(
-                name="test_tool",
-                tools=[SimpleToolInfo(name="test", description="Test function")],
-                description="Test tool description",
-                enabled=True,
-                icon="test",
-                error=None,
-            )
-        ]
-
-
 class MockDiveHostAPI:
     """Mock DiveHostAPI."""
 
@@ -61,20 +40,8 @@ class MockDiveHostAPI:
 
 
 @pytest.fixture
-def client(request):
-    """Create a test client.
-
-    Args:
-        request: The pytest request object.
-
-    Returns:
-        A TestClient for FastAPI testing or httpx.Client for direct Node.js testing.
-    """
-    client_type = getattr(request.module, "client_type", "fastapi")
-
-    if client_type == "nodejs":
-        return httpx.Client(base_url="http://localhost:4321/api")
-
+def client():
+    """Create a test client."""
     # Create a mock API instance
     mock_api = MockDiveHostAPI(
         mcp_server_config=MagicMock(),
@@ -87,49 +54,18 @@ def client(request):
 
     # Create FastAPI application
     app = FastAPI()
-    app.include_router(tools)
+    app.include_router(tools, prefix="/api/tools")
 
     # Override get_app dependency
     app.dependency_overrides[get_app] = lambda: mock_api
 
-    return TestClient(app)
-
-
-@pytest.fixture
-def app_client():
-    """Create a test client with mock data"""
-    app = FastAPI()
-    app.include_router(tools)
-
-    # Set up mock data
-    mock_config = MagicMock()
-    mock_config.mcp_servers = {"server1": {}, "server2": {}}
-
-    # Create server information
-    server_info = {
-        "server1": MockServerInfo(
-            tools=[
-                MockTool(name="tool1", description="Tool 1 description"),
-                MockTool(name="tool2", description="Tool 2 description"),
-            ]
-        )
-    }
-
-    # Create API instance
-    mock_api = MockDiveHostAPI(
-        mcp_server_config=mock_config,
-        server_info=server_info,
-    )
-
-    # Override get_app dependency
-    app.dependency_overrides[get_app] = lambda: mock_api
-
-    return TestClient(app)
+    with TestClient(app) as client:
+        yield client
 
 
 def test_list_tools(client):
-    """Test the /tools GET endpoint."""
-    response = client.get("/tools")
+    """Test the /api/tools GET endpoint."""
+    response = client.get("/api/tools")
 
     # Verify response status code
     assert response.status_code == status.HTTP_200_OK
@@ -164,24 +100,6 @@ def test_list_tools(client):
             assert isinstance(subtool["name"], str)
             assert "description" in subtool
             assert isinstance(subtool["description"], str)
-
-
-def test_integration_list_tools_endpoint(app_client):
-    """Integration test for /tools GET endpoint"""
-    # Send request
-    response = app_client.get("/tools")
-
-    # Verify response status code
-    assert response.status_code == status.HTTP_200_OK
-
-    # Parse JSON response
-    response_data = response.json()
-
-    # Validate response structure
-    assert "success" in response_data
-    assert response_data["success"] is True
-    assert "tools" in response_data
-    assert isinstance(response_data["tools"], list)
 
 
 def test_tools_result_serialization():

@@ -12,6 +12,7 @@ from dive_mcp_host.httpd.routers.model_verify import (
 
 ModelVerificationStatus = Literal["success", "warning", "error"]
 
+
 class ModelVerificationResult(BaseModel):
     """Result of model verification containing connection and tools test results."""
 
@@ -28,6 +29,7 @@ class ModelVerificationFinalResponse(BaseModel):
     type: Literal["final"]
     results: list[ModelVerificationResult]
     aborted: bool
+
 
 MOCK_MODEL_SETTING = {
     "model": "gpt-4o-mini",
@@ -57,12 +59,12 @@ def client(request):
     if client_type == "nodejs":
         return httpx.Client(base_url="http://localhost:4321/api")
     app = FastAPI()
-    app.include_router(model_verify)
+    app.include_router(model_verify, prefix="/api/model_verify")
     return TestClient(app)
 
 
 def test_do_verify_model(client):
-    """Test the /model_verify POST endpoint."""
+    """Test the /api/model_verify POST endpoint."""
     # Prepare test data
     test_settings = {
         "modelSettings": MOCK_MODEL_SETTING,
@@ -70,7 +72,7 @@ def test_do_verify_model(client):
 
     # Send request
     response = client.post(
-        "/model_verify",
+        "/api/model_verify",
         json=test_settings,
     )
 
@@ -96,7 +98,7 @@ def test_do_verify_model(client):
 
 
 def test_verify_model_streaming(client):
-    """Test the /model_verify/streaming POST endpoint."""
+    """Test the /api/model_verify/streaming POST endpoint."""
     # Prepare test data
     test_model_settings = {
         "modelSettings": [
@@ -106,7 +108,7 @@ def test_verify_model_streaming(client):
 
     # Send request
     response = client.post(
-        "/model_verify/streaming",
+        "/api/model_verify/streaming",
         json=test_model_settings,
     )
 
