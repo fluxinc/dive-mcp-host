@@ -1,10 +1,12 @@
+import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Self, TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool
+from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt.tool_node import ToolNode
 
 from dive_mcp_host.host.agents import AgentFactory, get_chat_agent_factory
@@ -178,3 +180,43 @@ class DiveMcpHost(ContextProtocol):
             The value will be None for any server that has not completed initialization.
         """
         return self._tool_manager.mcp_server_info
+
+    async def get_messages(self, thread_id: str) -> list[BaseMessage]:
+        """Get messages of a specific thread.
+
+        Args:
+            thread_id: The thread ID to retrieve messages for.
+
+        Returns:
+            A list of messages.
+        """
+        if self._checkpointer is None:
+            return []
+
+        try:
+            class State(TypedDict):
+                messages: list
+
+            def node(state: State) -> State:
+                return state
+
+            builder = StateGraph(State)
+            builder.add_node(node)
+            builder.add_edge(START, "node")
+            builder.add_edge("node", END)
+            graph = builder.compile(checkpointer=self._checkpointer)
+
+            state = await graph.aget_state(
+                {
+                    "configurable": {
+                        "thread_id": thread_id,
+                    }
+                },
+            )
+
+            return state.values.get("messages", [])
+
+        except (AttributeError, KeyError, TypeError, IndexError) as e:
+            logging.error("Error retrieving thread details for %s: %s", thread_id, e)
+
+        return []

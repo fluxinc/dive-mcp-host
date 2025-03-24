@@ -26,10 +26,13 @@ def create_app(config_path: str) -> DiveHostAPI:
 
     app.add_middleware(BaseHTTPMiddleware, dispatch=default_state)
     app.add_middleware(BaseHTTPMiddleware, dispatch=error_handler)
-    app.include_router(openai)
-    app.include_router(chat, prefix="/api")
-    app.include_router(tools, prefix="/api")
-    app.include_router(config, prefix="/api")
-    app.include_router(model_verify, prefix="/api")
+    app.include_router(openai, prefix="/v1/openai")
+    app.include_router(chat, prefix="/chat")
+    app.include_router(tools, prefix="/tools")
+    app.include_router(config, prefix="/config")
+    app.include_router(model_verify, prefix="/model_verify")
+
+    # remote endpoints
+    app.include_router(chat, prefix="/api/v1/mcp")
 
     return app
