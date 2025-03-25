@@ -6,6 +6,7 @@ from fastapi import FastAPI, status
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 
+from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.routers.openai import (
     CompletionEventStreamContextManager,
     OpenaiModel,
@@ -26,7 +27,7 @@ class MagicDict(dict):
         return self.values_mock()
 
 
-class MockApp(FastAPI):
+class MockDiveHostAPI:
     """Mock DiveHostAPI FastAPI application for testing."""
 
     def __init__(self):
@@ -55,17 +56,18 @@ class MockApp(FastAPI):
 @pytest.fixture
 def client():
     """Create a test client with the mock app."""
-    app = MockApp()
+    app = FastAPI()
     app.include_router(openai)
+
+    mock_app = MockDiveHostAPI()
+
+    def get_mock_app():
+        return mock_app
+
+    app.dependency_overrides[get_app] = get_mock_app
 
     with TestClient(app) as client:
         yield client
-
-
-@pytest.fixture
-def mock_app():
-    """Create a mock DiveHostAPI application."""
-    return MockApp()
 
 
 @pytest.fixture(autouse=True)
@@ -117,7 +119,7 @@ def test_get_openai(client):
     assert isinstance(response_data["message"], str)
 
 
-def test_list_models(client, mock_app):
+def test_list_models(client):
     """Test the /models GET endpoint with mocked dive host."""
     # Send request
     response = client.get("/models")

@@ -196,20 +196,12 @@ class MockDiveHostAPI:
         """Return the database mock."""
         return self.db
 
-
-@pytest.fixture
-def app():
-    """Create a mock DiveHostAPI for testing."""
-    return MockDiveHostAPI()
-
-
 @pytest.fixture
 def client():
     """Create a test client."""
     app = FastAPI()
     app.include_router(chat, prefix="/api/chat")
 
-    # Mock dependencies
     mock_app = MockDiveHostAPI()
 
     def get_mock_app():
@@ -218,7 +210,6 @@ def client():
     def get_mock_user():
         return {"user_id": TEST_USER_ID}
 
-    # Properly configure dependency overrides
     app.dependency_overrides[get_app] = get_mock_app
     app.dependency_overrides[get_dive_user] = get_mock_user
 
@@ -245,7 +236,7 @@ def mock_event_stream():
         yield
 
 
-def test_list_chat(client, app):
+def test_list_chat(client):
     """Test the /api/chat/list endpoint."""
     # Mock the get_all_chats method
     with mock.patch.object(MockDatabase, "get_all_chats") as mock_get_all_chats:
@@ -281,7 +272,7 @@ def test_list_chat(client, app):
             assert "createdAt" in chat
 
 
-def test_get_chat(client, app):
+def test_get_chat(client):
     """Test the /api/chat/{chat_id} endpoint."""
     # Mock the get_chat_with_messages method
     with mock.patch.object(MockDatabase, "get_chat_with_messages") as mock_get_chat:
@@ -330,7 +321,7 @@ def test_get_chat(client, app):
         assert isinstance(data["messages"], list)
 
 
-def test_delete_chat(client, app):
+def test_delete_chat(client):
     """Test the /api/chat/{chat_id} DELETE endpoint."""
     # Mock the delete_chat method
     with mock.patch.object(MockDatabase, "delete_chat") as mock_delete_chat:
@@ -370,7 +361,7 @@ def test_delete_chat(client, app):
 #     assert "Chat abort signal sent successfully" in response_data["message"]
 
 
-def test_create_chat(client, app, monkeypatch):
+def test_create_chat(client, monkeypatch):
     """Test the /api/chat POST endpoint."""
 
     # Mock EventStreamContextManager.get_response to return a valid StreamingResponse
@@ -404,7 +395,7 @@ def test_create_chat(client, app, monkeypatch):
     assert response.status_code == SUCCESS_CODE
 
 
-def test_edit_chat(client, app, monkeypatch):
+def test_edit_chat(client, monkeypatch):
     """Test the /api/chat/edit endpoint."""
 
     # Mock EventStreamContextManager.get_response to return a valid StreamingResponse
@@ -453,7 +444,7 @@ def test_edit_chat_missing_params(client):
     assert "Chat ID and Message ID are required" in str(excinfo.value)
 
 
-def test_retry_chat(client, app, monkeypatch):
+def test_retry_chat(client, monkeypatch):
     """Test the /api/chat/retry endpoint."""
 
     # Mock EventStreamContextManager.get_response to return a valid StreamingResponse

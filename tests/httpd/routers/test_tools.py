@@ -42,8 +42,10 @@ class MockDiveHostAPI:
 @pytest.fixture
 def client():
     """Create a test client."""
-    # Create a mock API instance
-    mock_api = MockDiveHostAPI(
+    app = FastAPI()
+    app.include_router(tools, prefix="/api/tools")
+
+    mock_app = MockDiveHostAPI(
         mcp_server_config=MagicMock(),
         server_info={
             "test_server": MockServerInfo(
@@ -52,12 +54,10 @@ def client():
         },
     )
 
-    # Create FastAPI application
-    app = FastAPI()
-    app.include_router(tools, prefix="/api/tools")
+    def get_mock_app():
+        return mock_app
 
-    # Override get_app dependency
-    app.dependency_overrides[get_app] = lambda: mock_api
+    app.dependency_overrides[get_app] = get_mock_app
 
     with TestClient(app) as client:
         yield client

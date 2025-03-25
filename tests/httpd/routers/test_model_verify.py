@@ -62,12 +62,13 @@ class MockDiveHostAPI:
 @pytest.fixture
 def client():
     """Create a test client with mocked dependencies."""
-    mock_api = MockDiveHostAPI()
     app = FastAPI()
     app.include_router(model_verify, prefix="/api/model_verify")
 
-    async def get_mock_app():
-        return Mock(dive_host={"default": mock_api.dive_host})
+    mock_app = MockDiveHostAPI()
+
+    def get_mock_app():
+        return Mock(dive_host={"default": mock_app.dive_host})
 
     app.dependency_overrides[get_app] = get_mock_app
 
