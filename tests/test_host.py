@@ -131,7 +131,7 @@ async def test_get_messages(echo_tool_stdio_config: dict[str, ServerConfig]) -> 
                 ],
             ),
         ]
-        cast("FakeMessageToolModel", mcp_host._model).responses = fake_responses  # noqa: SLF001
+        cast("FakeMessageToolModel", mcp_host._model).responses = fake_responses
         conversation = mcp_host.conversation()
         async with conversation:
             async for _ in conversation.query(
@@ -187,7 +187,7 @@ async def test_callable_system_prompt() -> None:
         ) as conversation,
     ):
         assert mcp_host._model is not None
-        model = cast(FakeMessageToolModel, mcp_host._model)
+        model = cast("FakeMessageToolModel", mcp_host._model)
         async for _ in conversation.query(
             msgs,
         ):

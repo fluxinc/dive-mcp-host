@@ -1,1 +1,1 @@
-"""HTTP server tests."""
+"""HTTPD tests package."""
