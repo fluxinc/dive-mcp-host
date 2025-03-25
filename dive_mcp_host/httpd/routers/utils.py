@@ -3,7 +3,7 @@ import json
 import logging
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine
-from contextlib import suppress
+from contextlib import AsyncExitStack, suppress
 from typing import TYPE_CHECKING, Any, Self
 from uuid import uuid4
 
@@ -291,9 +291,6 @@ class ChatProcessor:
         history: list[BaseMessage] | None = None,
         tools: list | None = None,
     ) -> tuple[HumanMessage, AIMessage]:
-        if chat_id:
-            # TODO: abort controller
-            ...
         messages = [*history] if history else []
 
         # if retry input is empty
@@ -357,9 +354,16 @@ class ChatProcessor:
             tools=tools,
             system_prompt=prompt,
         )
-        async with conversation:
+        async with AsyncExitStack() as stack:
+            if chat_id:
+                await stack.enter_async_context(
+                    self.app.abort_controller.abort_signal(chat_id, conversation.abort)
+                )
+            await stack.enter_async_context(conversation)
             response = conversation.query(messages, stream_mode=["messages", "values"])
             return await self._handle_response(response)
+
+        raise RuntimeError("Unreachable")
 
     async def _handle_response(  # noqa: C901, PLR0912
         self, response: AsyncIterator[dict[str, Any] | Any]

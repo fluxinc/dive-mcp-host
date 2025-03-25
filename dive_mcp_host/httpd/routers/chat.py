@@ -222,14 +222,22 @@ async def delete_chat(
 
 
 @chat.post("/{chat_id}/abort")
-async def abort_chat(_request: Request, _chat_id: str) -> ResultResponse:
+async def abort_chat(
+    chat_id: str,
+    app: DiveHostAPI = Depends(get_app),
+) -> ResultResponse:
     """Abort an ongoing chat operation.
 
     Args:
-        request (Request): The request object.
         chat_id (str): The ID of the chat to abort.
+        app (DiveHostAPI): The DiveHostAPI instance.
 
     Returns:
         ResultResponse: Result of the abort operation.
     """
+    abort_controller = app.abort_controller
+    ok = await abort_controller.abort(chat_id)
+    if not ok:
+        raise UserInputError("Chat not found")
+
     return ResultResponse(success=True, message="Chat abort signal sent successfully")
