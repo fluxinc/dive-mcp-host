@@ -1,9 +1,10 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import FastAPI, status
+from fastapi import status
 from fastapi.testclient import TestClient
 
+from dive_mcp_host.httpd.app import DiveHostAPI
 from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.routers.models import SimpleToolInfo
 from dive_mcp_host.httpd.routers.tools import McpTool, ToolsResult, tools
@@ -42,8 +43,10 @@ class MockDiveHostAPI:
 @pytest.fixture
 def client():
     """Create a test client."""
-    # Create a mock API instance
-    mock_api = MockDiveHostAPI(
+    app = DiveHostAPI()
+    app.include_router(tools, prefix="/api/tools")
+
+    mock_app = MockDiveHostAPI(
         mcp_server_config=MagicMock(),
         server_info={
             "test_server": MockServerInfo(
@@ -52,12 +55,10 @@ def client():
         },
     )
 
-    # Create FastAPI application
-    app = FastAPI()
-    app.include_router(tools, prefix="/api/tools")
+    def get_mock_app():
+        return mock_app
 
-    # Override get_app dependency
-    app.dependency_overrides[get_app] = lambda: mock_api
+    app.dependency_overrides[get_app] = get_mock_app
 
     with TestClient(app) as client:
         yield client

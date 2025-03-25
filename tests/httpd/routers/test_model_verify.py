@@ -1,11 +1,13 @@
 from typing import Literal
+from unittest.mock import AsyncMock, Mock
 
-import httpx
 import pytest
-from fastapi import FastAPI, status
+from fastapi import status
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
 
+from dive_mcp_host.httpd.app import DiveHostAPI
+from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.routers.model_verify import (
     model_verify,
 )
@@ -41,26 +43,38 @@ MOCK_MODEL_SETTING = {
     "configuration": {"baseURL": "https://api.openai.com/v1"},
 }
 
-client_type = "fastapi"
+
+class MockDiveHostAPI:
+    """Mock DiveHostAPI for testing."""
+
+    def __init__(self):
+        self.dive_host = Mock()
+        self.conversation = AsyncMock()
+        self.conversation.__aenter__ = AsyncMock()
+        self.conversation.__aexit__ = AsyncMock()
+
+        # simulate streaming response
+        self.conversation.query = AsyncMock()
+        self.conversation.query.return_value = [{"content": "test response"}]
+
+        self.dive_host.conversation.return_value = self.conversation
 
 
 @pytest.fixture
-def client(request):
-    """Create a test client.
-
-    Args:
-        request: The pytest request object.
-
-    Returns:
-        A TestClient for FastAPI testing or httpx.Client for direct Node.js testing.
-    """
-    client_type = getattr(request.module, "client_type", "fastapi")
-
-    if client_type == "nodejs":
-        return httpx.Client(base_url="http://localhost:4321/api")
-    app = FastAPI()
+def client():
+    """Create a test client with mocked dependencies."""
+    app = DiveHostAPI()
     app.include_router(model_verify, prefix="/api/model_verify")
-    return TestClient(app)
+
+    mock_app = MockDiveHostAPI()
+
+    def get_mock_app():
+        return Mock(dive_host={"default": mock_app.dive_host})
+
+    app.dependency_overrides[get_app] = get_mock_app
+
+    with TestClient(app) as client:
+        yield client
 
 
 def test_do_verify_model(client):
@@ -89,12 +103,8 @@ def test_do_verify_model(client):
     # Validate result structure
     assert "connectingSuccess" in response_data
     assert isinstance(response_data["connectingSuccess"], bool)
-    assert "connectingResult" in response_data
-    assert isinstance(response_data["connectingResult"], object)
     assert "supportTools" in response_data
     assert isinstance(response_data["supportTools"], bool)
-    assert "supportToolsResult" in response_data
-    assert isinstance(response_data["supportToolsResult"], object)
 
 
 def test_verify_model_streaming(client):

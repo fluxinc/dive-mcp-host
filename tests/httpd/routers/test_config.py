@@ -1,9 +1,9 @@
-import httpx
 import pytest
-from fastapi import FastAPI, status
+from fastapi import status
 from fastapi.testclient import TestClient
 
 from dive_mcp_host.host.conf import LLMConfig
+from dive_mcp_host.httpd.app import DiveHostAPI
 from dive_mcp_host.httpd.routers.config import (
     SaveModelSettingsRequest,
     config,
@@ -52,25 +52,10 @@ SUCCESS_CODE = status.HTTP_200_OK
 BAD_REQUEST_CODE = status.HTTP_400_BAD_REQUEST
 TEST_PROVIDER = "openai"
 
-
-client_type = "fastapi"
-
-
 @pytest.fixture
-def client(request):
-    """Create a test client.
-
-    Args:
-        request: The pytest request object.
-
-    Returns:
-        A TestClient for FastAPI testing or httpx.Client for direct Node.js testing.
-    """
-    client_type = getattr(request.module, "client_type", "fastapi")
-
-    if client_type == "nodejs":
-        return httpx.Client(base_url="http://localhost:4321/api")
-    app = FastAPI()
+def client():
+    """Create a test client."""
+    app = DiveHostAPI()
     app.include_router(config, prefix="/api/config")
     with TestClient(app) as client:
         yield client
