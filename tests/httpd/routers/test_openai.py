@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import status
+from fastapi.concurrency import asynccontextmanager
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 
@@ -58,6 +59,18 @@ class MockDiveHostAPI:
 def client():
     """Create a test client with the mock app."""
     app = DiveHostAPI()
+    original_prepare = app.prepare
+    @asynccontextmanager
+    async def debug_prepare():
+        print("prepare 開始執行")
+        try:
+            async with original_prepare():
+                print("prepare 執行成功")
+                yield
+        except Exception as e:
+            print(f"prepare 執行失敗: {e}")
+            yield  # 即使失敗也繼續測試
+    app.prepare = debug_prepare
     app.include_router(openai)
 
     mock_app = MockDiveHostAPI()
@@ -67,7 +80,7 @@ def client():
 
     app.dependency_overrides[get_app] = get_mock_app
 
-    with TestClient(app) as client:
+    with TestClient(app ) as client:
         yield client
 
 

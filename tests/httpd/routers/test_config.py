@@ -1,8 +1,9 @@
 import pytest
-from fastapi import FastAPI, status
+from fastapi import status
 from fastapi.testclient import TestClient
 
 from dive_mcp_host.host.conf import LLMConfig
+from dive_mcp_host.httpd.app import DiveHostAPI
 from dive_mcp_host.httpd.routers.config import (
     SaveModelSettingsRequest,
     config,
@@ -54,7 +55,7 @@ TEST_PROVIDER = "openai"
 @pytest.fixture
 def client():
     """Create a test client."""
-    app = FastAPI()
+    app = DiveHostAPI()
     app.include_router(config, prefix="/api/config")
     with TestClient(app) as client:
         yield client
