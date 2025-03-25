@@ -1,4 +1,3 @@
-import asyncio
 from typing import TypeVar
 
 from fastapi import APIRouter, Depends, Request
@@ -68,7 +67,7 @@ async def get_mcp_server(
         raise ValueError("MCP server configuration not found")
 
     config = McpServers.model_validate(
-        app.mcp_server_config_manager.current_config, from_attributes=True
+        app.mcp_server_config_manager.current_config.model_dump(by_alias=True)
     )
     return ConfigResult(
         success=True,
@@ -92,16 +91,16 @@ async def post_mcp_server(
         SaveConfigResult: Result of the save operation with any errors.
     """
     # Update conifg
-    new_config = Config.model_validate(servers, from_attributes=True)
+    new_config = Config.model_validate(servers.model_dump(by_alias=True))
     if not app.mcp_server_config_manager.update_all_configs(new_config):
         raise ValueError("Failed to update MCP server configurations")
 
     # Reload host
     # TODO: mcp server reloader
-    await app.dive_host["default"].reload(
-        new_config=app.load_host_config(),
-        reloader=lambda: asyncio.sleep(0),
-    )
+    # await app.dive_host["default"].reload(
+    #     new_config=app.load_host_config(),
+    #     reloader=lambda: asyncio.sleep(0),
+    # )
 
     # Get failed MCP servers
     failed_servers: list[McpServerError] = []
@@ -161,10 +160,10 @@ async def post_model(
 
     # Reload host
     # TODO: model reloader
-    await app.dive_host["default"].reload(
-        new_config=app.load_host_config(),
-        reloader=lambda: asyncio.sleep(0),
-    )
+    # await app.dive_host["default"].reload(
+    #     new_config=app.load_host_config(),
+    #     reloader=lambda: asyncio.sleep(0),
+    # )
 
     return ResultResponse(success=True)
 
