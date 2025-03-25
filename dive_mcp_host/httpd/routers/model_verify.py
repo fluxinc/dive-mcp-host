@@ -1,12 +1,21 @@
-from typing import Any
+import asyncio
+import json
+import uuid
+from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
+from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from dive_mcp_host.host.conf import LLMConfig
 from dive_mcp_host.httpd.dependencies import get_app
+from dive_mcp_host.httpd.routers.utils import EventStreamContextManager
 from dive_mcp_host.httpd.server import DiveHostAPI
+
+if TYPE_CHECKING:
+    from dive_mcp_host.httpd.middlewares.general import DiveUser
 
 model_verify = APIRouter(tags=["model_verify"])
 
@@ -35,7 +44,8 @@ class ModelVerifyResult(BaseModel):
 
 @model_verify.post("")
 async def do_verify_model(
-    app: DiveHostAPI = Depends(get_app), _settings: LLMConfig | None = None
+    app: DiveHostAPI = Depends(get_app),
+    settings: LLMConfig | None = None,  # noqa: ARG001
 ) -> ModelVerifyResult:
     """Verify if a model supports streaming capabilities.
 
@@ -65,10 +75,95 @@ async def do_verify_model(
 
 
 @model_verify.post("/streaming")
-async def verify_model() -> None:
+async def verify_model(
+    request: Request,
+    app: DiveHostAPI = Depends(get_app),
+    settings: LLMConfig | None = None,  # noqa: ARG001
+) -> StreamingResponse:
     """Verify if a model supports streaming capabilities.
 
     Returns:
-        Not implemented yet.
+        CompletionEventStreamContextManager
     """
-    raise NotImplementedError
+    dive_host = app.dive_host["default"]
+    chat_id = str(uuid.uuid4())
+    model_name = dive_host._config.llm.model  # noqa: SLF001
+    stream = EventStreamContextManager()
+    response = stream.get_response()
+    dive_user: DiveUser = request.state.dive_user
+
+    test_tool = TestTool()
+    conversation = dive_host.conversation(
+        user_id=dive_user["user_id"] or "default",
+        tools=[test_tool],
+        volatile=True,
+    )
+
+    async def abort_handler() -> None:
+        while not await request.is_disconnected():
+            await asyncio.sleep(1)
+        conversation.abort()
+
+    async def process() -> None:
+        async with stream:
+            task = asyncio.create_task(abort_handler())
+            conversation.query("run test_tool", stream_mode=["updates"])
+            async with conversation:
+                responses = [
+                    response[1]  # type: ignore  # noqa: PGH003
+                    async for response in conversation.query(
+                        "run test_tool", stream_mode=["updates"]
+                    )
+                ]
+
+            tool_response: ToolMessage | None = None
+            ai_response: AIMessage | None = None
+            for response in responses[::-1]:
+                if isinstance(response, ToolMessage):
+                    tool_response = response
+                elif isinstance(response, AIMessage):
+                    ai_response = response
+
+            await stream.write(
+                json.dumps(
+                    {
+                        "type": "progress",
+                        "step": 1,
+                        "modelName": model_name,
+                        "testType": "tools",
+                        "status": "success" if test_tool.called else "error",
+                        "error": None,
+                    }
+                )
+            )
+            await stream.write(
+                json.dumps(
+                    {
+                        "type": "final",
+                        "results": [
+                            {
+                                "modelName": model_name,
+                                "connection": {
+                                    "status": "success",
+                                    "result": ai_response.content
+                                    if ai_response
+                                    else None,
+                                },
+                                "tools": {
+                                    "status": "success"
+                                    if test_tool.called
+                                    else "error",
+                                    "result": tool_response.content
+                                    if tool_response
+                                    else None,
+                                },
+                            }
+                        ],
+                    }
+                )
+            )
+
+            task.cancel()
+
+    stream.add_task(process)
+    return response
