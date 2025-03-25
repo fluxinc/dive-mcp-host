@@ -34,16 +34,7 @@ MOCK_MODEL_CONFIG = ModelConfig(
             topP=0.9,
             maxTokens=4000,
             configuration=None,
-        ),
-        "anthropic": LLMConfig(
-            model="claude-3-opus-20240229",
-            modelProvider="anthropic",
-            apiKey="sk-ant-mock-key",
-            temperature=0.5,
-            topP=0.8,
-            maxTokens=4000,
-            configuration=None,
-        ),
+        )
     },
 )
 
@@ -51,6 +42,7 @@ MOCK_MODEL_CONFIG = ModelConfig(
 SUCCESS_CODE = status.HTTP_200_OK
 BAD_REQUEST_CODE = status.HTTP_400_BAD_REQUEST
 TEST_PROVIDER = "openai"
+
 
 @pytest.fixture
 def client():
@@ -92,11 +84,12 @@ def test_get_mcp_server(client):
     server_keys = list(server_data.keys())
     assert len(server_keys) > 0
     default_server = server_data[server_keys[0]]
-    assert "transport" in default_server
-    assert "enabled" in default_server
-    assert "command" in default_server
-    assert "args" in default_server
-    assert "env" in default_server
+    assert default_server["transport"] == "command"
+    assert default_server["enabled"] is True
+    assert default_server["command"] == "./mcp-server.js"
+    assert default_server["args"] == ["./mcp-server.js"]
+    assert default_server["env"] == {"NODE_ENV": "production"}
+    assert default_server["url"] is None
 
 
 def test_post_mcp_server(client):
@@ -145,19 +138,20 @@ def test_get_model(client):
 
     # Validate model configuration structure
     config_data = response_data["config"]
-    assert "activeProvider" in config_data
-    assert "enableTools" in config_data
+    assert config_data["activeProvider"] == "openai"
+    assert config_data["enableTools"] is True
     assert "configs" in config_data
     assert isinstance(config_data["configs"], dict)
 
-    # Validate provider configurations
     provider_configs = config_data["configs"]
-    for provider in provider_configs:
-        provider_config = provider_configs[provider]
-        assert "model" in provider_config
-        assert "modelProvider" in provider_config
-        assert "temperature" in provider_config
-
+    assert "openai" in provider_configs
+    openai_config = provider_configs["openai"]
+    assert openai_config["model"] == "gpt-4"
+    assert openai_config["modelProvider"] == "openai"
+    assert openai_config["temperature"] == 0.7
+    assert openai_config["topP"] == 0.9
+    assert openai_config["maxTokens"] == 4000
+    assert openai_config["configuration"] is None
 
 def test_post_model(client):
     """Test the /api/config/model POST endpoint."""

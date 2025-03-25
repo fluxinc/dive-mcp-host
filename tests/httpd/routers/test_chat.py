@@ -1,5 +1,7 @@
 import asyncio
 import io
+import json
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from unittest import mock
@@ -197,6 +199,7 @@ class MockDiveHostAPI:
         """Return the database mock."""
         return self.db
 
+
 @pytest.fixture
 def client():
     """Create a test client."""
@@ -365,11 +368,41 @@ def test_delete_chat(client):
 def test_create_chat(client, monkeypatch):
     """Test the /api/chat POST endpoint."""
 
-    # Mock EventStreamContextManager.get_response to return a valid StreamingResponse
+    # Mock EventStreamContextManager.get_response to return a custom StreamingResponse
     def mock_response(*args, **kwargs):
-        from fastapi.responses import JSONResponse
-
-        return JSONResponse(content={"success": True})
+        # Return a streaming response with specific test content
+        return StreamingResponse(
+            content=iter(
+                [
+                    (
+                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
+                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
+                        '\\"title\\":\\"New Chat\\"}}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"text\\",'
+                        '\\"content\\":\\"\\"}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"text\\",'
+                        '\\"content\\":\\"Test response\\"}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"message_info\\",'
+                        '\\"content\\":{\\"userMessageId\\":\\"test-user-msg\\",'
+                        '\\"assistantMessageId\\":\\"test-ai-msg\\"}}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
+                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
+                        '\\"title\\":\\"New Chat\\"}}"}\n\n'
+                    ),
+                    "data: [Done]\n\n",
+                ]
+            ),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
 
     monkeypatch.setattr(EventStreamContextManager, "get_response", mock_response)
     monkeypatch.setattr(
@@ -378,10 +411,7 @@ def test_create_chat(client, monkeypatch):
         lambda *_args, **_kwargs: None,
     )
 
-    # Mock file upload
     test_file = io.BytesIO(b"test file content")
-
-    # Send request
     response = client.post(
         "/api/chat",
         data={
@@ -392,18 +422,79 @@ def test_create_chat(client, monkeypatch):
         files={"files": ("test.txt", test_file, "text/plain")},
     )
 
-    # Only check HTTP status code
     assert response.status_code == SUCCESS_CODE
+    assert "text/event-stream" in response.headers["Content-Type"]
+
+    content = response.text
+
+    # assert the basic format
+    assert "data: " in content
+    assert "data: [Done]\n\n" in content
+
+    # extract and parse the JSON data
+    data_messages = re.findall(r"data: (.*?)\n\n", content)
+    for data in data_messages:
+        if data != "[Done]":
+            # parse the outer JSON
+            json_obj = json.loads(data)
+            assert "message" in json_obj
+
+            # parse the inner JSON string
+            if json_obj["message"]:
+                inner_json = json.loads(json_obj["message"])
+                assert "type" in inner_json
+                assert "content" in inner_json
+
+                # assert the specific type of message
+                if inner_json["type"] == "chat_info":
+                    assert "id" in inner_json["content"]
+                    assert "title" in inner_json["content"]
+                    assert inner_json["content"]["id"] == "test-chat-id"
+                elif inner_json["type"] == "message_info":
+                    assert "userMessageId" in inner_json["content"]
+                    assert "assistantMessageId" in inner_json["content"]
+                    assert inner_json["content"]["userMessageId"] == "test-user-msg"
+                    assert inner_json["content"]["assistantMessageId"] == "test-ai-msg"
 
 
 def test_edit_chat(client, monkeypatch):
     """Test the /api/chat/edit endpoint."""
 
-    # Mock EventStreamContextManager.get_response to return a valid StreamingResponse
+    # Mock EventStreamContextManager.get_response to return a custom StreamingResponse
     def mock_response(*args, **kwargs):
-        from fastapi.responses import JSONResponse
-
-        return JSONResponse(content={"success": True})
+        # Return a streaming response with specific test content
+        return StreamingResponse(
+            content=iter(
+                [
+                    (
+                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
+                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
+                        '\\"title\\":\\"Test Chat\\"}}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"text\\",'
+                        '\\"content\\":\\"\\"}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"text\\",'
+                        '\\"content\\":\\"Edited response\\"}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"message_info\\",'
+                        '\\"content\\":{\\"userMessageId\\":\\"test-user-msg\\",'
+                        '\\"assistantMessageId\\":\\"test-ai-msg\\"}}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
+                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
+                        '\\"title\\":\\"Test Chat\\"}}"}\n\n'
+                    ),
+                    "data: [Done]\n\n",
+                ]
+            ),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
 
     monkeypatch.setattr(EventStreamContextManager, "get_response", mock_response)
     monkeypatch.setattr(
@@ -412,10 +503,7 @@ def test_edit_chat(client, monkeypatch):
         lambda *_args, **_kwargs: None,
     )
 
-    # Mock file upload
     test_file = io.BytesIO(b"test file content")
-
-    # Send request
     response = client.post(
         "/api/chat/edit",
         data={
@@ -427,8 +515,39 @@ def test_edit_chat(client, monkeypatch):
         files={"files": ("test_edit.txt", test_file, "text/plain")},
     )
 
-    # Only check HTTP status code
     assert response.status_code == SUCCESS_CODE
+    assert "text/event-stream" in response.headers["Content-Type"]
+
+    content = response.text
+
+    # assert the basic format
+    assert "data: " in content
+    assert "data: [Done]\n\n" in content
+
+    # extract and parse the JSON data
+    data_messages = re.findall(r"data: (.*?)\n\n", content)
+    for data in data_messages:
+        if data != "[Done]":
+            # parse the outer JSON
+            json_obj = json.loads(data)
+            assert "message" in json_obj
+
+            # parse the inner JSON string
+            if json_obj["message"]:
+                inner_json = json.loads(json_obj["message"])
+                assert "type" in inner_json
+                assert "content" in inner_json
+
+                # assert the specific type of message
+                if inner_json["type"] == "chat_info":
+                    assert "id" in inner_json["content"]
+                    assert "title" in inner_json["content"]
+                    assert inner_json["content"]["id"] == "test-chat-id"
+                elif inner_json["type"] == "message_info":
+                    assert "userMessageId" in inner_json["content"]
+                    assert "assistantMessageId" in inner_json["content"]
+                    assert inner_json["content"]["userMessageId"] == "test-user-msg"
+                    assert inner_json["content"]["assistantMessageId"] == "test-ai-msg"
 
 
 def test_edit_chat_missing_params(client):
@@ -440,19 +559,47 @@ def test_edit_chat_missing_params(client):
                 "content": "edited message",
             },
         )
-
-    # Verify the exception message
     assert "Chat ID and Message ID are required" in str(excinfo.value)
 
 
 def test_retry_chat(client, monkeypatch):
     """Test the /api/chat/retry endpoint."""
 
-    # Mock EventStreamContextManager.get_response to return a valid StreamingResponse
+    # Mock EventStreamContextManager.get_response to return a custom StreamingResponse
     def mock_response(*args, **kwargs):
-        from fastapi.responses import JSONResponse
-
-        return JSONResponse(content={"success": True})
+        # Return a streaming response with specific test content
+        return StreamingResponse(
+            content=iter(
+                [
+                    (
+                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
+                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
+                        '\\"title\\":\\"Test Chat\\"}}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"text\\",'
+                        '\\"content\\":\\"\\"}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"text\\",'
+                        '\\"content\\":\\"Retry response\\"}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"message_info\\",'
+                        '\\"content\\":{\\"userMessageId\\":\\"test-user-msg\\",'
+                        '\\"assistantMessageId\\":\\"test-ai-msg\\"}}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
+                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
+                        '\\"title\\":\\"Test Chat\\"}}"}\n\n'
+                    ),
+                    "data: [Done]\n\n",
+                ]
+            ),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
 
     monkeypatch.setattr(EventStreamContextManager, "get_response", mock_response)
     monkeypatch.setattr(
@@ -461,7 +608,6 @@ def test_retry_chat(client, monkeypatch):
         lambda *_args, **_kwargs: None,
     )
 
-    # Send request
     response = client.post(
         "/api/chat/retry",
         data={
@@ -470,8 +616,39 @@ def test_retry_chat(client, monkeypatch):
         },
     )
 
-    # Only check HTTP status code
     assert response.status_code == SUCCESS_CODE
+    assert "text/event-stream" in response.headers["Content-Type"]
+
+    content = response.text
+
+    # assert the basic format
+    assert "data: " in content
+    assert "data: [Done]\n\n" in content
+
+    # extract and parse the JSON data
+    data_messages = re.findall(r"data: (.*?)\n\n", content)
+    for data in data_messages:
+        if data != "[Done]":
+            # parse the outer JSON
+            json_obj = json.loads(data)
+            assert "message" in json_obj
+
+            # parse the inner JSON string
+            if json_obj["message"]:
+                inner_json = json.loads(json_obj["message"])
+                assert "type" in inner_json
+                assert "content" in inner_json
+
+                # assert the specific type of message
+                if inner_json["type"] == "chat_info":
+                    assert "id" in inner_json["content"]
+                    assert "title" in inner_json["content"]
+                    assert inner_json["content"]["id"] == "test-chat-id"
+                elif inner_json["type"] == "message_info":
+                    assert "userMessageId" in inner_json["content"]
+                    assert "assistantMessageId" in inner_json["content"]
+                    assert inner_json["content"]["userMessageId"] == "test-user-msg"
+                    assert inner_json["content"]["assistantMessageId"] == "test-ai-msg"
 
 
 def test_retry_chat_missing_params(client):
