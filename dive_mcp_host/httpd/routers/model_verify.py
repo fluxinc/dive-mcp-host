@@ -94,6 +94,7 @@ async def verify_model(
 
     test_tool = TestTool()
     conversation = dive_host.conversation(
+        thread_id=chat_id,
         user_id=dive_user["user_id"] or "default",
         tools=[test_tool],
         volatile=True,
