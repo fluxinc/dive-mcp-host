@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from dive_mcp_host.host.conf import HostConfig, ServerConfig
 from dive_mcp_host.host.host import DiveMcpHost
+from dive_mcp_host.httpd.abort_controller import AbortController
 from dive_mcp_host.httpd.conf.mcpserver.manager import MCPServerManager
 from dive_mcp_host.httpd.conf.model.manager import ModelManager
 from dive_mcp_host.httpd.conf.prompts.manager import PromptManager
@@ -57,6 +58,8 @@ class DiveHostAPI(FastAPI):
         self._prompt_config_manager = PromptManager(
             self._service_config_manager.current_setting.config_location.prompt_config_path
         )
+
+        self._abort_controller = AbortController()
 
     @asynccontextmanager
     async def prepare(self) -> AsyncGenerator[None, None]:
@@ -188,3 +191,8 @@ class DiveHostAPI(FastAPI):
     def prompt_config_manager(self) -> PromptManager:
         """Get the prompt config manager."""
         return self._prompt_config_manager
+
+    @property
+    def abort_controller(self) -> AbortController:
+        """Get the abort controller."""
+        return self._abort_controller

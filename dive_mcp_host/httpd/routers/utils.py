@@ -1,8 +1,9 @@
 import asyncio
 import json
 import logging
+import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine
-from contextlib import suppress
+from contextlib import AsyncExitStack, suppress
 from typing import TYPE_CHECKING, Any, Self
 from uuid import uuid4
 
@@ -167,10 +168,12 @@ class ChatProcessor:
             )
         )
 
+        start = time.time()
         user_message, ai_message = await self._process_chat(chat_id, query_input)
+        end = time.time()
+        duration = ai_message.response_metadata.get("total_duration")
         assert user_message.id
         assert ai_message.id
-        assert ai_message.usage_metadata
         result = str(ai_message.content)
 
         if title_await:
@@ -205,11 +208,18 @@ class ChatProcessor:
                     messageId=ai_message.id,
                     content=result,
                     resource_usage=ResourceUsage(
-                        model=ai_message.response_metadata["model"],
-                        total_input_tokens=ai_message.usage_metadata["input_tokens"],
-                        total_output_tokens=ai_message.usage_metadata["output_tokens"],
-                        total_run_time=ai_message.response_metadata["total_duration"]
-                        / (10**9),
+                        model=ai_message.response_metadata.get("model")
+                        or ai_message.response_metadata.get("model_name")
+                        or "",
+                        total_input_tokens=ai_message.usage_metadata["input_tokens"]
+                        if ai_message.usage_metadata
+                        else 0,
+                        total_output_tokens=ai_message.usage_metadata["output_tokens"]
+                        if ai_message.usage_metadata
+                        else 0,
+                        total_run_time=(
+                            duration / (10**9) if duration else int(end - start)
+                        ),
                     ),
                 ),
             )
@@ -234,9 +244,15 @@ class ChatProcessor:
         )
 
         token_usage = TokenUsage(
-            totalInputTokens=ai_message.usage_metadata["input_tokens"],
-            totalOutputTokens=ai_message.usage_metadata["output_tokens"],
-            totalTokens=ai_message.usage_metadata["total_tokens"],
+            totalInputTokens=ai_message.usage_metadata["input_tokens"]
+            if ai_message.usage_metadata
+            else 0,
+            totalOutputTokens=ai_message.usage_metadata["output_tokens"]
+            if ai_message.usage_metadata
+            else 0,
+            totalTokens=ai_message.usage_metadata["total_tokens"]
+            if ai_message.usage_metadata
+            else 0,
         )
 
         return result, token_usage
@@ -275,9 +291,6 @@ class ChatProcessor:
         history: list[BaseMessage] | None = None,
         tools: list | None = None,
     ) -> tuple[HumanMessage, AIMessage]:
-        if chat_id:
-            # TODO: abort controller
-            ...
         messages = [*history] if history else []
 
         # if retry input is empty
@@ -341,15 +354,23 @@ class ChatProcessor:
             tools=tools,
             system_prompt=prompt,
         )
-        async with conversation:
+        async with AsyncExitStack() as stack:
+            if chat_id:
+                await stack.enter_async_context(
+                    self.app.abort_controller.abort_signal(chat_id, conversation.abort)
+                )
+            await stack.enter_async_context(conversation)
             response = conversation.query(messages, stream_mode=["messages", "values"])
             return await self._handle_response(response)
 
-    async def _handle_response(
+        raise RuntimeError("Unreachable")
+
+    async def _handle_response(  # noqa: C901, PLR0912
         self, response: AsyncIterator[dict[str, Any] | Any]
     ) -> tuple[HumanMessage | Any, AIMessage | Any]:
         user_message = None
         ai_message = None
+        latest_messages = []
 
         async for res_type, res_content in response:
             event_type = None
@@ -382,13 +403,20 @@ class ChatProcessor:
                     # idk what is this
                     logger.warning("Unknown message type: %s", message)
             elif res_type == "values" and len(res_content["messages"]) >= 2:  # type: ignore[index]  # noqa: PLR2004
-                user_message, ai_message = res_content["messages"][-2:]  # type: ignore[index]
+                latest_messages = res_content["messages"]  # type: ignore  # noqa: PGH003
             else:
                 pass
 
             if event_type and content:
                 await self.stream.write(StreamMessage(type=event_type, content=content))
 
+        for message in latest_messages[::-1]:
+            if user_message and ai_message:
+                break
+            if isinstance(message, HumanMessage):
+                user_message = message
+            elif isinstance(message, AIMessage):
+                ai_message = message
         return user_message, ai_message
 
     async def _generate_title(self, query: str) -> str:
