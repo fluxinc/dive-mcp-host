@@ -67,7 +67,7 @@ def client():
 
     app.dependency_overrides[get_app] = get_mock_app
 
-    with TestClient(app ) as client:
+    with TestClient(app) as client:
         yield client
 
 
@@ -155,7 +155,6 @@ def test_chat_completions_with_system_message(mock_chat_processor, client):
     )
     mock_chat_processor.return_value = processor_instance
 
-    # Prepare test data
     test_data = {
         "messages": [
             {"role": "system", "content": "You are a helpful assistant."},
@@ -165,27 +164,30 @@ def test_chat_completions_with_system_message(mock_chat_processor, client):
         "tool_choice": "auto",
     }
 
-    # Send request
     response = client.post("/chat/completions", json=test_data)
 
-    # Verify response status code
     assert response.status_code == status.HTTP_200_OK
 
-    # Parse JSON response
     response_data = response.json()
-
-    # Verify processor was called
     mock_chat_processor.assert_called_once()
 
-    # Validate response structure
     assert "id" in response_data
+    assert response_data["id"].startswith("chatcmpl-")
+    assert response_data["object"] == "chat.completion"
+    assert response_data["model"] == "test-model"
     assert "choices" in response_data
+    assert len(response_data["choices"]) == 1
+    assert response_data["choices"][0]["index"] == 0
+    assert response_data["choices"][0]["message"]["role"] == "assistant"
     assert (
         response_data["choices"][0]["message"]["content"] == "This is a test response"
     )
+    assert response_data["choices"][0]["finish_reason"] == "stop"
+    assert "usage" in response_data
     assert response_data["usage"]["prompt_tokens"] == 10
     assert response_data["usage"]["completion_tokens"] == 20
     assert response_data["usage"]["total_tokens"] == 30
+    assert response_data["system_fingerprint"] == "fp_dive"
 
 
 @patch("dive_mcp_host.httpd.routers.openai.ChatProcessor")
@@ -208,27 +210,30 @@ def test_chat_completions_without_system_message(mock_chat_processor, client):
         "tool_choice": "auto",
     }
 
-    # Send request
     response = client.post("/chat/completions", json=test_data)
 
-    # Verify response status code
     assert response.status_code == status.HTTP_200_OK
 
-    # Verify processor was called
     mock_chat_processor.assert_called_once()
-
-    # Parse JSON response
     response_data = response.json()
 
-    # Validate response structure
     assert "id" in response_data
+    assert response_data["id"].startswith("chatcmpl-")
+    assert response_data["object"] == "chat.completion"
+    assert response_data["model"] == "test-model"
     assert "choices" in response_data
+    assert len(response_data["choices"]) == 1
+    assert response_data["choices"][0]["index"] == 0
+    assert response_data["choices"][0]["message"]["role"] == "assistant"
     assert (
         response_data["choices"][0]["message"]["content"] == "This is a test response"
     )
+    assert response_data["choices"][0]["finish_reason"] == "stop"
+    assert "usage" in response_data
     assert response_data["usage"]["prompt_tokens"] == 10
     assert response_data["usage"]["completion_tokens"] == 20
     assert response_data["usage"]["total_tokens"] == 30
+    assert response_data["system_fingerprint"] == "fp_dive"
 
 
 @patch("dive_mcp_host.httpd.routers.openai.ChatProcessor")
@@ -254,27 +259,30 @@ def test_chat_completions_with_assistant_message(mock_chat_processor, client):
         "tool_choice": "auto",
     }
 
-    # Send request
     response = client.post("/chat/completions", json=test_data)
 
-    # Verify response status code
     assert response.status_code == status.HTTP_200_OK
 
-    # Verify processor was called
     mock_chat_processor.assert_called_once()
-
-    # Parse JSON response
     response_data = response.json()
 
-    # Validate response structure
     assert "id" in response_data
+    assert response_data["id"].startswith("chatcmpl-")
+    assert response_data["object"] == "chat.completion"
+    assert response_data["model"] == "test-model"
     assert "choices" in response_data
+    assert len(response_data["choices"]) == 1
+    assert response_data["choices"][0]["index"] == 0
+    assert response_data["choices"][0]["message"]["role"] == "assistant"
     assert (
         response_data["choices"][0]["message"]["content"] == "This is a test response"
     )
+    assert response_data["choices"][0]["finish_reason"] == "stop"
+    assert "usage" in response_data
     assert response_data["usage"]["prompt_tokens"] == 15
     assert response_data["usage"]["completion_tokens"] == 25
     assert response_data["usage"]["total_tokens"] == 40
+    assert response_data["system_fingerprint"] == "fp_dive"
 
 
 @patch("dive_mcp_host.httpd.routers.openai.ChatProcessor")
@@ -297,27 +305,30 @@ def test_chat_completions_with_tool_choice_none(mock_chat_processor, client):
         "tool_choice": "none",
     }
 
-    # Send request
     response = client.post("/chat/completions", json=test_data)
 
-    # Verify response status code
     assert response.status_code == status.HTTP_200_OK
 
-    # Verify processor was called
     mock_chat_processor.assert_called_once()
-
-    # Parse JSON response
     response_data = response.json()
 
-    # Validate response structure
     assert "id" in response_data
+    assert response_data["id"].startswith("chatcmpl-")
+    assert response_data["object"] == "chat.completion"
+    assert response_data["model"] == "test-model"
     assert "choices" in response_data
+    assert len(response_data["choices"]) == 1
+    assert response_data["choices"][0]["index"] == 0
+    assert response_data["choices"][0]["message"]["role"] == "assistant"
     assert (
         response_data["choices"][0]["message"]["content"] == "This is a test response"
     )
+    assert response_data["choices"][0]["finish_reason"] == "stop"
+    assert "usage" in response_data
     assert response_data["usage"]["prompt_tokens"] == 10
     assert response_data["usage"]["completion_tokens"] == 20
     assert response_data["usage"]["total_tokens"] == 30
+    assert response_data["system_fingerprint"] == "fp_dive"
 
 
 @patch("dive_mcp_host.httpd.routers.openai.ChatProcessor")
@@ -335,7 +346,16 @@ def test_chat_completions_streaming(mock_chat_processor, client, mock_event_stre
     mock_event_stream.get_response.return_value = StreamingResponse(
         content=iter(
             [
-                'data: {"choices":[{"delta":{"content":"Test response"}}]}\n\n',
+                (
+                    'data: {"id":"chatcmpl-test","object":"chat.completion.chunk",'
+                    '"model":"test-model","choices":[{"index":0,"delta":'
+                    '{"content":"Test response"},"finish_reason":null}]}\n\n'
+                ),
+                (
+                    'data: {"id":"chatcmpl-test","object":"chat.completion.chunk",'
+                    '"model":"test-model","choices":[{"index":0,"delta":{},'
+                    '"finish_reason":"stop"}]}\n\n'
+                ),
                 "data: [Done]\n\n",
             ]
         ),
@@ -343,7 +363,6 @@ def test_chat_completions_streaming(mock_chat_processor, client, mock_event_stre
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
-    # Prepare test data
     test_data = {
         "messages": [
             {"role": "user", "content": "Hello, how are you?"},
@@ -352,21 +371,20 @@ def test_chat_completions_streaming(mock_chat_processor, client, mock_event_stre
         "tool_choice": "auto",
     }
 
-    # Send request
     response = client.post("/chat/completions", json=test_data)
 
-    # Verify response status code
     assert response.status_code == status.HTTP_200_OK
-
-    # Verify response headers
     assert "text/event-stream" in response.headers["Content-Type"]
 
-    # Verify add_task method was called
     mock_event_stream.add_task.assert_called_once()
+    content = response.text
 
-    # Read and verify stream data
-    content = response.content
-    assert b"data: " in content
+    assert "data: " in content
+    assert "chat.completion.chunk" in content
+    assert "test-model" in content
+    assert "Test response" in content
+    assert "finish_reason" in content
+    assert "data: [Done]\n\n" in content
 
 
 @pytest.mark.asyncio
@@ -409,13 +427,9 @@ def test_chat_completions_invalid_request(client):
 
 def test_openai_model_serialization():
     """Test that OpenaiModel can be properly serialized."""
-    # Create a sample model
     model = OpenaiModel(id="test-model", type="model", owned_by="test-provider")
-
-    # Convert to dict
     model_dict = model.model_dump()
 
-    # Validate structure
     assert "id" in model_dict
     assert isinstance(model_dict["id"], str)
     assert "type" in model_dict

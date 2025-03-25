@@ -365,11 +365,31 @@ def test_delete_chat(client):
 def test_create_chat(client, monkeypatch):
     """Test the /api/chat POST endpoint."""
 
-    # Mock EventStreamContextManager.get_response to return a valid StreamingResponse
+    # Mock EventStreamContextManager.get_response to return a custom StreamingResponse
     def mock_response(*args, **kwargs):
-        from fastapi.responses import JSONResponse
-
-        return JSONResponse(content={"success": True})
+        # Return a streaming response with specific test content
+        return StreamingResponse(
+            content=iter(
+                [
+                    (
+                        'data: {"type":"chat_info",'
+                        '"content":{"id":"test-chat-id","title":"New Chat"}}\n\n'
+                    ),
+                    (
+                        'data: {"type":"message_info",'
+                        '"content":{"userMessageId":"test-user-msg",'
+                        '"assistantMessageId":"test-ai-msg"}}\n\n'
+                    ),
+                    (
+                        'data: {"type":"chat_info",'
+                        '"content":{"id":"test-chat-id","title":"New Chat"}}\n\n'
+                    ),
+                    "data: [Done]\n\n",
+                ]
+            ),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
 
     monkeypatch.setattr(EventStreamContextManager, "get_response", mock_response)
     monkeypatch.setattr(
@@ -378,10 +398,7 @@ def test_create_chat(client, monkeypatch):
         lambda *_args, **_kwargs: None,
     )
 
-    # Mock file upload
     test_file = io.BytesIO(b"test file content")
-
-    # Send request
     response = client.post(
         "/api/chat",
         data={
@@ -392,18 +409,48 @@ def test_create_chat(client, monkeypatch):
         files={"files": ("test.txt", test_file, "text/plain")},
     )
 
-    # Only check HTTP status code
     assert response.status_code == SUCCESS_CODE
+    assert "text/event-stream" in response.headers["Content-Type"]
+
+    content = response.text
+
+    assert "data: " in content
+    assert "chat_info" in content
+    assert "message_info" in content
+    assert "test-chat-id" in content
+    assert "test-user-msg" in content
+    assert "test-ai-msg" in content
+    assert "data: [Done]\n\n" in content
 
 
 def test_edit_chat(client, monkeypatch):
     """Test the /api/chat/edit endpoint."""
 
-    # Mock EventStreamContextManager.get_response to return a valid StreamingResponse
+    # Mock EventStreamContextManager.get_response to return a custom StreamingResponse
     def mock_response(*args, **kwargs):
-        from fastapi.responses import JSONResponse
-
-        return JSONResponse(content={"success": True})
+        # Return a streaming response with specific test content
+        return StreamingResponse(
+            content=iter(
+                [
+                    (
+                        'data: {"type":"chat_info",'
+                        '"content":{"id":"test-chat-id","title":"Test Chat"}}\n\n'
+                    ),
+                    (
+                        'data: {"type":"message_info",'
+                        '"content":{"userMessageId":"test-user-msg",'
+                        '"assistantMessageId":"test-ai-msg"}}\n\n'
+                    ),
+                    (
+                        'data: {"type":"chat_info",'
+                        '"content":{"id":"test-chat-id","title":"Test Chat"}}\n\n'
+                    ),
+                    "data: [Done]\n\n",
+                ]
+            ),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
 
     monkeypatch.setattr(EventStreamContextManager, "get_response", mock_response)
     monkeypatch.setattr(
@@ -412,10 +459,7 @@ def test_edit_chat(client, monkeypatch):
         lambda *_args, **_kwargs: None,
     )
 
-    # Mock file upload
     test_file = io.BytesIO(b"test file content")
-
-    # Send request
     response = client.post(
         "/api/chat/edit",
         data={
@@ -427,8 +471,18 @@ def test_edit_chat(client, monkeypatch):
         files={"files": ("test_edit.txt", test_file, "text/plain")},
     )
 
-    # Only check HTTP status code
     assert response.status_code == SUCCESS_CODE
+    assert "text/event-stream" in response.headers["Content-Type"]
+
+    content = response.text
+
+    assert "data: " in content
+    assert "chat_info" in content
+    assert "message_info" in content
+    assert "test-chat-id" in content
+    assert "test-user-msg" in content
+    assert "test-ai-msg" in content
+    assert "data: [Done]\n\n" in content
 
 
 def test_edit_chat_missing_params(client):
@@ -440,19 +494,37 @@ def test_edit_chat_missing_params(client):
                 "content": "edited message",
             },
         )
-
-    # Verify the exception message
     assert "Chat ID and Message ID are required" in str(excinfo.value)
 
 
 def test_retry_chat(client, monkeypatch):
     """Test the /api/chat/retry endpoint."""
 
-    # Mock EventStreamContextManager.get_response to return a valid StreamingResponse
+    # Mock EventStreamContextManager.get_response to return a custom StreamingResponse
     def mock_response(*args, **kwargs):
-        from fastapi.responses import JSONResponse
-
-        return JSONResponse(content={"success": True})
+        # Return a streaming response with specific test content
+        return StreamingResponse(
+            content=iter(
+                [
+                    (
+                        'data: {"type":"chat_info",'
+                        '"content":{"id":"test-chat-id","title":"Test Chat"}}\n\n'
+                    ),
+                    (
+                        'data: {"type":"message_info",'
+                        '"content":{"userMessageId":"test-user-msg",'
+                        '"assistantMessageId":"test-ai-msg"}}\n\n'
+                    ),
+                    (
+                        'data: {"type":"chat_info",'
+                        '"content":{"id":"test-chat-id","title":"Test Chat"}}\n\n'
+                    ),
+                    "data: [Done]\n\n",
+                ]
+            ),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
 
     monkeypatch.setattr(EventStreamContextManager, "get_response", mock_response)
     monkeypatch.setattr(
@@ -461,7 +533,6 @@ def test_retry_chat(client, monkeypatch):
         lambda *_args, **_kwargs: None,
     )
 
-    # Send request
     response = client.post(
         "/api/chat/retry",
         data={
@@ -470,8 +541,18 @@ def test_retry_chat(client, monkeypatch):
         },
     )
 
-    # Only check HTTP status code
     assert response.status_code == SUCCESS_CODE
+    assert "text/event-stream" in response.headers["Content-Type"]
+
+    content = response.text
+
+    assert "data: " in content
+    assert "chat_info" in content
+    assert "message_info" in content
+    assert "test-chat-id" in content
+    assert "test-user-msg" in content
+    assert "test-ai-msg" in content
+    assert "data: [Done]\n\n" in content
 
 
 def test_retry_chat_missing_params(client):
