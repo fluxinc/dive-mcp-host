@@ -97,13 +97,10 @@ def test_do_verify_model(client):
     response_data = response.json()
 
     # Validate response structure
-    assert "success" in response_data
     assert response_data["success"] is True
 
     # Validate result structure
-    assert "connectingSuccess" in response_data
     assert isinstance(response_data["connectingSuccess"], bool)
-    assert "supportTools" in response_data
     assert isinstance(response_data["supportTools"], bool)
 
 
@@ -169,21 +166,19 @@ def test_model_verification_response_structure():
     response_dict = response.model_dump(by_alias=True)
 
     # Validate structure
-    assert "type" in response_dict
     assert isinstance(response_dict["type"], str)
-    assert "results" in response_dict
+    assert response_dict["type"] == "final"
     assert isinstance(response_dict["results"], list)
     assert len(response_dict["results"]) == 1
-    assert "aborted" in response_dict
     assert isinstance(response_dict["aborted"], bool)
 
     # Validate first result structure
     result = response_dict["results"][0]
-    assert "modelName" in result
     assert isinstance(result["modelName"], str)
-    assert "connectingStatus" in result
+    assert result["modelName"] == "gpt-4"
     assert isinstance(result["connectingStatus"], str)
-    assert "connectingResult" in result
-    assert "supportToolsStatus" in result
+    assert result["connectingStatus"] == "success"
+    assert result["connectingResult"] == "Test connection result"
     assert isinstance(result["supportToolsStatus"], str)
-    assert "supportToolsResult" in result
+    assert result["supportToolsStatus"] == "success"
+    assert result["supportToolsResult"] == "Test tools result"
