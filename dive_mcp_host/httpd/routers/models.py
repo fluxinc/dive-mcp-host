@@ -75,15 +75,15 @@ class ModelSettingsProperty(BaseModel):
     type: Literal["string", "number"]
     description: str
     required: bool
-    default: Any | None
-    placeholder: Any | None
+    default: Any | None = None
+    placeholder: Any | None = None
 
 
 class ModelSettingsDefinition(ModelSettingsProperty):
     """Model settings definition with nested properties."""
 
     type: Literal["string", "number", "object"]
-    properties: dict[str, ModelSettingsProperty] | None
+    properties: dict[str, ModelSettingsProperty] | None = None
 
 
 class ModelInterfaceDefinition(BaseModel):

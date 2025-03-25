@@ -52,6 +52,14 @@ class PromptManager:
         """
         return self.prompts.get(key)
 
+    def write_custom_rules(self, prompt: str) -> None:
+        """Write custom rules to file.
+
+        Args:
+            prompt: The prompt text.
+        """
+        Path(self.custom_rules_path).write_text(prompt, encoding="utf-8")
+
     def load_custom_rules(self) -> str:
         """Load custom rules from file or environment variable.
 
