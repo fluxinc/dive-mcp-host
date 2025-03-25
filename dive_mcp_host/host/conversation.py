@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Mapping
 from typing import TYPE_CHECKING, Any, Self
@@ -50,11 +51,16 @@ class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
         self._system_prompt = system_prompt
         self._agent: CompiledGraph | None = None
         self._agent_factory: AgentFactory[STATE_TYPE] = agent_factory
+        self._abort_signal: asyncio.Event = asyncio.Event()
 
     @property
     def thread_id(self) -> str:
         """The thread ID of the conversation."""
         return self._thread_id
+
+    def abort(self) -> None:
+        """Abort the conversation."""
+        self._abort_signal.set()
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
         if self._system_prompt is None:
@@ -89,17 +95,23 @@ class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
         Returns:
             An async generator of the response.
         """
-        # TODO: Theoretically the prompt and agent should be compiled once
-        # and reused for each query.
-        if self._agent is None:
-            raise RuntimeError("Graph not compiled")
-        return self._agent.astream(
-            self._agent_factory.create_initial_state(
-                query=query,
-            ),
-            stream_mode=stream_mode,
-            config=self._agent_factory.create_config(
-                user_id=self._user_id,
-                thread_id=self._thread_id,
-            ),
-        )
+
+        async def _stream_response() -> AsyncGenerator[dict[str, Any] | Any, None]:
+            if self._agent is None:
+                raise RuntimeError("Graph not compiled")
+            async for response in self._agent.astream(
+                self._agent_factory.create_initial_state(
+                    query=query,
+                ),
+                stream_mode=stream_mode,
+                config=self._agent_factory.create_config(
+                    user_id=self._user_id,
+                    thread_id=self._thread_id,
+                ),
+            ):
+                if self._abort_signal.is_set():
+                    self._abort_signal.clear()
+                    break
+                yield response
+
+        return _stream_response()

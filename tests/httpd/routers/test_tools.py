@@ -44,7 +44,7 @@ class MockDiveHostAPI:
 def client():
     """Create a test client."""
     app = DiveHostAPI()
-    app.include_router(tools, prefix="/api/tools")
+    app.include_router(tools)
 
     mock_app = MockDiveHostAPI(
         mcp_server_config=MagicMock(),
@@ -65,16 +65,12 @@ def client():
 
 
 def test_list_tools(client):
-    """Test the /api/tools GET endpoint."""
-    response = client.get("/api/tools")
-
-    # Verify response status code
+    """Test the GET endpoint."""
+    response = client.get("/")
     assert response.status_code == status.HTTP_200_OK
 
-    # Parse JSON response
     response_data = response.json()
 
-    # Validate response structure
     assert "success" in response_data
     assert isinstance(response_data["success"], bool)
     assert response_data["success"] is True
@@ -84,23 +80,25 @@ def test_list_tools(client):
     # If there are tools, check structure of first tool
     if response_data["tools"]:
         tool = response_data["tools"][0]
-        assert "name" in tool
         assert isinstance(tool["name"], str)
-        assert "description" in tool
+        assert tool["name"] == "test_server"
+
         assert isinstance(tool["description"], str)
-        assert "enabled" in tool
+
         assert isinstance(tool["enabled"], bool)
+        assert tool["enabled"] is True
+
         assert "icon" in tool
 
-        assert "tools" in tool
         assert isinstance(tool["tools"], list)
 
         if tool["tools"]:
             subtool = tool["tools"][0]
-            assert "name" in subtool
             assert isinstance(subtool["name"], str)
-            assert "description" in subtool
+            assert subtool["name"] == "test_tool"
+
             assert isinstance(subtool["description"], str)
+            assert subtool["description"] == "Test tool description"
 
 
 def test_tools_result_serialization():
@@ -121,28 +119,37 @@ def test_tools_result_serialization():
         ],
     )
 
-    # Convert to dict
     response_dict = response.model_dump(by_alias=True)
 
-    # Validate structure
-    assert "success" in response_dict
     assert isinstance(response_dict["success"], bool)
-    assert "tools" in response_dict
+    assert response_dict["success"] is True
     assert isinstance(response_dict["tools"], list)
 
-    # Validate tool structure
     if response_dict["tools"]:
         tool = response_dict["tools"][0]
-        assert "name" in tool
         assert isinstance(tool["name"], str)
-        assert "tools" in tool
+        assert tool["name"] == "test_tool"
+
         assert isinstance(tool["tools"], list)
-        assert "description" in tool
+
         assert isinstance(tool["description"], str)
-        assert "enabled" in tool
+        assert tool["description"] == "Test tool description"
+
         assert isinstance(tool["enabled"], bool)
-        assert "icon" in tool
+        assert tool["enabled"] is True
+
         assert isinstance(tool["icon"], str)
+        assert tool["icon"] == "test"
+
+        assert tool["error"] is None
+
+        if tool["tools"]:
+            subtool = tool["tools"][0]
+            assert isinstance(subtool["name"], str)
+            assert subtool["name"] == "test"
+
+            assert isinstance(subtool["description"], str)
+            assert subtool["description"] == "Test function"
 
 
 @pytest.mark.asyncio
@@ -188,15 +195,28 @@ async def test_list_tools_with_servers(mock_list_tools):
         ],
     )
 
-    # Call API endpoint test
     response = await mock_list_tools(app)
 
-    # Verify results
     assert response.success is True
     assert len(response.tools) >= 1
-    assert any(tool.name == "server1" for tool in response.tools)
 
-    # Verify mock was called
+    server1 = next((tool for tool in response.tools if tool.name == "server1"), None)
+    assert server1 is not None
+    assert server1.enabled is True
+    assert server1.description == ""
+    assert server1.icon == ""
+    assert server1.error is None
+
+    assert len(server1.tools) == 2
+
+    tool1 = next((tool for tool in server1.tools if tool.name == "tool1"), None)
+    assert tool1 is not None
+    assert tool1.description == "Tool 1 description"
+
+    tool2 = next((tool for tool in server1.tools if tool.name == "tool2"), None)
+    assert tool2 is not None
+    assert tool2.description == "Tool 2 description"
+
     mock_list_tools.assert_called_once_with(app)
 
 
@@ -257,17 +277,12 @@ async def test_list_tools_with_missing_servers(mock_list_tools):
         ],
     )
 
-    # Call API endpoint test
     response = await mock_list_tools(app)
 
-    # Verify results
     assert response.success is True
     assert len(response.tools) >= 2
-
-    # Verify server2 from cache exists
     assert any(tool.name == "server2" for tool in response.tools)
 
-    # Verify mock was called
     mock_list_tools.assert_called_once_with(app)
 
 
@@ -301,19 +316,20 @@ async def test_list_tools_with_error(mock_list_tools):
         ],
     )
 
-    # Call API endpoint test
     response = await mock_list_tools(app)
 
-    # Verify results
     assert response.success is True
-    assert len(response.tools) >= 1
+    assert len(response.tools) == 1
 
-    # Verify error server contains error message
     error_server = next((t for t in response.tools if t.name == "error_server"), None)
     assert error_server is not None
+    assert error_server.name == "error_server"
+    assert error_server.enabled is True
+    assert error_server.description == ""
+    assert error_server.icon == ""
     assert error_server.error == "Test error"
+    assert error_server.tools == []
 
-    # Verify mock was called
     mock_list_tools.assert_called_once_with(app)
 
 
@@ -393,35 +409,46 @@ async def test_list_tools_with_missing_server_not_in_cache(mock_list_tools):
         ],
     )
 
-    # Call API endpoint test
     response = await mock_list_tools(app)
 
-    # Verify results
     assert response.success is True
+    assert len(response.tools) == 2
 
-    # Verify missing server has default values
+    server1 = next((t for t in response.tools if t.name == "server1"), None)
+    assert server1 is not None
+    assert server1.enabled is True
+    assert server1.description == ""
+    assert server1.icon == ""
+    assert server1.error is None
+
+    assert len(server1.tools) == 1
+    tool1 = server1.tools[0]
+    assert tool1.name == "tool1"
+    assert tool1.description == "Tool 1 description"
+
     missing_server = next(
         (t for t in response.tools if t.name == "missing_server"), None
     )
     assert missing_server is not None
     assert missing_server.enabled is False
     assert missing_server.tools == []
+    assert missing_server.description == ""
+    assert missing_server.icon == ""
+    assert missing_server.error is None
 
-    # Verify mock was called
     mock_list_tools.assert_called_once_with(app)
 
 
 def test_empty_tools_result():
     """Test empty ToolsResult serialization."""
-    # Create empty response
     response = ToolsResult(success=True, message=None, tools=[])
-
-    # Convert to dictionary
     response_dict = response.model_dump(by_alias=True)
 
-    # Validate structure
     assert "success" in response_dict
     assert response_dict["success"] is True
     assert "tools" in response_dict
     assert isinstance(response_dict["tools"], list)
     assert len(response_dict["tools"]) == 0
+
+    assert "message" in response_dict
+    assert response_dict["message"] is None

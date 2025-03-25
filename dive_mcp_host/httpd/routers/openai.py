@@ -1,5 +1,7 @@
+import asyncio
 import time
 import uuid
+from collections.abc import AsyncGenerator
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
@@ -85,11 +87,13 @@ class CompletionEventStreamContextManager(EventStreamContextManager):
 
     chat_id: str
     model: str
+    abort_signal: asyncio.Event
 
     def __init__(self, chat_id: str, model: str) -> None:
         """Initialize the completion event stream context manager."""
         self.chat_id = chat_id
         self.model = model
+        self.abort_signal = asyncio.Event()
         super().__init__()
 
     async def write(self, data: str | StreamMessage | CompletionsResult) -> None:
@@ -111,6 +115,13 @@ class CompletionEventStreamContextManager(EventStreamContextManager):
             await super().write(data)
         elif isinstance(data, CompletionsResult):
             await super().write(data.model_dump_json())
+
+    async def _generate(self) -> AsyncGenerator[str, None]:
+        try:
+            async for chunk in super()._generate():
+                yield chunk
+        finally:
+            self.abort_signal.set()
 
 
 @openai.get("/")
@@ -179,8 +190,13 @@ async def create_chat_completion(
     model_name = dive_host._config.llm.model  # noqa: SLF001
     stream = CompletionEventStreamContextManager(chat_id, model_name)
 
+    async def abort_handler() -> None:
+        await stream.abort_signal.wait()
+        await app.abort_controller.abort(chat_id)
+
     async def process() -> tuple[CompletionsMessageResp, CompletionsUsage]:
         async with stream:
+            task = asyncio.create_task(abort_handler())
             processor = ChatProcessor(app, request.state, stream)
             result, usage = await processor.handle_chat_with_history(
                 chat_id,
@@ -203,6 +219,7 @@ async def create_chat_completion(
                     ],
                 )
             )
+            task.cancel()
 
             return (
                 CompletionsMessageResp(role="assistant", content=result),
