@@ -10,7 +10,7 @@ POSTGRES_URI_ASYNC = getenv(
 SQLITE_URI_ASYNC = getenv("SQLITE_URI_ASYNC", "sqlite+aiosqlite:///dummy.db")
 
 
-def dict_subset(superset: dict, subset: dict) -> None:
+def dict_subset(superset: dict, subset: dict) -> bool:
     """Check if subset is a subset of superset.
 
     Args:
@@ -25,7 +25,7 @@ def dict_subset(superset: dict, subset: dict) -> None:
     for key, value in subset.items():
         assert key in superset, f"{key} is not in {superset}"
         if isinstance(value, dict) and isinstance(superset[key], dict):
-            assert dict_subset(superset[key], value) is None, (
+            assert dict_subset(superset[key], value), (
                 f"{key} is not a subset of {superset[key]}"
             )
         elif isinstance(value, list) and isinstance(superset[key], list):
@@ -36,7 +36,7 @@ def dict_subset(superset: dict, subset: dict) -> None:
                 zip(value, superset[key], strict=False)
             ):
                 if isinstance(subset_item, dict) and isinstance(superset_item, dict):
-                    assert dict_subset(superset_item, subset_item) is None, (
+                    assert dict_subset(superset_item, subset_item), (
                         f"List item {i} in {key} is not a subset"
                     )
                 else:
@@ -47,3 +47,4 @@ def dict_subset(superset: dict, subset: dict) -> None:
             assert superset[key] == value, (
                 f"{key} is not equal {superset[key]} and {value}"
             )
+    return True

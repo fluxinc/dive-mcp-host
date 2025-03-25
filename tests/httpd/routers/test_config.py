@@ -129,7 +129,7 @@ def test_get_model(test_client):
 
     assert response.status_code == SUCCESS_CODE
     response_data = response.json()
-    assert helper.dict_subset(
+    helper.dict_subset(
         response_data,
         {
             "success": True,

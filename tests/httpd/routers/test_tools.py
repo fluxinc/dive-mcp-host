@@ -1,13 +1,12 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 from fastapi import status
-from fastapi.testclient import TestClient
 
-from dive_mcp_host.httpd.app import DiveHostAPI
-from dive_mcp_host.httpd.dependencies import get_app
+from dive_mcp_host.host.tools.echo import ECHO_DESCRIPTION, IGNORE_DESCRIPTION
 from dive_mcp_host.httpd.routers.models import SimpleToolInfo
-from dive_mcp_host.httpd.routers.tools import McpTool, ToolsResult, tools
+from dive_mcp_host.httpd.routers.tools import McpTool, ToolsResult
+from tests import helper
 
 
 class MockTool:
@@ -40,65 +39,83 @@ class MockDiveHostAPI:
         self.local_file_cache.set = MagicMock()
 
 
-@pytest.fixture
-def client():
-    """Create a test client."""
-    app = DiveHostAPI()
-    app.include_router(tools)
-
-    mock_app = MockDiveHostAPI(
-        mcp_server_config=MagicMock(),
-        server_info={
-            "test_server": MockServerInfo(
-                tools=[MockTool(name="test_tool", description="Test tool description")]
-            )
-        },
-    )
-
-    def get_mock_app():
-        return mock_app
-
-    app.dependency_overrides[get_app] = get_mock_app
-
-    with TestClient(app) as client:
-        yield client
-
-
-def test_list_tools(client):
+def test_list_tools_no_mock(test_client):
     """Test the GET endpoint."""
-    response = client.get("/")
+    client, _ = test_client
+    response = client.get("/api/tools")
     assert response.status_code == status.HTTP_200_OK
 
     response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "message": None,
+            "tools": [
+                {
+                    "name": "echo",
+                    "description": "",
+                    "enabled": True,
+                    "icon": "",
+                    "error": None,
+                    "tools": [
+                        {
+                            "name": "echo",
+                            "description": ECHO_DESCRIPTION,
+                        },
+                        {
+                            "name": "ignore",
+                            "description": IGNORE_DESCRIPTION,
+                        },
+                    ],
+                }
+            ],
+        },
+    )
 
-    assert "success" in response_data
-    assert isinstance(response_data["success"], bool)
-    assert response_data["success"] is True
-    assert "tools" in response_data
-    assert isinstance(response_data["tools"], list)
 
-    # If there are tools, check structure of first tool
-    if response_data["tools"]:
-        tool = response_data["tools"][0]
-        assert isinstance(tool["name"], str)
-        assert tool["name"] == "test_server"
+@patch(
+    "dive_mcp_host.httpd.server.DiveHostAPI.local_file_cache", new_callable=PropertyMock
+)
+@patch(
+    "dive_mcp_host.host.tools.ToolManager.mcp_server_info", new_callable=PropertyMock
+)
+def test_list_tools_mock_cache(
+    mock_mcp_server_info, mock_local_file_cache, test_client
+):
+    """Test the GET endpoint without cache."""
+    (client, _) = test_client
+    mock_mcp_server_info.return_value = {
+        "test_tool": MockServerInfo(
+            tools=[MockTool(name="test_tool", description="Test tool description")]
+        )
+    }
+    mocked_cache = MagicMock()
+    mocked_cache.get = MagicMock(return_value=None)
+    mock_local_file_cache.return_value = mocked_cache
+    response = client.get("/api/tools")
+    assert response.status_code == status.HTTP_200_OK
 
-        assert isinstance(tool["description"], str)
-
-        assert isinstance(tool["enabled"], bool)
-        assert tool["enabled"] is True
-
-        assert "icon" in tool
-
-        assert isinstance(tool["tools"], list)
-
-        if tool["tools"]:
-            subtool = tool["tools"][0]
-            assert isinstance(subtool["name"], str)
-            assert subtool["name"] == "test_tool"
-
-            assert isinstance(subtool["description"], str)
-            assert subtool["description"] == "Test tool description"
+    response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "message": None,
+            "tools": [
+                {
+                    "name": "test_tool",
+                    "tools": [
+                        {"name": "test_tool", "description": "Test tool description"}
+                    ],
+                    "description": "",
+                    "enabled": True,
+                    "icon": "",
+                    "error": None,
+                }
+            ],
+        },
+    )
 
 
 def test_tools_result_serialization():
@@ -121,35 +138,27 @@ def test_tools_result_serialization():
 
     response_dict = response.model_dump(by_alias=True)
 
-    assert isinstance(response_dict["success"], bool)
-    assert response_dict["success"] is True
-    assert isinstance(response_dict["tools"], list)
-
-    if response_dict["tools"]:
-        tool = response_dict["tools"][0]
-        assert isinstance(tool["name"], str)
-        assert tool["name"] == "test_tool"
-
-        assert isinstance(tool["tools"], list)
-
-        assert isinstance(tool["description"], str)
-        assert tool["description"] == "Test tool description"
-
-        assert isinstance(tool["enabled"], bool)
-        assert tool["enabled"] is True
-
-        assert isinstance(tool["icon"], str)
-        assert tool["icon"] == "test"
-
-        assert tool["error"] is None
-
-        if tool["tools"]:
-            subtool = tool["tools"][0]
-            assert isinstance(subtool["name"], str)
-            assert subtool["name"] == "test"
-
-            assert isinstance(subtool["description"], str)
-            assert subtool["description"] == "Test function"
+    helper.dict_subset(
+        response_dict,
+        {
+            "success": True,
+            "tools": [
+                {
+                    "name": "test_tool",
+                    "description": "Test tool description",
+                    "enabled": True,
+                    "icon": "test",
+                    "error": None,
+                    "tools": [
+                        {
+                            "name": "test",
+                            "description": "Test function",
+                        },
+                    ],
+                },
+            ],
+        },
+    )
 
 
 @pytest.mark.asyncio
