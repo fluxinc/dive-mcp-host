@@ -15,7 +15,6 @@ from dive_mcp_host.httpd.conf.service.manager import (
     DBConfig,
     ServiceConfig,
 )
-from dive_mcp_host.httpd.routers.config import config
 from dive_mcp_host.httpd.routers.models import ModelConfig
 
 

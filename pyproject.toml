@@ -127,6 +127,7 @@ lint.ignore = [
     "COM812",
     "B008",   # For FastAPI 'Depends' usage
     "S101",   # Need assert statements for unknown values
+    "PGH003",
 ]
 # Follow Google Style Guide
 lint.extend-select = ["I"]

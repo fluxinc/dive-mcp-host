@@ -111,7 +111,7 @@ async def verify_model(
             conversation.query("run test_tool", stream_mode=["updates"])
             async with conversation:
                 responses = [
-                    response[1]  # type: ignore  # noqa: PGH003
+                    response[1]  # type: ignore
                     async for response in conversation.query(
                         "run test_tool", stream_mode=["updates"]
                     )
