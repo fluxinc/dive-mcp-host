@@ -29,7 +29,7 @@ def create_app(config_path: str) -> DiveHostAPI:
     app.include_router(openai, prefix="/v1/openai")
     app.include_router(chat, prefix="/chat")
     app.include_router(tools, prefix="/tools")
-    app.include_router(config, prefix="/config")
+    app.include_router(config, prefix="/api/config")
     app.include_router(model_verify, prefix="/model_verify")
 
     # remote endpoints
