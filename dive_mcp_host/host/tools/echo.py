@@ -11,11 +11,15 @@ Instructions = """Echo a message."""
 
 mcp = FastMCP(name="echo", instructions=Instructions)
 
+ECHO_DESCRIPTION = """A simple echo tool to verify if the MCP server is working properly.
+It returns a characteristic response containing the input message."""
+
+IGNORE_DESCRIPTION = """Do nothing."""
+
 
 @mcp.tool(
     name="echo",
-    description="A simple echo tool to verify if the MCP server is working properly."
-    "It returns a characteristic response containing the input message.",
+    description=ECHO_DESCRIPTION,
 )
 async def echo(
     message: Annotated[str, Field(description="Message to be echoed back")],
@@ -30,7 +34,7 @@ async def echo(
     return message
 
 
-@mcp.tool(name="ignore", description="Do nothing.")
+@mcp.tool(name="ignore", description=IGNORE_DESCRIPTION)
 async def ignore(
     message: Annotated[str, Field(description="The message I should ignore.")],  # noqa: ARG001
 ) -> None:

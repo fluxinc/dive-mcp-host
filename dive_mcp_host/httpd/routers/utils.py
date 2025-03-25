@@ -402,8 +402,8 @@ class ChatProcessor:
                 else:
                     # idk what is this
                     logger.warning("Unknown message type: %s", message)
-            elif res_type == "values" and len(res_content["messages"]) >= 2:  # type: ignore[index]  # noqa: PLR2004
-                latest_messages = res_content["messages"]  # type: ignore  # noqa: PGH003
+            elif res_type == "values" and len(res_content["messages"]) >= 2:  # type: ignore  # noqa: PLR2004
+                latest_messages = res_content["messages"]  # type: ignore
             else:
                 pass
 
