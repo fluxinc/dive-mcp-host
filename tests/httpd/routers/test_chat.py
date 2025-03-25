@@ -5,10 +5,11 @@ from datetime import UTC, datetime
 from unittest import mock
 
 import pytest
-from fastapi import FastAPI, status
+from fastapi import status
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 
+from dive_mcp_host.httpd.app import DiveHostAPI
 from dive_mcp_host.httpd.database.models import Chat
 from dive_mcp_host.httpd.dependencies import get_app, get_dive_user
 from dive_mcp_host.httpd.routers.chat import chat
@@ -199,7 +200,7 @@ class MockDiveHostAPI:
 @pytest.fixture
 def client():
     """Create a test client."""
-    app = FastAPI()
+    app = DiveHostAPI()
     app.include_router(chat, prefix="/api/chat")
 
     mock_app = MockDiveHostAPI()

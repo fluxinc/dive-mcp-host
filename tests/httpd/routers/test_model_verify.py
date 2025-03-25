@@ -2,10 +2,11 @@ from typing import Literal
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from fastapi import FastAPI, status
+from fastapi import status
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
 
+from dive_mcp_host.httpd.app import DiveHostAPI
 from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.routers.model_verify import (
     model_verify,
@@ -62,7 +63,7 @@ class MockDiveHostAPI:
 @pytest.fixture
 def client():
     """Create a test client with mocked dependencies."""
-    app = FastAPI()
+    app = DiveHostAPI()
     app.include_router(model_verify, prefix="/api/model_verify")
 
     mock_app = MockDiveHostAPI()

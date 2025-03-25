@@ -1,9 +1,10 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import FastAPI, status
+from fastapi import status
 from fastapi.testclient import TestClient
 
+from dive_mcp_host.httpd.app import DiveHostAPI
 from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.routers.models import SimpleToolInfo
 from dive_mcp_host.httpd.routers.tools import McpTool, ToolsResult, tools
@@ -42,7 +43,7 @@ class MockDiveHostAPI:
 @pytest.fixture
 def client():
     """Create a test client."""
-    app = FastAPI()
+    app = DiveHostAPI()
     app.include_router(tools, prefix="/api/tools")
 
     mock_app = MockDiveHostAPI(

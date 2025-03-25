@@ -2,10 +2,11 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import FastAPI, status
+from fastapi import status
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 
+from dive_mcp_host.httpd.app import DiveHostAPI
 from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.routers.openai import (
     CompletionEventStreamContextManager,
@@ -56,7 +57,7 @@ class MockDiveHostAPI:
 @pytest.fixture
 def client():
     """Create a test client with the mock app."""
-    app = FastAPI()
+    app = DiveHostAPI()
     app.include_router(openai)
 
     mock_app = MockDiveHostAPI()
