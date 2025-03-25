@@ -1,5 +1,7 @@
 import asyncio
 import io
+import json
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from unittest import mock
@@ -197,6 +199,7 @@ class MockDiveHostAPI:
         """Return the database mock."""
         return self.db
 
+
 @pytest.fixture
 def client():
     """Create a test client."""
@@ -372,17 +375,27 @@ def test_create_chat(client, monkeypatch):
             content=iter(
                 [
                     (
-                        'data: {"type":"chat_info",'
-                        '"content":{"id":"test-chat-id","title":"New Chat"}}\n\n'
+                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
+                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
+                        '\\"title\\":\\"New Chat\\"}}"}\n\n'
                     ),
                     (
-                        'data: {"type":"message_info",'
-                        '"content":{"userMessageId":"test-user-msg",'
-                        '"assistantMessageId":"test-ai-msg"}}\n\n'
+                        'data: {"message":"{\\"type\\":\\"text\\",'
+                        '\\"content\\":\\"\\"}"}\n\n'
                     ),
                     (
-                        'data: {"type":"chat_info",'
-                        '"content":{"id":"test-chat-id","title":"New Chat"}}\n\n'
+                        'data: {"message":"{\\"type\\":\\"text\\",'
+                        '\\"content\\":\\"Test response\\"}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"message_info\\",'
+                        '\\"content\\":{\\"userMessageId\\":\\"test-user-msg\\",'
+                        '\\"assistantMessageId\\":\\"test-ai-msg\\"}}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
+                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
+                        '\\"title\\":\\"New Chat\\"}}"}\n\n'
                     ),
                     "data: [Done]\n\n",
                 ]
@@ -414,13 +427,34 @@ def test_create_chat(client, monkeypatch):
 
     content = response.text
 
+    # assert the basic format
     assert "data: " in content
-    assert "chat_info" in content
-    assert "message_info" in content
-    assert "test-chat-id" in content
-    assert "test-user-msg" in content
-    assert "test-ai-msg" in content
     assert "data: [Done]\n\n" in content
+
+    # extract and parse the JSON data
+    data_messages = re.findall(r"data: (.*?)\n\n", content)
+    for data in data_messages:
+        if data != "[Done]":
+            # parse the outer JSON
+            json_obj = json.loads(data)
+            assert "message" in json_obj
+
+            # parse the inner JSON string
+            if json_obj["message"]:
+                inner_json = json.loads(json_obj["message"])
+                assert "type" in inner_json
+                assert "content" in inner_json
+
+                # assert the specific type of message
+                if inner_json["type"] == "chat_info":
+                    assert "id" in inner_json["content"]
+                    assert "title" in inner_json["content"]
+                    assert inner_json["content"]["id"] == "test-chat-id"
+                elif inner_json["type"] == "message_info":
+                    assert "userMessageId" in inner_json["content"]
+                    assert "assistantMessageId" in inner_json["content"]
+                    assert inner_json["content"]["userMessageId"] == "test-user-msg"
+                    assert inner_json["content"]["assistantMessageId"] == "test-ai-msg"
 
 
 def test_edit_chat(client, monkeypatch):
@@ -433,17 +467,27 @@ def test_edit_chat(client, monkeypatch):
             content=iter(
                 [
                     (
-                        'data: {"type":"chat_info",'
-                        '"content":{"id":"test-chat-id","title":"Test Chat"}}\n\n'
+                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
+                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
+                        '\\"title\\":\\"Test Chat\\"}}"}\n\n'
                     ),
                     (
-                        'data: {"type":"message_info",'
-                        '"content":{"userMessageId":"test-user-msg",'
-                        '"assistantMessageId":"test-ai-msg"}}\n\n'
+                        'data: {"message":"{\\"type\\":\\"text\\",'
+                        '\\"content\\":\\"\\"}"}\n\n'
                     ),
                     (
-                        'data: {"type":"chat_info",'
-                        '"content":{"id":"test-chat-id","title":"Test Chat"}}\n\n'
+                        'data: {"message":"{\\"type\\":\\"text\\",'
+                        '\\"content\\":\\"Edited response\\"}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"message_info\\",'
+                        '\\"content\\":{\\"userMessageId\\":\\"test-user-msg\\",'
+                        '\\"assistantMessageId\\":\\"test-ai-msg\\"}}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
+                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
+                        '\\"title\\":\\"Test Chat\\"}}"}\n\n'
                     ),
                     "data: [Done]\n\n",
                 ]
@@ -476,13 +520,34 @@ def test_edit_chat(client, monkeypatch):
 
     content = response.text
 
+    # assert the basic format
     assert "data: " in content
-    assert "chat_info" in content
-    assert "message_info" in content
-    assert "test-chat-id" in content
-    assert "test-user-msg" in content
-    assert "test-ai-msg" in content
     assert "data: [Done]\n\n" in content
+
+    # extract and parse the JSON data
+    data_messages = re.findall(r"data: (.*?)\n\n", content)
+    for data in data_messages:
+        if data != "[Done]":
+            # parse the outer JSON
+            json_obj = json.loads(data)
+            assert "message" in json_obj
+
+            # parse the inner JSON string
+            if json_obj["message"]:
+                inner_json = json.loads(json_obj["message"])
+                assert "type" in inner_json
+                assert "content" in inner_json
+
+                # assert the specific type of message
+                if inner_json["type"] == "chat_info":
+                    assert "id" in inner_json["content"]
+                    assert "title" in inner_json["content"]
+                    assert inner_json["content"]["id"] == "test-chat-id"
+                elif inner_json["type"] == "message_info":
+                    assert "userMessageId" in inner_json["content"]
+                    assert "assistantMessageId" in inner_json["content"]
+                    assert inner_json["content"]["userMessageId"] == "test-user-msg"
+                    assert inner_json["content"]["assistantMessageId"] == "test-ai-msg"
 
 
 def test_edit_chat_missing_params(client):
@@ -507,17 +572,27 @@ def test_retry_chat(client, monkeypatch):
             content=iter(
                 [
                     (
-                        'data: {"type":"chat_info",'
-                        '"content":{"id":"test-chat-id","title":"Test Chat"}}\n\n'
+                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
+                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
+                        '\\"title\\":\\"Test Chat\\"}}"}\n\n'
                     ),
                     (
-                        'data: {"type":"message_info",'
-                        '"content":{"userMessageId":"test-user-msg",'
-                        '"assistantMessageId":"test-ai-msg"}}\n\n'
+                        'data: {"message":"{\\"type\\":\\"text\\",'
+                        '\\"content\\":\\"\\"}"}\n\n'
                     ),
                     (
-                        'data: {"type":"chat_info",'
-                        '"content":{"id":"test-chat-id","title":"Test Chat"}}\n\n'
+                        'data: {"message":"{\\"type\\":\\"text\\",'
+                        '\\"content\\":\\"Retry response\\"}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"message_info\\",'
+                        '\\"content\\":{\\"userMessageId\\":\\"test-user-msg\\",'
+                        '\\"assistantMessageId\\":\\"test-ai-msg\\"}}"}\n\n'
+                    ),
+                    (
+                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
+                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
+                        '\\"title\\":\\"Test Chat\\"}}"}\n\n'
                     ),
                     "data: [Done]\n\n",
                 ]
@@ -546,13 +621,34 @@ def test_retry_chat(client, monkeypatch):
 
     content = response.text
 
+    # assert the basic format
     assert "data: " in content
-    assert "chat_info" in content
-    assert "message_info" in content
-    assert "test-chat-id" in content
-    assert "test-user-msg" in content
-    assert "test-ai-msg" in content
     assert "data: [Done]\n\n" in content
+
+    # extract and parse the JSON data
+    data_messages = re.findall(r"data: (.*?)\n\n", content)
+    for data in data_messages:
+        if data != "[Done]":
+            # parse the outer JSON
+            json_obj = json.loads(data)
+            assert "message" in json_obj
+
+            # parse the inner JSON string
+            if json_obj["message"]:
+                inner_json = json.loads(json_obj["message"])
+                assert "type" in inner_json
+                assert "content" in inner_json
+
+                # assert the specific type of message
+                if inner_json["type"] == "chat_info":
+                    assert "id" in inner_json["content"]
+                    assert "title" in inner_json["content"]
+                    assert inner_json["content"]["id"] == "test-chat-id"
+                elif inner_json["type"] == "message_info":
+                    assert "userMessageId" in inner_json["content"]
+                    assert "assistantMessageId" in inner_json["content"]
+                    assert inner_json["content"]["userMessageId"] == "test-user-msg"
+                    assert inner_json["content"]["assistantMessageId"] == "test-ai-msg"
 
 
 def test_retry_chat_missing_params(client):
