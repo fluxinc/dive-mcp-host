@@ -1,7 +1,7 @@
 import asyncio
 from typing import TypeVar
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from dive_mcp_host.host.conf import LLMConfig
@@ -96,8 +96,8 @@ async def post_mcp_server(
     if not app.mcp_server_config_manager.update_all_configs(new_config):
         raise ValueError("Failed to update MCP server configurations")
 
-    # TODO: mcp server reloader
     # Reload host
+    # TODO: mcp server reloader
     await app.dive_host["default"].reload(
         new_config=app.load_host_config(),
         reloader=lambda: asyncio.sleep(0),
@@ -149,9 +149,6 @@ async def post_model(
     Returns:
         ResultResponse: Result of the save operation.
     """
-    if app.model_config_manager.full_config is None:
-        raise ValueError("Model configuration not found")
-
     app.model_config_manager.save_single_settings(
         provider=model_settings.provider,
         upload_model_settings=model_settings.model_settings,
@@ -162,8 +159,8 @@ async def post_model(
     if not app.model_config_manager.initialize():
         raise ValueError("Failed to reload model configuration")
 
-    # TODO: model reloader
     # Reload host
+    # TODO: model reloader
     await app.dive_host["default"].reload(
         new_config=app.load_host_config(),
         reloader=lambda: asyncio.sleep(0),
@@ -186,11 +183,7 @@ async def post_model_replace_all(
     Returns:
         ResultResponse: Result of the replace operation.
     """
-    if app.model_config_manager.full_config is None:
-        raise ValueError("Model configuration not found")
-
     app.model_config_manager.replace_all_settings(model_config)
-
     return ResultResponse(success=True)
 
 
@@ -248,10 +241,9 @@ async def get_custom_rules(app: DiveHostAPI = Depends(get_app)) -> RulesResult:
     return RulesResult(success=True, rules=custom_rules)
 
 
-# NOTE: JS version uses Promise, hmmm... might need to redo this
 @config.post("/customrules")
 async def post_custom_rules(
-    rules: str,
+    request: Request,
     app: DiveHostAPI = Depends(get_app),
 ) -> ResultResponse:
     """Save custom rules configuration.
@@ -259,6 +251,8 @@ async def post_custom_rules(
     Returns:
         ResultResponse: Result of the save operation.
     """
+    raw_rules = await request.body()
+    rules = raw_rules.decode("utf-8")
     app.prompt_config_manager.write_custom_rules(rules)
     app.prompt_config_manager.update_system_prompt()
     return ResultResponse(success=True)
