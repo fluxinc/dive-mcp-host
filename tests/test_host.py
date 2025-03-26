@@ -302,3 +302,13 @@ async def test_abort_conversation() -> None:
                 message[0].content
                 == "This is a long running response that should be aborted"
             )
+
+            # abort a non-running conversation
+            conversation.abort()
+            responses = [
+                i
+                async for i in conversation.query(
+                    "This is a long running query", stream_mode=["messages"]
+                )
+            ]
+            assert len(responses) == 1
