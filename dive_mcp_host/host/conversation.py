@@ -61,7 +61,7 @@ class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
     def abort(self) -> None:
         """Abort the conversation."""
         if self._abort_signal is None:
-            raise RuntimeError("No running query")
+            return
         self._abort_signal.set()
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
