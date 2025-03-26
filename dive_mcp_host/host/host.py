@@ -1,17 +1,17 @@
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Any, Self, TypedDict
+from typing import TYPE_CHECKING, Any, Self
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool
-from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt.tool_node import ToolNode
 
 from dive_mcp_host.host.agents import AgentFactory, get_chat_agent_factory
 from dive_mcp_host.host.conf import HostConfig
 from dive_mcp_host.host.conversation import Conversation
+from dive_mcp_host.host.errors import ThreadNotFoundError
 from dive_mcp_host.host.helpers.checkpointer import get_checkpointer
 from dive_mcp_host.host.helpers.context import ContextProtocol
 from dive_mcp_host.host.tools import McpServerInfo, ToolManager
@@ -189,35 +189,19 @@ class DiveMcpHost(ContextProtocol):
 
         Returns:
             A list of messages.
+
+        Raises:
+            ThreadNotFoundError: If the thread is not found.
         """
         if self._checkpointer is None:
             return []
 
-        try:
-
-            class State(TypedDict):
-                messages: list
-
-            def node(state: State) -> State:
-                return state
-
-            builder = StateGraph(State)
-            builder.add_node(node)
-            builder.add_edge(START, "node")
-            builder.add_edge("node", END)
-            graph = builder.compile(checkpointer=self._checkpointer)
-
-            state = await graph.aget_state(
-                {
-                    "configurable": {
-                        "thread_id": thread_id,
-                    }
-                },
-            )
-
-            return state.values.get("messages", [])
-
-        except (AttributeError, KeyError, TypeError, IndexError) as e:
-            logging.error("Error retrieving thread details for %s: %s", thread_id, e)
-
-        return []
+        if ckp := await self._checkpointer.aget(
+            {
+                "configurable": {
+                    "thread_id": thread_id,
+                }
+            }
+        ):
+            return ckp["channel_values"].get("messages", [])
+        raise ThreadNotFoundError(thread_id)
