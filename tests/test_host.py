@@ -1,5 +1,6 @@
+import asyncio
 import json
-from typing import cast
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -227,3 +228,77 @@ async def test_callable_system_prompt() -> None:
         assert model.query_history[0].content == "You are a helpful assistant."
         assert model.query_history[1].content == "Line 2!"
         assert mock_system_prompt.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_abort_conversation() -> None:
+    """Test that the conversation can be aborted during a long-running query."""
+    config = HostConfig(
+        llm=LLMConfig(
+            model="fake",
+            modelProvider="dive",
+        ),
+        mcp_servers={},
+    )
+
+    # Create a fake model with a long sleep time to simulate a long-running query
+    fake_responses = [
+        AIMessage(content="This is a long running response that should be aborted"),
+    ]
+
+    async with DiveMcpHost(config) as mcp_host:
+        # Set up the fake model with a long sleep time
+        model = cast("FakeMessageToolModel", mcp_host._model)
+        model.responses = fake_responses
+        model.sleep = 2.0  # 2 seconds sleep to simulate long running query
+
+        conversation = mcp_host.conversation()
+        async with conversation:
+            # Start the query in a separate task
+            async def _query() -> list[dict[str, Any]]:
+                return [
+                    i
+                    async for i in conversation.query(
+                        "This is a long running query", stream_mode=["messages"]
+                    )
+                ]
+
+            query_task = asyncio.create_task(_query())
+
+            # Wait a bit and then abort
+            await asyncio.sleep(0.5)
+            conversation.abort()
+
+            # Wait for the query task to complete
+            async with asyncio.timeout(5):
+                await query_task
+            assert query_task.exception() is None
+            responses = query_task.result()
+
+            # Verify that we got fewer responses than expected and no AIMessages
+            assert len(responses) == 0, (
+                "Query should have been aborted before completion"
+            )
+            # Check that there are no AIMessages in the responses
+            for response in responses:
+                messages = response.get("agent", {}).get("messages", [])
+                assert not any(isinstance(msg, AIMessage) for msg in messages), (
+                    "Should not have any AIMessages after abort"
+                )
+
+            # Verify the abort signal was cleared
+            model.sleep = 0
+            model.i = 0
+            responses = [
+                i
+                async for i in conversation.query(
+                    "This is a long running query", stream_mode=["messages"]
+                )
+            ]
+            assert len(responses) == 1
+            # Verify that we have AIMessages in the responses
+            _, (message) = cast(tuple[str, tuple[AIMessage]], responses[0])
+            assert (
+                message[0].content
+                == "This is a long running response that should be aborted"
+            )

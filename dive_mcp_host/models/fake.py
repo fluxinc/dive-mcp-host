@@ -1,4 +1,5 @@
 from collections.abc import Callable, Sequence
+from time import sleep
 from typing import Any
 
 from langchain_core.callbacks import (
@@ -59,6 +60,8 @@ class FakeMessageToolModel(BaseChatModel):
             self.i += 1
         else:
             self.i = 0
+        if self.sleep is not None and self.sleep > 0:
+            sleep(self.sleep)
         generation = ChatGeneration(message=response)
         return ChatResult(generations=[generation])
 
