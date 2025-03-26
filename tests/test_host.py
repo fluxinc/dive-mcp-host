@@ -7,10 +7,13 @@ import pytest
 from langchain_core.messages import (
     AIMessage,
     HumanMessage,
+    RemoveMessage,
     SystemMessage,
     ToolCall,
     ToolMessage,
 )
+from langchain_core.runnables import RunnableConfig
+from langgraph.graph.message import MessagesState
 from pydantic import AnyUrl
 
 from dive_mcp_host.host.conf import CheckpointerConfig, HostConfig, LLMConfig
@@ -311,3 +314,137 @@ async def test_abort_conversation() -> None:
                 )
             ]
             assert len(responses) == 1
+
+
+@pytest.mark.asyncio
+async def test_update_messages(sqlite_uri: str) -> None:
+    """Test the update_messages method with different scenarios."""
+    config = HostConfig(
+        llm=LLMConfig(
+            model="fake",
+            modelProvider="dive",
+        ),
+        mcp_servers={},
+        checkpointer=CheckpointerConfig(uri=AnyUrl(sqlite_uri)),
+    )
+
+    async with DiveMcpHost(config) as mcp_host:
+        conversation = mcp_host.conversation()
+        model = cast("FakeMessageToolModel", mcp_host.model)
+        async with conversation:
+            # First, let's create some initial messages
+            initial_messages = [
+                HumanMessage(content="First message", id="msg1"),
+                AIMessage(content="First response", id="msg2"),
+                HumanMessage(content="Second message", id="msg3"),
+                AIMessage(content="Second response", id="msg4"),
+            ]
+
+            # Setup Initial State
+            model.responses = [initial_messages[1]]
+            model.i = 0
+            async for _ in conversation.query(
+                initial_messages[0],
+                stream_mode=["messages"],
+            ):
+                ...
+            model.responses = [initial_messages[3]]
+            model.i = 0
+            async for _ in conversation.query(
+                initial_messages[2],
+                stream_mode=["messages"],
+            ):
+                ...
+
+            # Test case 1: Remove a message and its subsequent messages
+            resend = [HumanMessage(content="Second message", id="msg3")]
+            update = []
+            await conversation.update_messages(resend=resend, update=update)  # type: ignore
+
+            # Verify state after removal
+            state = await conversation.active_agent.aget_state(
+                RunnableConfig(
+                    configurable={
+                        "thread_id": conversation.thread_id,
+                        "user_id": conversation._user_id,
+                    },
+                )
+            )
+            messages = cast(MessagesState, state.values)["messages"]
+            assert len(messages) == 2
+            assert messages[0].id == "msg1"
+            assert messages[1].id == "msg2"
+
+            # Test case 2: Add new messages
+            new_messages = [
+                HumanMessage(content="New message", id="msg5"),
+                AIMessage(content="New response", id="msg6"),
+            ]
+            await conversation.update_messages(resend=[], update=new_messages)
+
+            # Verify state after adding new messages
+            state = await conversation.active_agent.aget_state(
+                RunnableConfig(
+                    configurable={
+                        "thread_id": conversation.thread_id,
+                        "user_id": conversation._user_id,
+                    },
+                )
+            )
+            messages = cast(MessagesState, state.values)["messages"]
+            assert len(messages) == 4
+            assert messages[2].id == "msg5"
+            assert messages[3].id == "msg6"
+
+            # Test case 3: Update existing message
+            updated_message = HumanMessage(content="Updated message", id="msg1")
+            await conversation.update_messages(resend=[], update=[updated_message])
+
+            # Verify state after updating message
+            state = await conversation.active_agent.aget_state(
+                RunnableConfig(
+                    configurable={
+                        "thread_id": conversation.thread_id,
+                        "user_id": conversation._user_id,
+                    },
+                )
+            )
+            messages = cast(MessagesState, state.values)["messages"]
+            assert len(messages) == 4
+            assert messages[0].content == "Updated message"
+
+            # Test case 4: Messages in resend should be ignored in update
+            resend = [HumanMessage(content="New message", id="msg5")]
+            update = [HumanMessage(content="Should be ignored", id="msg5")]
+            await conversation.update_messages(resend=resend, update=update)  # type: ignore
+
+            # Verify state after ignoring message in resend
+            state = await conversation.active_agent.aget_state(
+                RunnableConfig(
+                    configurable={
+                        "thread_id": conversation.thread_id,
+                        "user_id": conversation._user_id,
+                    },
+                )
+            )
+            messages = cast(MessagesState, state.values)["messages"]
+            assert len(messages) == 2  # msg5 and msg6 should be removed
+            assert messages[0].id == "msg1"
+            assert messages[1].id == "msg2"
+
+            # Test case 5: RemoveMessage in update
+            remove_message = RemoveMessage("msg2")
+            await conversation.update_messages(resend=[], update=[remove_message])
+
+            # Verify state after removing message
+            state = await conversation.active_agent.aget_state(
+                RunnableConfig(
+                    configurable={
+                        "thread_id": conversation.thread_id,
+                        "user_id": conversation._user_id,
+                    },
+                )
+            )
+            messages = cast(MessagesState, state.values)["messages"]
+            assert len(messages) == 1
+            assert messages[0].id == "msg1"

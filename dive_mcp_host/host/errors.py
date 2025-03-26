@@ -29,3 +29,13 @@ class GraphNotCompiledError(MCPHostError):
         """
         self.thread_id = thread_id
         super().__init__(f"Graph not compiled for thread {thread_id}")
+
+
+class MessageTypeError(MCPHostError, ValueError):
+    """Exception raised when a message is not the correct type."""
+
+    def __init__(self, msg: str | None = None) -> None:
+        """Initialize the error."""
+        if msg is None:
+            msg = "Message is not the correct type"
+        super().__init__(msg)
