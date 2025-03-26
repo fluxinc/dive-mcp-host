@@ -9,6 +9,8 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.store.base import BaseStore
 from langgraph.types import StreamMode
 
+from .errors import GraphNotCompiledError
+
 if TYPE_CHECKING:
     from langgraph.graph.graph import CompiledGraph
 
@@ -98,7 +100,7 @@ class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
 
         async def _stream_response() -> AsyncGenerator[dict[str, Any] | Any, None]:
             if self._agent is None:
-                raise RuntimeError("Graph not compiled")
+                raise GraphNotCompiledError(self._thread_id)
             async for response in self._agent.astream(
                 self._agent_factory.create_initial_state(
                     query=query,
