@@ -4,71 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import status
 from fastapi.responses import StreamingResponse
-from fastapi.testclient import TestClient
 
-from dive_mcp_host.httpd.app import DiveHostAPI
-from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.routers.openai import (
     CompletionEventStreamContextManager,
     OpenaiModel,
     StreamMessage,
-    openai,
 )
-
-
-class MagicDict(dict):
-    """Custom dictionary class that simulates the values method of dive_host."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.values_mock = MagicMock()
-
-    def values(self):
-        """Simulate the values method of a dictionary."""
-        return self.values_mock()
-
-
-class MockDiveHostAPI:
-    """Mock DiveHostAPI FastAPI application for testing."""
-
-    def __init__(self):
-        super().__init__()
-
-        # Create mock dive_host
-        mock_config = MagicMock()
-        mock_config.llm.model = "test-model"
-        mock_config.llm.modelProvider = "test-provider"
-
-        mock_dive_host = MagicMock()
-        mock_dive_host._config = mock_config
-
-        # Use custom MagicDict
-        magic_dict = MagicDict(default=mock_dive_host)
-        magic_dict.values_mock.return_value = [mock_dive_host]
-
-        # Add dive_host attribute
-        self.dive_host = magic_dict
-
-        # Add prompt_config_manager attribute
-        self.prompt_config_manager = MagicMock()
-        self.prompt_config_manager.get_prompt.return_value = "This is a system prompt"
-
-
-@pytest.fixture
-def client():
-    """Create a test client with the mock app."""
-    app = DiveHostAPI()
-    app.include_router(openai)
-
-    mock_app = MockDiveHostAPI()
-
-    def get_mock_app():
-        return mock_app
-
-    app.dependency_overrides[get_app] = get_mock_app
-
-    with TestClient(app) as client:
-        yield client
 
 
 @pytest.fixture(autouse=True)
@@ -102,10 +43,11 @@ def mock_event_stream():
         yield mock_instance
 
 
-def test_get_openai(client):
+def test_get_openai(test_client):
     """Test the / GET endpoint."""
     # Send request
-    response = client.get("/")
+    client, _ = test_client
+    response = client.get("/v1/openai/")
 
     # Verify response status code
     assert response.status_code == status.HTTP_200_OK
@@ -120,10 +62,11 @@ def test_get_openai(client):
     assert isinstance(response_data["message"], str)
 
 
-def test_list_models(client):
+def test_list_models(test_client):
     """Test the /models GET endpoint with mocked dive host."""
     # Send request
-    response = client.get("/models")
+    client, _ = test_client
+    response = client.get("/v1/openai/models")
 
     # Verify response status code
     assert response.status_code == status.HTTP_200_OK
@@ -139,14 +82,15 @@ def test_list_models(client):
 
     # Validate model structure
     model = response_data["models"][0]
-    assert model["id"] == "test-model"
+    assert model["id"] == "fake"
     assert model["type"] == "model"
-    assert model["owned_by"] == "test-provider"
+    assert model["owned_by"] == "dive"
 
 
 @patch("dive_mcp_host.httpd.routers.openai.ChatProcessor")
-def test_chat_completions_with_system_message(mock_chat_processor, client):
+def test_chat_completions_with_system_message(mock_chat_processor, test_client):
     """Test chat completions with a system message."""
+    client, _ = test_client
     # Setup mock
     processor_instance = AsyncMock()
     processor_instance.handle_chat_with_history.return_value = (
@@ -164,7 +108,7 @@ def test_chat_completions_with_system_message(mock_chat_processor, client):
         "tool_choice": "auto",
     }
 
-    response = client.post("/chat/completions", json=test_data)
+    response = client.post("/v1/openai/chat/completions", json=test_data)
 
     assert response.status_code == status.HTTP_200_OK
 
@@ -174,7 +118,7 @@ def test_chat_completions_with_system_message(mock_chat_processor, client):
     assert "id" in response_data
     assert response_data["id"].startswith("chatcmpl-")
     assert response_data["object"] == "chat.completion"
-    assert response_data["model"] == "test-model"
+    assert response_data["model"] == "fake"
     assert "choices" in response_data
     assert len(response_data["choices"]) == 1
     assert response_data["choices"][0]["index"] == 0
@@ -191,8 +135,9 @@ def test_chat_completions_with_system_message(mock_chat_processor, client):
 
 
 @patch("dive_mcp_host.httpd.routers.openai.ChatProcessor")
-def test_chat_completions_without_system_message(mock_chat_processor, client):
+def test_chat_completions_without_system_message(mock_chat_processor, test_client):
     """Test chat completions without a system message."""
+    client, _ = test_client
     # Setup mock
     processor_instance = AsyncMock()
     processor_instance.handle_chat_with_history.return_value = (
@@ -210,7 +155,7 @@ def test_chat_completions_without_system_message(mock_chat_processor, client):
         "tool_choice": "auto",
     }
 
-    response = client.post("/chat/completions", json=test_data)
+    response = client.post("/v1/openai/chat/completions", json=test_data)
 
     assert response.status_code == status.HTTP_200_OK
 
@@ -220,7 +165,7 @@ def test_chat_completions_without_system_message(mock_chat_processor, client):
     assert "id" in response_data
     assert response_data["id"].startswith("chatcmpl-")
     assert response_data["object"] == "chat.completion"
-    assert response_data["model"] == "test-model"
+    assert response_data["model"] == "fake"
     assert "choices" in response_data
     assert len(response_data["choices"]) == 1
     assert response_data["choices"][0]["index"] == 0
@@ -237,8 +182,9 @@ def test_chat_completions_without_system_message(mock_chat_processor, client):
 
 
 @patch("dive_mcp_host.httpd.routers.openai.ChatProcessor")
-def test_chat_completions_with_assistant_message(mock_chat_processor, client):
+def test_chat_completions_with_assistant_message(mock_chat_processor, test_client):
     """Test chat completions with assistant messages included."""
+    client, _ = test_client
     # Setup mock
     processor_instance = AsyncMock()
     processor_instance.handle_chat_with_history.return_value = (
@@ -259,7 +205,7 @@ def test_chat_completions_with_assistant_message(mock_chat_processor, client):
         "tool_choice": "auto",
     }
 
-    response = client.post("/chat/completions", json=test_data)
+    response = client.post("/v1/openai/chat/completions", json=test_data)
 
     assert response.status_code == status.HTTP_200_OK
 
@@ -269,7 +215,7 @@ def test_chat_completions_with_assistant_message(mock_chat_processor, client):
     assert "id" in response_data
     assert response_data["id"].startswith("chatcmpl-")
     assert response_data["object"] == "chat.completion"
-    assert response_data["model"] == "test-model"
+    assert response_data["model"] == "fake"
     assert "choices" in response_data
     assert len(response_data["choices"]) == 1
     assert response_data["choices"][0]["index"] == 0
@@ -286,8 +232,9 @@ def test_chat_completions_with_assistant_message(mock_chat_processor, client):
 
 
 @patch("dive_mcp_host.httpd.routers.openai.ChatProcessor")
-def test_chat_completions_with_tool_choice_none(mock_chat_processor, client):
+def test_chat_completions_with_tool_choice_none(mock_chat_processor, test_client):
     """Test chat completions with tool_choice=none."""
+    client, _ = test_client
     # Setup mock
     processor_instance = AsyncMock()
     processor_instance.handle_chat_with_history.return_value = (
@@ -305,7 +252,7 @@ def test_chat_completions_with_tool_choice_none(mock_chat_processor, client):
         "tool_choice": "none",
     }
 
-    response = client.post("/chat/completions", json=test_data)
+    response = client.post("/v1/openai/chat/completions", json=test_data)
 
     assert response.status_code == status.HTTP_200_OK
 
@@ -315,7 +262,7 @@ def test_chat_completions_with_tool_choice_none(mock_chat_processor, client):
     assert "id" in response_data
     assert response_data["id"].startswith("chatcmpl-")
     assert response_data["object"] == "chat.completion"
-    assert response_data["model"] == "test-model"
+    assert response_data["model"] == "fake"
     assert "choices" in response_data
     assert len(response_data["choices"]) == 1
     assert response_data["choices"][0]["index"] == 0
@@ -332,8 +279,13 @@ def test_chat_completions_with_tool_choice_none(mock_chat_processor, client):
 
 
 @patch("dive_mcp_host.httpd.routers.openai.ChatProcessor")
-def test_chat_completions_streaming(mock_chat_processor, client, mock_event_stream):
+def test_chat_completions_streaming(
+    mock_chat_processor,
+    test_client,
+    mock_event_stream,
+):
     """Test streaming chat completions."""
+    client, _ = test_client
     # Setup mock
     processor_instance = AsyncMock()
     processor_instance.handle_chat_with_history.return_value = (
@@ -348,12 +300,12 @@ def test_chat_completions_streaming(mock_chat_processor, client, mock_event_stre
             [
                 (
                     'data: {"id":"chatcmpl-test","object":"chat.completion.chunk",'
-                    '"model":"test-model","choices":[{"index":0,"delta":'
+                    '"model":"fake","choices":[{"index":0,"delta":'
                     '{"content":"Test response"},"finish_reason":null}]}\n\n'
                 ),
                 (
                     'data: {"id":"chatcmpl-test","object":"chat.completion.chunk",'
-                    '"model":"test-model","choices":[{"index":0,"delta":{},'
+                    '"model":"fake","choices":[{"index":0,"delta":{},'
                     '"finish_reason":"stop"}]}\n\n'
                 ),
                 "data: [DONE]\n\n",
@@ -371,7 +323,7 @@ def test_chat_completions_streaming(mock_chat_processor, client, mock_event_stre
         "tool_choice": "auto",
     }
 
-    response = client.post("/chat/completions", json=test_data)
+    response = client.post("/v1/openai/chat/completions", json=test_data)
 
     assert response.status_code == status.HTTP_200_OK
     assert "text/event-stream" in response.headers["Content-Type"]
@@ -381,7 +333,7 @@ def test_chat_completions_streaming(mock_chat_processor, client, mock_event_stre
 
     assert "data: " in content
     assert "chat.completion.chunk" in content
-    assert "test-model" in content
+    assert "fake" in content
     assert "Test response" in content
     assert "finish_reason" in content
     assert "data: [DONE]\n\n" in content
@@ -392,7 +344,7 @@ async def test_completion_event_stream_context_manager():
     """Test the CompletionEventStreamContextManager functionality."""
     # Create context manager
     chat_id = "test-chat-id"
-    model = "test-model"
+    model = "fake"
     stream = CompletionEventStreamContextManager(chat_id, model)
 
     # Mock response writing
@@ -409,17 +361,18 @@ async def test_completion_event_stream_context_manager():
         assert called_with.content == "Hello"
 
 
-def test_chat_completions_invalid_request(client):
+def test_chat_completions_invalid_request(test_client):
     """Test the /chat/completions POST endpoint with invalid request."""
+    client, _ = test_client
     # Test with missing messages
-    response = client.post("/chat/completions", json={"stream": False})
+    response = client.post("/v1/openai/chat/completions", json={"stream": False})
     # Use 422 status code,
     # as FastAPI returns 422 for missing required fields rather than 400
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     # Test with invalid message format
     response = client.post(
-        "/chat/completions",
+        "/v1/openai/chat/completions",
         json={"messages": [{"invalid": "format"}], "stream": False},
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -427,7 +380,7 @@ def test_chat_completions_invalid_request(client):
 
 def test_openai_model_serialization():
     """Test that OpenaiModel can be properly serialized."""
-    model = OpenaiModel(id="test-model", type="model", owned_by="test-provider")
+    model = OpenaiModel(id="fake", type="model", owned_by="test-provider")
     model_dict = model.model_dump()
 
     assert "id" in model_dict

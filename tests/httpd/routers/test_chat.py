@@ -19,6 +19,7 @@ from dive_mcp_host.httpd.routers.models import (
     UserInputError,
 )
 from dive_mcp_host.httpd.routers.utils import EventStreamContextManager
+from tests import helper
 
 # Constants
 SUCCESS_CODE = status.HTTP_200_OK
@@ -262,29 +263,31 @@ def test_list_chat(client):
         # Parse JSON response
         response_data = response.json()
 
-        # Validate response structure
-        assert "success" in response_data
-        assert response_data["success"] is True
-        assert "data" in response_data
-        assert isinstance(response_data["data"], list)
-
-        # Validate chat data structure
-        if response_data["data"]:
-            chat = response_data["data"][0]
-            assert "id" in chat
-            assert "title" in chat
-            assert "createdAt" in chat
+        helper.dict_subset(
+            response_data,
+            {
+                "success": True,
+                "data": [
+                    {
+                        "id": "test_chat_1",
+                        "title": "Test Chat 1",
+                        "user_id": TEST_USER_ID,
+                    }
+                ],
+            },
+        )
 
 
 def test_get_chat(client):
     """Test the /api/chat/{chat_id} endpoint."""
     # Mock the get_chat_with_messages method
     with mock.patch.object(MockDatabase, "get_chat_with_messages") as mock_get_chat:
+        now = datetime.now(UTC)
         mock_get_chat.return_value = ChatWithMessages(
             chat=Chat(
                 id=TEST_CHAT_ID,
                 title="Test Chat Title",
-                createdAt=datetime.now(UTC),
+                createdAt=now,
                 user_id=TEST_USER_ID,
             ),
             messages=[
@@ -294,7 +297,8 @@ def test_get_chat(client):
                     chatId=TEST_CHAT_ID,
                     messageId="test_msg_user",
                     id=1,
-                    createdAt=datetime.now(UTC),
+                    createdAt=now,
+                    files="[]",
                 )
             ],
         )
@@ -308,21 +312,29 @@ def test_get_chat(client):
         # Parse JSON response
         response_data = response.json()
 
-        # Validate response structure
-        assert "success" in response_data
-        assert response_data["success"] is True
-        assert "data" in response_data
-
-        # Validate chat data structure
-        data = response_data["data"]
-        assert "chat" in data
-        assert "id" in data["chat"]
-        assert "title" in data["chat"]
-        assert "createdAt" in data["chat"]
-
-        # Validate message list structure
-        assert "messages" in data
-        assert isinstance(data["messages"], list)
+        helper.dict_subset(
+            response_data,
+            {
+                "success": True,
+                "data": {
+                    "chat": {
+                        "id": TEST_CHAT_ID,
+                        "title": "Test Chat Title",
+                        "user_id": TEST_USER_ID,
+                    },
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": "Test user message",
+                            "chatId": TEST_CHAT_ID,
+                            "messageId": "test_msg_user",
+                            "id": 1,
+                            "files": "[]",
+                        },
+                    ],
+                },
+            },
+        )
 
 
 def test_delete_chat(client):
@@ -447,14 +459,22 @@ def test_create_chat(client, monkeypatch):
 
                 # assert the specific type of message
                 if inner_json["type"] == "chat_info":
-                    assert "id" in inner_json["content"]
-                    assert "title" in inner_json["content"]
-                    assert inner_json["content"]["id"] == "test-chat-id"
+                    helper.dict_subset(
+                        inner_json["content"],
+                        {
+                            "id": "test-chat-id",
+                            "title": "New Chat",
+                        },
+                    )
                 elif inner_json["type"] == "message_info":
-                    assert "userMessageId" in inner_json["content"]
-                    assert "assistantMessageId" in inner_json["content"]
-                    assert inner_json["content"]["userMessageId"] == "test-user-msg"
-                    assert inner_json["content"]["assistantMessageId"] == "test-ai-msg"
+                    helper.dict_subset(
+                        inner_json["content"],
+                        {
+                            "userMessageId": "test-user-msg",
+                            "assistantMessageId": "test-ai-msg",
+                        },
+                    )
+
 
 
 def test_edit_chat(client, monkeypatch):
@@ -540,14 +560,21 @@ def test_edit_chat(client, monkeypatch):
 
                 # assert the specific type of message
                 if inner_json["type"] == "chat_info":
-                    assert "id" in inner_json["content"]
-                    assert "title" in inner_json["content"]
-                    assert inner_json["content"]["id"] == "test-chat-id"
+                    helper.dict_subset(
+                        inner_json["content"],
+                        {
+                            "id": "test-chat-id",
+                            "title": "Test Chat",
+                        },
+                    )
                 elif inner_json["type"] == "message_info":
-                    assert "userMessageId" in inner_json["content"]
-                    assert "assistantMessageId" in inner_json["content"]
-                    assert inner_json["content"]["userMessageId"] == "test-user-msg"
-                    assert inner_json["content"]["assistantMessageId"] == "test-ai-msg"
+                    helper.dict_subset(
+                        inner_json["content"],
+                        {
+                            "userMessageId": "test-user-msg",
+                            "assistantMessageId": "test-ai-msg",
+                        },
+                    )
 
 
 def test_edit_chat_missing_params(client):
@@ -641,14 +668,21 @@ def test_retry_chat(client, monkeypatch):
 
                 # assert the specific type of message
                 if inner_json["type"] == "chat_info":
-                    assert "id" in inner_json["content"]
-                    assert "title" in inner_json["content"]
-                    assert inner_json["content"]["id"] == "test-chat-id"
+                    helper.dict_subset(
+                        inner_json["content"],
+                        {
+                            "id": "test-chat-id",
+                            "title": "Test Chat",
+                        },
+                    )
                 elif inner_json["type"] == "message_info":
-                    assert "userMessageId" in inner_json["content"]
-                    assert "assistantMessageId" in inner_json["content"]
-                    assert inner_json["content"]["userMessageId"] == "test-user-msg"
-                    assert inner_json["content"]["assistantMessageId"] == "test-ai-msg"
+                    helper.dict_subset(
+                        inner_json["content"],
+                        {
+                            "userMessageId": "test-user-msg",
+                            "assistantMessageId": "test-ai-msg",
+                        },
+                    )
 
 
 def test_retry_chat_missing_params(client):
