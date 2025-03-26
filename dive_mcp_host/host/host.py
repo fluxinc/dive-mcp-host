@@ -1,11 +1,12 @@
 import logging
-from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Self
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool
+from langgraph.graph.message import MessagesState
 from langgraph.prebuilt.tool_node import ToolNode
 
 from dive_mcp_host.host.agents import AgentFactory, get_chat_agent_factory
@@ -19,6 +20,9 @@ from dive_mcp_host.models import load_model
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
+
+
+logger = logging.getLogger(__name__)
 
 
 class DiveMcpHost(ContextProtocol):
@@ -99,7 +103,7 @@ class DiveMcpHost(ContextProtocol):
         )
         self._model = model
 
-    def conversation[T: Mapping[str, Any]](  # noqa: PLR0913 Is there a better way to do this?
+    def conversation[T: MessagesState](  # noqa: PLR0913 Is there a better way to do this?
         self,
         *,
         thread_id: str | None = None,
@@ -181,11 +185,19 @@ class DiveMcpHost(ContextProtocol):
         """
         return self._tool_manager.mcp_server_info
 
-    async def get_messages(self, thread_id: str) -> list[BaseMessage]:
+    @property
+    def model(self) -> BaseChatModel:
+        """The model of the host."""
+        if self._model is None:
+            raise RuntimeError("Model not initialized")
+        return self._model
+
+    async def get_messages(self, thread_id: str, user_id: str) -> list[BaseMessage]:
         """Get messages of a specific thread.
 
         Args:
             thread_id: The thread ID to retrieve messages for.
+            user_id: The user ID to retrieve messages for.
 
         Returns:
             A list of messages.
@@ -200,6 +212,7 @@ class DiveMcpHost(ContextProtocol):
             {
                 "configurable": {
                     "thread_id": thread_id,
+                    "user_id": user_id,
                 }
             }
         ):

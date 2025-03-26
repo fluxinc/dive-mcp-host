@@ -12,7 +12,7 @@ Instructions = """Echo a message."""
 mcp = FastMCP(name="echo", instructions=Instructions)
 
 ECHO_DESCRIPTION = """A simple echo tool to verify if the MCP server is working properly.
-It returns a characteristic response containing the input message."""
+It returns a characteristic response containing the input message."""  # noqa: E501
 
 IGNORE_DESCRIPTION = """Do nothing."""
 

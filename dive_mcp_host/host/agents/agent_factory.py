@@ -1,17 +1,18 @@
 from typing import Protocol
 
-from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.messages import AnyMessage, BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver, V
 from langgraph.graph.graph import CompiledGraph
+from langgraph.graph.message import MessagesState
 from langgraph.store.base import BaseStore
 
 from dive_mcp_host.host.prompt import PromptType
 
 
 # XXX is there any better way to do this?
-class AgentFactory[T](Protocol):
+class AgentFactory[T: MessagesState](Protocol):
     """A factory for creating agents.
 
     Implementing this protocol to create your own custom agent.
@@ -98,8 +99,8 @@ class AgentFactory[T](Protocol):
 
 
 def initial_messages(
-    query: str | HumanMessage | list[BaseMessage],
-) -> list[BaseMessage]:
+    query: str | HumanMessage | list[AnyMessage | BaseMessage],
+) -> list[AnyMessage]:
     """Create an initial message for your state.
 
     The state must contain a 'messages' key with type list[BaseMessage].

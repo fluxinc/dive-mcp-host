@@ -4,7 +4,6 @@ It uses langgraph.prebuilt.create_react_agent to create the agent.
 """
 
 from collections.abc import Sequence
-from typing import Annotated, TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage
@@ -12,7 +11,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver, V
 from langgraph.graph.graph import CompiledGraph
-from langgraph.graph.message import add_messages
+from langgraph.graph.message import MessagesState
 from langgraph.managed import IsLastStep
 from langgraph.prebuilt import create_react_agent  # type: ignore[arg-type]
 from langgraph.prebuilt.tool_node import ToolNode
@@ -23,10 +22,9 @@ from dive_mcp_host.host.helpers import today_datetime
 from dive_mcp_host.host.prompt import PromptType
 
 
-class AgentState(TypedDict):
+class AgentState(MessagesState):
     """The state of the agent."""
 
-    messages: Annotated[Sequence[BaseMessage], add_messages]
     is_last_step: IsLastStep
     today_datetime: str
     remaining_steps: int

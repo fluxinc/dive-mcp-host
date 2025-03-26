@@ -1,25 +1,31 @@
 import asyncio
+import logging
 import uuid
-from collections.abc import AsyncGenerator, AsyncIterator, Callable, Mapping
-from typing import TYPE_CHECKING, Any, Self
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from typing import Any, Self, cast
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.messages import BaseMessage, HumanMessage, RemoveMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.graph.graph import CompiledGraph
+from langgraph.graph.message import MessagesState
 from langgraph.store.base import BaseStore
 from langgraph.types import StreamMode
 
-from .errors import GraphNotCompiledError
-
-if TYPE_CHECKING:
-    from langgraph.graph.graph import CompiledGraph
-
 from dive_mcp_host.host.agents import AgentFactory, V
+from dive_mcp_host.host.errors import (
+    GraphNotCompiledError,
+    MessageTypeError,
+    ThreadNotFoundError,
+)
 from dive_mcp_host.host.helpers.context import ContextProtocol
 from dive_mcp_host.host.prompt import default_system_prompt
 
+logger = logging.getLogger(__name__)
 
-class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
+
+class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
     """A conversation with a language model."""
 
     def __init__(  # noqa: PLR0913, too many arguments
@@ -56,6 +62,13 @@ class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
         self._abort_signal: asyncio.Event | None = None
 
     @property
+    def active_agent(self) -> CompiledGraph:
+        """The active agent of the conversation."""
+        if self._agent is None:
+            raise GraphNotCompiledError(self._thread_id)
+        return self._agent
+
+    @property
     def thread_id(self) -> str:
         """The thread ID of the conversation."""
         return self._thread_id
@@ -84,36 +97,105 @@ class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
         yield self
         self._agent = None
 
+    async def update_messages(
+        self,
+        resend: list[BaseMessage],
+        update: list[BaseMessage],
+    ) -> None:
+        """Update conversation state for resend messages or update messages.
+
+        Args:
+            resend: Messages to remove and their subsequent messages.
+            update: New messages to update. Update messages in resend will be ignored.
+        """
+        resend_ids = {msg.id for msg in resend}
+        if resend_ids:
+            to_update = [i for i in update if i.id not in resend_ids]
+            if state := await self.active_agent.aget_state(
+                RunnableConfig(
+                    configurable={
+                        "thread_id": self._thread_id,
+                        "user_id": self._user_id,
+                    },
+                )
+            ):
+                drop_after = False
+                for msg in cast(MessagesState, state.values)["messages"]:
+                    assert msg.id is not None  # all messages from the agent have an ID
+                    if drop_after:
+                        to_update.append(RemoveMessage(msg.id))
+                    elif msg.id in resend_ids:
+                        to_update.append(RemoveMessage(msg.id))
+                        drop_after = True
+            else:
+                raise ThreadNotFoundError(self._thread_id)
+        else:
+            to_update = update.copy()
+
+        if len(to_update) > 0:
+            await self.active_agent.aupdate_state(
+                RunnableConfig(
+                    configurable={
+                        "thread_id": self._thread_id,
+                        "user_id": self._user_id,
+                    },
+                ),
+                values={
+                    "messages": to_update,
+                },
+            )
+
     def query(
         self,
-        query: str | HumanMessage | list[BaseMessage],
+        query: str | HumanMessage | list[BaseMessage] | None,
         *,
         stream_mode: list[StreamMode] | StreamMode | None = "messages",
+        modify: list[BaseMessage] | None = None,
+        is_resend: bool = False,
     ) -> AsyncIterator[dict[str, Any] | Any]:
         """Query the conversation.
 
         Args:
             query: The query to ask the conversation.
             stream_mode: The mode to stream the response.
+            modify: The messages to modify.
+            is_resend: Whether the query is a resend.
 
         Returns:
             An async generator of the response.
+
+        Raises:
+            MessageTypeError: If the messages to modify are invalid.
         """
+        resend_msg = []
+        if is_resend and query:
+            if isinstance(query, BaseMessage):
+                resend_msg = [query]
+            elif isinstance(query, str):
+                raise MessageTypeError("Cannot resend a string")
+            else:
+                resend_msg = query
 
         async def _stream_response() -> AsyncGenerator[dict[str, Any] | Any, None]:
-            if self._agent is None:
-                raise GraphNotCompiledError(self._thread_id)
+            if modify or resend_msg:
+                await self.update_messages(
+                    resend=resend_msg,  # type: ignore
+                    update=modify or [],
+                )
             signal = asyncio.Event()
             self._abort_signal = signal
-            async for response in self._agent.astream(
-                self._agent_factory.create_initial_state(
-                    query=query,
-                ),
+            if query:
+                init_state = self._agent_factory.create_initial_state(query=query)
+            else:
+                init_state = None
+            config = self._agent_factory.create_config(
+                user_id=self._user_id,
+                thread_id=self._thread_id,
+            )
+            async for response in self.active_agent.astream(
+                input=init_state,
                 stream_mode=stream_mode,
-                config=self._agent_factory.create_config(
-                    user_id=self._user_id,
-                    thread_id=self._thread_id,
-                ),
+                config=config,
             ):
                 if signal.is_set():
                     break

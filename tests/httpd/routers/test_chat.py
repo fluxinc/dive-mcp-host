@@ -476,7 +476,6 @@ def test_create_chat(client, monkeypatch):
                     )
 
 
-
 def test_edit_chat(client, monkeypatch):
     """Test the /api/chat/edit endpoint."""
 

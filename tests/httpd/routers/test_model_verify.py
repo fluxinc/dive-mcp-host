@@ -1,4 +1,3 @@
-
 import json
 import re
 
@@ -15,6 +14,7 @@ MOCK_MODEL_SETTING = {
     "maxTokens": 4000,
     "configuration": {"baseURL": "https://api.openai.com/v1"},
 }
+
 
 def test_do_verify_model(test_client):
     """Test the /api/model_verify POST endpoint."""
@@ -114,5 +114,3 @@ def test_verify_model_streaming(test_client):
                         ],
                     },
                 )
-
-
