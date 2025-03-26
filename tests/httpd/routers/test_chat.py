@@ -227,7 +227,7 @@ def mock_event_stream():
     mock_instance = mock.MagicMock()
     mock_instance.queue = asyncio.Queue()
     mock_instance.get_response.return_value = StreamingResponse(
-        content=iter(["data: [Done]\n\n"]),
+        content=iter(["data: [DONE]\n\n"]),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
@@ -397,7 +397,7 @@ def test_create_chat(client, monkeypatch):
                         '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
                         '\\"title\\":\\"New Chat\\"}}"}\n\n'
                     ),
-                    "data: [Done]\n\n",
+                    "data: [DONE]\n\n",
                 ]
             ),
             media_type="text/event-stream",
@@ -429,12 +429,12 @@ def test_create_chat(client, monkeypatch):
 
     # assert the basic format
     assert "data: " in content
-    assert "data: [Done]\n\n" in content
+    assert "data: [DONE]\n\n" in content
 
     # extract and parse the JSON data
     data_messages = re.findall(r"data: (.*?)\n\n", content)
     for data in data_messages:
-        if data != "[Done]":
+        if data != "[DONE]":
             # parse the outer JSON
             json_obj = json.loads(data)
             assert "message" in json_obj
@@ -489,7 +489,7 @@ def test_edit_chat(client, monkeypatch):
                         '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
                         '\\"title\\":\\"Test Chat\\"}}"}\n\n'
                     ),
-                    "data: [Done]\n\n",
+                    "data: [DONE]\n\n",
                 ]
             ),
             media_type="text/event-stream",
@@ -522,12 +522,12 @@ def test_edit_chat(client, monkeypatch):
 
     # assert the basic format
     assert "data: " in content
-    assert "data: [Done]\n\n" in content
+    assert "data: [DONE]\n\n" in content
 
     # extract and parse the JSON data
     data_messages = re.findall(r"data: (.*?)\n\n", content)
     for data in data_messages:
-        if data != "[Done]":
+        if data != "[DONE]":
             # parse the outer JSON
             json_obj = json.loads(data)
             assert "message" in json_obj
@@ -594,7 +594,7 @@ def test_retry_chat(client, monkeypatch):
                         '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
                         '\\"title\\":\\"Test Chat\\"}}"}\n\n'
                     ),
-                    "data: [Done]\n\n",
+                    "data: [DONE]\n\n",
                 ]
             ),
             media_type="text/event-stream",
@@ -623,12 +623,12 @@ def test_retry_chat(client, monkeypatch):
 
     # assert the basic format
     assert "data: " in content
-    assert "data: [Done]\n\n" in content
+    assert "data: [DONE]\n\n" in content
 
     # extract and parse the JSON data
     data_messages = re.findall(r"data: (.*?)\n\n", content)
     for data in data_messages:
-        if data != "[Done]":
+        if data != "[DONE]":
             # parse the outer JSON
             json_obj = json.loads(data)
             assert "message" in json_obj
