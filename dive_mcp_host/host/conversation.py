@@ -1,11 +1,15 @@
 import asyncio
+import logging
 import uuid
-from collections.abc import AsyncGenerator, AsyncIterator, Callable, Mapping
-from typing import TYPE_CHECKING, Any, Self
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from typing import Any, Self, cast
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.messages import BaseMessage, HumanMessage, RemoveMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.graph.graph import CompiledGraph
+from langgraph.graph.message import MessagesState
 from langgraph.store.base import BaseStore
 from langgraph.types import StreamMode
 
@@ -18,8 +22,10 @@ from dive_mcp_host.host.agents import AgentFactory, V
 from dive_mcp_host.host.helpers.context import ContextProtocol
 from dive_mcp_host.host.prompt import default_system_prompt
 
+logger = logging.getLogger(__name__)
 
-class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
+
+class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
     """A conversation with a language model."""
 
     def __init__(  # noqa: PLR0913, too many arguments
@@ -54,6 +60,13 @@ class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
         self._agent: CompiledGraph | None = None
         self._agent_factory: AgentFactory[STATE_TYPE] = agent_factory
         self._abort_signal: asyncio.Event | None = None
+
+    @property
+    def active_agent(self) -> CompiledGraph:
+        """The active agent of the conversation."""
+        if self._agent is None:
+            raise GraphNotCompiledError(self._thread_id)
+        return self._agent
 
     @property
     def thread_id(self) -> str:

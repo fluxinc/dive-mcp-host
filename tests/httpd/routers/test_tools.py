@@ -24,6 +24,7 @@ class MockServerInfo:
         self.tools = tools or []
         self.error = error
 
+
 def test_list_tools_no_mock(test_client):
     """Test the GET endpoint."""
     client, _ = test_client
@@ -389,9 +390,7 @@ async def test_list_tools_with_missing_server_not_in_cache(
             "tools": [
                 {
                     "name": "server1",
-                    "tools": [
-                        {"name": "tool1", "description": "Tool 1 description"}
-                    ],
+                    "tools": [{"name": "tool1", "description": "Tool 1 description"}],
                     "description": "",
                     "enabled": True,
                     "icon": "",
