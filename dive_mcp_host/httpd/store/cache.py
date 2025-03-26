@@ -37,7 +37,7 @@ class LocalFileCache:
 
         logger.info("LocalCache directory: %s", self._cache_dir)
         logger.info("LocalCache file prefix: %s", self._cache_file_prefix)
-        self._cache_dir.mkdir(mode=0o644, parents=True, exist_ok=True)
+        self._cache_dir.mkdir(mode=0o744, parents=True, exist_ok=True)
         logger.info("LocalCache directory prepared")
 
     def get_cache_file_path(self, key: CacheKeys, extension: str = "json") -> Path:

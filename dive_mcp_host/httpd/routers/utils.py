@@ -105,7 +105,7 @@ class EventStreamContextManager:
                 continue
             yield "data: " + chunk + "\n\n"
 
-        yield "data: [Done]\n\n"
+        yield "data: [DONE]\n\n"
 
     def get_response(self) -> StreamingResponse:
         """Get the streaming response.

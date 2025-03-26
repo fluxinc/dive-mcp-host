@@ -183,6 +183,8 @@ async def post_model_replace_all(
         ResultResponse: Result of the replace operation.
     """
     app.model_config_manager.replace_all_settings(model_config)
+    if not app.model_config_manager.initialize():
+        raise ValueError("Failed to reload model configuration")
     return ResultResponse(success=True)
 
 
