@@ -13,6 +13,7 @@ from langchain_core.messages import (
 from pydantic import AnyUrl
 
 from dive_mcp_host.host.conf import CheckpointerConfig, HostConfig, LLMConfig
+from dive_mcp_host.host.errors import ThreadNotFoundError
 from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.host.tools import ServerConfig
 from dive_mcp_host.models.fake import FakeMessageToolModel, default_responses
@@ -159,8 +160,21 @@ async def test_get_messages(echo_tool_stdio_config: dict[str, ServerConfig]) -> 
                 == "Hello, world! 許個願望吧"
             )
 
-            empty_messages = await mcp_host.get_messages("non_existent_thread_id")
-            assert len(empty_messages) == 0
+            with pytest.raises(ThreadNotFoundError):
+                _ = await mcp_host.get_messages("non-existent-thread-id")
+
+            messages = await mcp_host.get_messages(thread_id)
+            assert len(messages) > 0
+            for i, msg in enumerate(
+                [msg for msg in messages if isinstance(msg, HumanMessage)]
+            ):
+                match msg.content:
+                    case "Hello, world! 許個願望吧":
+                        assert i == 0, "First message should be the first message"
+                    case "Second message":
+                        assert i == 1, "Second message should be the second message"
+                    case _:
+                        raise ValueError(f"Unexpected message: {msg.content}")
 
 
 @pytest.mark.asyncio
