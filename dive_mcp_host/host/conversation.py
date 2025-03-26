@@ -53,7 +53,7 @@ class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
         self._system_prompt = system_prompt
         self._agent: CompiledGraph | None = None
         self._agent_factory: AgentFactory[STATE_TYPE] = agent_factory
-        self._abort_signal: asyncio.Event = asyncio.Event()
+        self._abort_signal: asyncio.Event | None = None
 
     @property
     def thread_id(self) -> str:
@@ -62,6 +62,8 @@ class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
 
     def abort(self) -> None:
         """Abort the conversation."""
+        if self._abort_signal is None:
+            return
         self._abort_signal.set()
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
@@ -101,6 +103,8 @@ class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
         async def _stream_response() -> AsyncGenerator[dict[str, Any] | Any, None]:
             if self._agent is None:
                 raise GraphNotCompiledError(self._thread_id)
+            signal = asyncio.Event()
+            self._abort_signal = signal
             async for response in self._agent.astream(
                 self._agent_factory.create_initial_state(
                     query=query,
@@ -111,8 +115,7 @@ class Conversation[STATE_TYPE: Mapping[str, Any]](ContextProtocol):
                     thread_id=self._thread_id,
                 ),
             ):
-                if self._abort_signal.is_set():
-                    self._abort_signal.clear()
+                if signal.is_set():
                     break
                 yield response
 

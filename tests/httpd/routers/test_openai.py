@@ -77,7 +77,7 @@ def mock_event_stream():
     mock_instance = MagicMock()
     mock_instance.queue = asyncio.Queue()
     mock_instance.get_response.return_value = StreamingResponse(
-        content=iter(["data: [Done]\n\n"]),
+        content=iter(["data: [DONE]\n\n"]),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
@@ -356,7 +356,7 @@ def test_chat_completions_streaming(mock_chat_processor, client, mock_event_stre
                     '"model":"test-model","choices":[{"index":0,"delta":{},'
                     '"finish_reason":"stop"}]}\n\n'
                 ),
-                "data: [Done]\n\n",
+                "data: [DONE]\n\n",
             ]
         ),
         media_type="text/event-stream",
@@ -384,7 +384,7 @@ def test_chat_completions_streaming(mock_chat_processor, client, mock_event_stre
     assert "test-model" in content
     assert "Test response" in content
     assert "finish_reason" in content
-    assert "data: [Done]\n\n" in content
+    assert "data: [DONE]\n\n" in content
 
 
 @pytest.mark.asyncio
