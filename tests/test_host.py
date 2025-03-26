@@ -113,6 +113,7 @@ async def test_query_two_messages() -> None:
 @pytest.mark.asyncio
 async def test_get_messages(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
     """Test the get_messages."""
+    user_id = "default"
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
@@ -146,7 +147,7 @@ async def test_get_messages(echo_tool_stdio_config: dict[str, ServerConfig]) -> 
                 pass
 
             thread_id = conversation.thread_id
-            messages = await mcp_host.get_messages(thread_id)
+            messages = await mcp_host.get_messages(thread_id, user_id)
             assert len(messages) > 0
 
             human_messages = [msg for msg in messages if isinstance(msg, HumanMessage)]
@@ -165,9 +166,9 @@ async def test_get_messages(echo_tool_stdio_config: dict[str, ServerConfig]) -> 
             )
 
             with pytest.raises(ThreadNotFoundError):
-                _ = await mcp_host.get_messages("non-existent-thread-id")
+                _ = await mcp_host.get_messages("non-existent-thread-id", user_id)
 
-            messages = await mcp_host.get_messages(thread_id)
+            messages = await mcp_host.get_messages(thread_id, user_id)
             assert len(messages) > 0
             for i, msg in enumerate(
                 [msg for msg in messages if isinstance(msg, HumanMessage)]

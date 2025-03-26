@@ -192,11 +192,12 @@ class DiveMcpHost(ContextProtocol):
             raise RuntimeError("Model not initialized")
         return self._model
 
-    async def get_messages(self, thread_id: str) -> list[BaseMessage]:
+    async def get_messages(self, thread_id: str, user_id: str) -> list[BaseMessage]:
         """Get messages of a specific thread.
 
         Args:
             thread_id: The thread ID to retrieve messages for.
+            user_id: The user ID to retrieve messages for.
 
         Returns:
             A list of messages.
@@ -211,6 +212,7 @@ class DiveMcpHost(ContextProtocol):
             {
                 "configurable": {
                     "thread_id": thread_id,
+                    "user_id": user_id,
                 }
             }
         ):
