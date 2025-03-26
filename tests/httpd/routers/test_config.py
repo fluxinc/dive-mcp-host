@@ -22,7 +22,7 @@ MOCK_MODEL_CONFIG = ModelConfig(
     enableTools=True,
     configs={
         "openai": LLMConfig(
-            model="gpt-4",
+            model="gpt-4o",
             modelProvider="openai",
             apiKey="sk-mock-key",
             temperature=0.7,
