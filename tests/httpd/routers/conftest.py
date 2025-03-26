@@ -126,7 +126,5 @@ async def test_client(
         A tuple of the test client and the app.
     """
     app = create_app(config_files.service_config_file)
-    async with app.prepare():
-        with TestClient(app) as client:
-            yield client, app
-    await app.cleanup()
+    with TestClient(app) as client:
+        yield client, app
