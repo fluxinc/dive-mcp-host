@@ -181,6 +181,13 @@ class DiveMcpHost(ContextProtocol):
         """
         return self._tool_manager.mcp_server_info
 
+    @property
+    def model(self) -> BaseChatModel:
+        """The model of the host."""
+        if self._model is None:
+            raise RuntimeError("Model not initialized")
+        return self._model
+
     async def get_messages(self, thread_id: str) -> list[BaseMessage]:
         """Get messages of a specific thread.
 

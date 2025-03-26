@@ -133,7 +133,7 @@ async def test_get_messages(echo_tool_stdio_config: dict[str, ServerConfig]) -> 
                 ],
             ),
         ]
-        cast("FakeMessageToolModel", mcp_host._model).responses = fake_responses
+        cast("FakeMessageToolModel", mcp_host.model).responses = fake_responses
         conversation = mcp_host.conversation()
         async with conversation:
             async for _ in conversation.query(
@@ -201,8 +201,8 @@ async def test_callable_system_prompt() -> None:
             system_prompt=mock_system_prompt, volatile=True
         ) as conversation,
     ):
-        assert mcp_host._model is not None
-        model = cast("FakeMessageToolModel", mcp_host._model)
+        assert mcp_host.model is not None
+        model = cast("FakeMessageToolModel", mcp_host.model)
         async for _ in conversation.query(
             msgs,
         ):
@@ -247,8 +247,7 @@ async def test_abort_conversation() -> None:
     ]
 
     async with DiveMcpHost(config) as mcp_host:
-        # Set up the fake model with a long sleep time
-        model = cast("FakeMessageToolModel", mcp_host._model)
+        model = cast("FakeMessageToolModel", mcp_host.model)
         model.responses = fake_responses
         model.sleep = 2.0  # 2 seconds sleep to simulate long running query
 
