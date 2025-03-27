@@ -35,6 +35,7 @@ def echo_tool_stdio_config() -> dict[str, ServerConfig]:  # noqa: D103
                 "dive_mcp_host.host.tools.echo",
                 "--transport=stdio",
             ],
+            transport="stdio",
         ),
     }
 

@@ -7,6 +7,7 @@ from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from os import environ
 from typing import TYPE_CHECKING, cast
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
@@ -22,6 +23,7 @@ from dive_mcp_host.host.conf import HostConfig, LLMConfig
 from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.host.tools import (
     ClientState,
+    McpServer,
     McpServerInfo,
     ServerConfig,
     ToolManager,
@@ -42,6 +44,30 @@ def echo_tool_stdio_config() -> dict[str, ServerConfig]:  # noqa: D103
                 "dive_mcp_host.host.tools.echo",
                 "--transport=stdio",
             ],
+            transport="stdio",
+        ),
+    }
+
+
+@pytest.fixture
+def echo_tool_local_sse_config(
+    unused_tcp_port_factory: Callable[[], int],
+) -> dict[str, ServerConfig]:
+    """Echo Local SSE server configuration."""
+    port = unused_tcp_port_factory()
+    return {
+        "echo": ServerConfig(
+            name="echo",
+            command="python3",
+            args=[
+                "-m",
+                "dive_mcp_host.host.tools.echo",
+                "--transport=sse",
+                "--host=localhost",
+                f"--port={port}",
+            ],
+            transport="sse",
+            url=f"http://localhost:{port}/sse",
         ),
     }
 
@@ -61,7 +87,14 @@ async def echo_tool_sse_server(
         "--host=localhost",
         f"--port={port}",
     )
-    yield port, {"echo": ServerConfig(name="echo", url=f"http://localhost:{port}/sse")}
+    yield (
+        port,
+        {
+            "echo": ServerConfig(
+                name="echo", url=f"http://localhost:{port}/sse", transport="sse"
+            )
+        },
+    )
     proc.send_signal(signal.SIGKILL)
     await proc.wait()
 
@@ -73,10 +106,12 @@ def no_such_file_mcp_server() -> dict[str, ServerConfig]:
         "no_such_file": ServerConfig(
             name="no_such_file",
             command="no_such_file",
+            transport="stdio",
         ),
         "sse": ServerConfig(
             name="sse_server",
             url="http://localhost:2/sse",
+            transport="sse",
         ),
     }
 
@@ -203,6 +238,76 @@ async def test_tool_manager_massive_tools(
     async with ToolManager(echo_tool_stdio_config) as tool_manager:
         tools = tool_manager.langchain_tools()
         assert len(tools) == 2 * (more_tools + 1)
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_exception_handling(
+    echo_tool_stdio_config: dict[str, ServerConfig],
+):
+    """Test the exception handling of the MCP tool.
+
+    This test verifies that:
+    1. When a tool call fails, the exception is properly propagated to the caller
+    2. The SSE connection is automatically reconnected after failure
+    3. Subsequent tool calls succeed after the connection is restored
+    """
+    async with McpServer("echo", echo_tool_stdio_config["echo"]) as server:
+        server.RESTART_INTERVAL = 0.1
+        tools = server.get_tools()
+        session = server._session
+        with patch("mcp.ClientSession.call_tool") as mocked:
+            mocked.side_effect = RuntimeError("test")
+            with pytest.raises(RuntimeError, match="test"):
+                await tools[0].ainvoke(
+                    ToolCall(
+                        name=tools[0].name,
+                        id="123",
+                        args={"xxxx": "Hello, world!"},
+                        type="tool_call",
+                    ),
+                )
+            assert mocked.call_count == 1
+        assert server._client_status in [
+            ClientState.RESTARTING,
+            ClientState.RUNNING,
+        ]
+        await server.wait([ClientState.RUNNING])
+        assert server._session != session
+        await tools[0].ainvoke(
+            ToolCall(
+                name=tools[0].name,
+                id="123",
+                args={"message": "Hello, world!"},
+                type="tool_call",
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_tool_manager_local_sse(
+    echo_tool_local_sse_config: dict[str, ServerConfig],
+) -> None:
+    """Test the tool manager."""
+    import logging
+
+    async with ToolManager(echo_tool_local_sse_config) as tool_manager:
+        tools = tool_manager.langchain_tools()
+        assert sorted([i.name for i in tools]) == ["echo", "ignore"]
+        for tool in tools:
+            result = await tool.ainvoke(
+                ToolCall(
+                    name=tool.name,
+                    id="123",
+                    args={"message": "Hello, world!"},
+                    type="tool_call",
+                ),
+            )
+            assert isinstance(result, ToolMessage)
+            if tool.name == "echo":
+                assert json.loads(str(result.content))[0]["text"] == "Hello, world!"
+            else:
+                assert json.loads(str(result.content)) == []
+            logging.info("Tool %s tested", tool.name)
 
 
 @pytest.mark.asyncio
