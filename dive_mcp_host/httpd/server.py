@@ -133,6 +133,7 @@ class DiveHostAPI(FastAPI):
                     env=server_config.env or {},
                     enabled=server_config.enabled,
                     url=server_config.url or None,
+                    transport=server_config.transport,
                 )
                 for server_name, server_config in self._mcp_server_config_manager.get_enabled_servers().items()  # noqa: E501
             },

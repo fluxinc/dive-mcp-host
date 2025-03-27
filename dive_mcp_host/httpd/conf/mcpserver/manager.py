@@ -2,16 +2,19 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
 
 
 # Define necessary types for configuration
 class ServerConfig(BaseModel):
     """Server configuration model."""
 
-    transport: Literal["command", "sse", "websocket"]
+    transport: Annotated[
+        Literal["stdio", "sse", "websocket"],
+        BeforeValidator(lambda v: "stdio" if v == "command" else v),
+    ]
     enabled: bool = True
     command: str | None = None
     args: list[str] | None = None
