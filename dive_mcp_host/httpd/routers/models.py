@@ -1,7 +1,7 @@
 from enum import StrEnum
-from typing import Any, Literal, TypeVar
+from typing import Annotated, Any, Literal, TypeVar
 
-from pydantic import BaseModel, Field, RootModel
+from pydantic import BaseModel, BeforeValidator, Field, RootModel
 
 from dive_mcp_host.host.conf import LLMConfig
 
@@ -15,13 +15,15 @@ class ResultResponse(BaseModel):
     message: str | None = None
 
 
-Transport = Literal["command", "sse", "websocket"]
+Transport = Literal["stdio", "sse", "websocket"]
 
 
 class McpServerConfig(BaseModel):
     """MCP server configuration with transport and connection settings."""
 
-    transport: Transport
+    transport: Annotated[
+        Transport, BeforeValidator(lambda v: "stdio" if v == "command" else v)
+    ]
     enabled: bool | None
     command: str | None
     args: list[str] | None
