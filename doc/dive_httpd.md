@@ -44,6 +44,9 @@ Configuration loading priority:
 - `--mcp_config <path>`: MCP server configuration file
   - Default: `${DIVE_CONFIG_DIR}/mcp_config.json`
   - Description: Configuration for MCP server settings
+- `--custom_rules <path>`: Custom rules file
+  - Default: `${DIVE_CONFIG_DIR}/custom_rules`
+  - Description: Custom rules for LLM
 - `--command_alias_config <path>`: Command alias configuration file
   - Default: `${DIVE_CONFIG_DIR}/command_alias.json`
   - Description: Configuration for command aliases
