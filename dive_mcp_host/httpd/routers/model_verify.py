@@ -1,35 +1,21 @@
 import asyncio
 import json
-import uuid
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable, Generator
+from contextlib import AsyncExitStack, contextmanager
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessage, ToolMessage
-from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from dive_mcp_host.host.conf import LLMConfig
+from dive_mcp_host.host.conf import HostConfig, LLMConfig
+from dive_mcp_host.host.host import DiveMcpHost
+from dive_mcp_host.host.tools.misc import TestTool
 from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.routers.utils import EventStreamContextManager
 from dive_mcp_host.httpd.server import DiveHostAPI
 
-if TYPE_CHECKING:
-    from dive_mcp_host.httpd.middlewares.general import DiveUser
-
 model_verify = APIRouter(tags=["model_verify"])
-
-
-class TestTool(BaseTool):
-    """Test tool."""
-
-    name: str = "test_tool"
-    description: str = "a simple test tool check tool functionality call it any name with any arguments, returns nothing"  # noqa: E501
-    called: bool = False
-
-    def _run(self, *_args: Any, **_kwargs: Any) -> Any:
-        self.called = True
-        return {"result": "success"}
 
 
 class ModelVerifyResult(BaseModel):
@@ -42,10 +28,156 @@ class ModelVerifyResult(BaseModel):
     # support_tools_result: str = Field(default="", alias="supportToolsResult")
 
 
+class ModelVerifyService:
+    """Model verify service."""
+
+    _abort_signal: asyncio.Event = asyncio.Event()
+    _stream_progress: Callable | None = None
+
+    def __init__(self, stream_progress: Callable | None = None) -> None:
+        """Initialize the model verify service.
+
+        Args:
+            stream_progress (Callable): The stream progress callback.
+        """
+        self._abort_signal = asyncio.Event()
+        self._stream_progress = stream_progress
+
+    async def test_models(
+        self,
+        llm_configs: list[LLMConfig],
+        subjects: list[Literal["connection", "tools"]],
+    ) -> dict[str, ModelVerifyResult]:
+        """Test the models.
+
+        Args:
+            llm_configs (list[LLMConfig]): The LLM configurations.
+            subjects (list[Literal["connection", "tools"]]): The subjects to verify.
+
+        Returns:
+            dict[str, ModelVerifyResult]: The results.
+        """
+        results = {}
+        for llm_config in llm_configs:
+            if self._abort_signal.is_set():
+                break
+            results[llm_config.model] = await self.test_model(
+                llm_config, subjects, llm_configs.index(llm_config) * len(subjects)
+            )
+        return results
+
+    def abort(self) -> None:
+        """Abort the test."""
+        self._abort_signal.set()
+
+    @contextmanager
+    def _handle_abort(self, abort_func: Callable) -> Generator[None, None, None]:
+        async def wait_for_abort() -> None:
+            await self._abort_signal.wait()
+            abort_func()
+
+        task = asyncio.create_task(wait_for_abort())
+        try:
+            yield
+        finally:
+            task.cancel()
+
+    async def _report_progress(
+        self,
+        step: int,
+        model_name: str,
+        test_type: str,
+        status: bool,
+        error: str | None,
+    ) -> None:
+        if not self._stream_progress:
+            return
+        await self._stream_progress(
+            {
+                "type": "progress",
+                "step": step,
+                "modelName": model_name,
+                "testType": test_type,
+                "status": "success" if status else "error",
+                "error": error,
+            }
+        )
+
+    async def test_model(
+        self,
+        llm_config: LLMConfig,
+        subjects: list[Literal["connection", "tools"]],
+        steps: int,
+    ) -> ModelVerifyResult:
+        """Run the model.
+
+        Args:
+            llm_config (LLMConfig): The LLM configuration.
+            subjects (list[Literal["connection", "tools"]]): The subjects to verify.
+            steps (int): The steps to verify.
+
+        Returns:
+            ModelVerifyResult
+        """
+        host = DiveMcpHost(HostConfig(llm=llm_config, mcp_servers={}))
+        async with host:
+            con_ok = False
+            tools_ok = False
+            n_step = steps
+            if "connection" in subjects:
+                n_step += 1
+                con_ok = await self._check_connection(host)
+                await self._report_progress(
+                    n_step, llm_config.model, "connection", con_ok, None
+                )
+            if "tools" in subjects:
+                n_step += 1
+                tools_ok = await self._check_tools(host)
+                await self._report_progress(
+                    n_step, llm_config.model, "tools", tools_ok, None
+                )
+            return ModelVerifyResult(
+                success=True,
+                connectingSuccess=con_ok,
+                supportTools=tools_ok,
+            )
+
+    async def _check_connection(self, host: DiveMcpHost) -> bool:
+        """Check if the model is connected."""
+        conversation = host.conversation(volatile=True)
+        async with AsyncExitStack() as stack:
+            await stack.enter_async_context(conversation)
+            stack.enter_context(self._handle_abort(conversation.abort))
+            _responses = [
+                response
+                async for response in conversation.query(
+                    "Only return 'Hi' strictly", stream_mode=["updates"]
+                )
+            ]
+            return True
+        return False
+
+    async def _check_tools(self, host: DiveMcpHost) -> bool:
+        """Check if the model supports tools."""
+        test_tool = TestTool()
+        conversation = host.conversation(volatile=True, tools=[test_tool])
+        async with AsyncExitStack() as stack:
+            await stack.enter_async_context(conversation)
+            stack.enter_context(self._handle_abort(conversation.abort))
+            _responses = [
+                response
+                async for response in conversation.query(
+                    "run test_tool", stream_mode=["updates"]
+                )
+            ]
+            return test_tool.called
+        return False
+
+
 @model_verify.post("")
 async def do_verify_model(
     app: DiveHostAPI = Depends(get_app),
-    settings: LLMConfig | None = None,  # noqa: ARG001
+    settings: LLMConfig | None = None,
 ) -> ModelVerifyResult:
     """Verify if a model supports streaming capabilities.
 
@@ -53,32 +185,19 @@ async def do_verify_model(
         ModelVerifyResult
     """
     dive_host = app.dive_host["default"]
-    test_tool = TestTool()
-    conversation = dive_host.conversation(
-        tools=[test_tool],
-        volatile=True,
-    )
 
-    async with conversation:
-        _responses = [
-            response
-            async for response in conversation.query(
-                "run test_tool", stream_mode=["updates"]
-            )
-        ]
+    if not settings:
+        settings = dive_host._config.llm  # noqa: SLF001
 
-    return ModelVerifyResult(
-        success=True,
-        connectingSuccess=True,
-        supportTools=test_tool.called,
-    )
+    test_service = ModelVerifyService()
+    return await test_service.test_model(settings, ["connection", "tools"], 0)
 
 
 @model_verify.post("/streaming")
 async def verify_model(
     request: Request,
     app: DiveHostAPI = Depends(get_app),
-    settings: LLMConfig | None = None,  # noqa: ARG001
+    settings: LLMConfig | None = None,
 ) -> StreamingResponse:
     """Verify if a model supports streaming capabilities.
 
@@ -86,56 +205,31 @@ async def verify_model(
         CompletionEventStreamContextManager
     """
     dive_host = app.dive_host["default"]
-    chat_id = str(uuid.uuid4())
-    model_name = dive_host._config.llm.model  # noqa: SLF001
+    if not settings:
+        settings = dive_host.config.llm
     stream = EventStreamContextManager()
+    test_service = ModelVerifyService(lambda x: stream.write(json.dumps(x)))
     response = stream.get_response()
-    dive_user: DiveUser = request.state.dive_user
 
-    test_tool = TestTool()
-    conversation = dive_host.conversation(
-        thread_id=chat_id,
-        user_id=dive_user["user_id"] or "default",
-        tools=[test_tool],
-        volatile=True,
-    )
+    @contextmanager
+    def handle_connection() -> Generator[None, None, None]:
+        async def abort_func() -> None:
+            while not await request.is_disconnected():
+                await asyncio.sleep(1)
+            test_service.abort()
 
-    async def abort_handler() -> None:
-        while not await request.is_disconnected():
-            await asyncio.sleep(1)
-        conversation.abort()
+        task = asyncio.create_task(abort_func())
+        try:
+            yield
+        finally:
+            task.cancel()
 
     async def process() -> None:
-        async with stream:
-            task = asyncio.create_task(abort_handler())
-            conversation.query("run test_tool", stream_mode=["updates"])
-            async with conversation:
-                responses = [
-                    response[1]  # type: ignore
-                    async for response in conversation.query(
-                        "run test_tool", stream_mode=["updates"]
-                    )
-                ]
-
-            tool_response: ToolMessage | None = None
-            ai_response: AIMessage | None = None
-            for response in responses[::-1]:
-                if isinstance(response, ToolMessage):
-                    tool_response = response
-                elif isinstance(response, AIMessage):
-                    ai_response = response
-
-            await stream.write(
-                json.dumps(
-                    {
-                        "type": "progress",
-                        "step": 1,
-                        "modelName": model_name,
-                        "testType": "tools",
-                        "status": "success" if test_tool.called else "error",
-                        "error": None,
-                    }
-                )
+        async with AsyncExitStack() as stack:
+            await stack.enter_async_context(stream)
+            stack.enter_context(handle_connection())
+            results = await test_service.test_models(
+                [settings], ["connection", "tools"]
             )
             await stream.write(
                 json.dumps(
@@ -143,28 +237,23 @@ async def verify_model(
                         "type": "final",
                         "results": [
                             {
-                                "modelName": model_name,
+                                "modelName": n,
                                 "connection": {
-                                    "status": "success",
-                                    "result": ai_response.content
-                                    if ai_response
-                                    else None,
+                                    "status": "success"
+                                    if r.connecting_success
+                                    else "error",
+                                    "result": "",  # r.connecting_result,
                                 },
                                 "tools": {
-                                    "status": "success"
-                                    if test_tool.called
-                                    else "error",
-                                    "result": tool_response.content
-                                    if tool_response
-                                    else None,
+                                    "status": "success" if r.support_tools else "error",
+                                    "result": "",  # r.support_tools_result,
                                 },
                             }
+                            for n, r in results.items()
                         ],
                     }
                 )
             )
-
-            task.cancel()
 
     stream.add_task(process)
     return response

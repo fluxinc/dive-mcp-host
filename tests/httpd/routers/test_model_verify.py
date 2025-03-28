@@ -1,6 +1,9 @@
 import json
+import os
 import re
+from typing import cast
 
+import pytest
 from fastapi import status
 
 from tests import helper
@@ -18,6 +21,8 @@ MOCK_MODEL_SETTING = {
 
 def test_do_verify_model(test_client):
     """Test the /api/model_verify POST endpoint."""
+    if not os.environ.get("OPENAI_API_KEY"):
+        pytest.skip("OPENAI_API_KEY is not set")
     client, _ = test_client
 
     # Prepare test data
@@ -35,7 +40,7 @@ def test_do_verify_model(test_client):
     assert response.status_code == status.HTTP_200_OK
 
     # Parse JSON response
-    response_data = response.json()
+    response_data = cast(dict, response.json())
 
     # Validate response structure
     assert response_data["success"] is True
