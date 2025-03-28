@@ -2,32 +2,20 @@ import asyncio
 import json
 from collections.abc import Callable, Generator
 from contextlib import AsyncExitStack, contextmanager
-from typing import Any, Literal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from dive_mcp_host.host.conf import HostConfig, LLMConfig
 from dive_mcp_host.host.host import DiveMcpHost
+from dive_mcp_host.host.tools.misc import TestTool
 from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.routers.utils import EventStreamContextManager
 from dive_mcp_host.httpd.server import DiveHostAPI
 
 model_verify = APIRouter(tags=["model_verify"])
-
-
-class TestTool(BaseTool):
-    """Test tool."""
-
-    name: str = "test_tool"
-    description: str = "a simple test tool check tool functionality call it any name with any arguments, returns nothing"  # noqa: E501
-    called: bool = False
-
-    def _run(self, *_args: Any, **_kwargs: Any) -> Any:
-        self.called = True
-        return {"result": "success"}
 
 
 class ModelVerifyResult(BaseModel):
