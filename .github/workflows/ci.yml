@@ -31,11 +31,25 @@ jobs:
         uv sync --extra dev
 
     - name: Test with pytest
+      if: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/tags/development'}}
       env:
         POSTGRES_URI: postgresql://mcp:mcp@postgres:5432/mcp
         POSTGRES_URI_ASYNC: postgresql+asyncpg://mcp:mcp@postgres:5432/mcp
         SQLITE_URI: sqlite:///dummy.db
         SQLITE_URI_ASYNC: sqlite+aiosqlite:///dummy.db
+      run: |
+        uv run --extra dev pytest
+
+    - name: Test with pytest
+      if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/tags/development' }}
+      env:
+        POSTGRES_URI: postgresql://mcp:mcp@postgres:5432/mcp
+        POSTGRES_URI_ASYNC: postgresql+asyncpg://mcp:mcp@postgres:5432/mcp
+        SQLITE_URI: sqlite:///dummy.db
+        SQLITE_URI_ASYNC: sqlite+aiosqlite:///dummy.db
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        OLLAMA_URL: ${{ env.OLLAMA_URL }}
+        OLLAMA_MODEL: ${{ env.OLLAMA_MODEL }}
       run: |
         uv run --extra dev pytest
 
