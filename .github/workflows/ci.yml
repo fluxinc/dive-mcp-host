@@ -41,7 +41,7 @@ jobs:
         uv run --extra dev pytest
 
     - name: Test with pytest
-      if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/tags/development' }}
+      if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development' }}
       env:
         POSTGRES_URI: postgresql://mcp:mcp@postgres:5432/mcp
         POSTGRES_URI_ASYNC: postgresql+asyncpg://mcp:mcp@postgres:5432/mcp
