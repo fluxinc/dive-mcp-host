@@ -62,11 +62,6 @@ class EventStreamContextManager:
         """Initialize the event stream context manager."""
         self.queue = asyncio.Queue()
 
-    def __del__(self) -> None:
-        """Delete the event stream context manager."""
-        self.done = True
-        asyncio.create_task(self.queue.put(None))  # noqa: RUF006
-
     def add_task(
         self, func: Callable[[], Coroutine[Any, Any, Any]], *args: Any, **kwargs: Any
     ) -> None:

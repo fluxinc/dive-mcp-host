@@ -177,7 +177,7 @@ class ModelVerifyService:
 @model_verify.post("")
 async def do_verify_model(
     app: DiveHostAPI = Depends(get_app),
-    settings: LLMConfig | None = None,
+    settings: dict[str, LLMConfig] | None = None,
 ) -> ModelVerifyResult:
     """Verify if a model supports streaming capabilities.
 
@@ -186,18 +186,20 @@ async def do_verify_model(
     """
     dive_host = app.dive_host["default"]
 
-    if not settings:
-        settings = dive_host._config.llm  # noqa: SLF001
+    llm_config = settings.get("modelSettings") if settings else None
+
+    if not llm_config:
+        llm_config = dive_host._config.llm  # noqa: SLF001
 
     test_service = ModelVerifyService()
-    return await test_service.test_model(settings, ["connection", "tools"], 0)
+    return await test_service.test_model(llm_config, ["connection", "tools"], 0)
 
 
 @model_verify.post("/streaming")
 async def verify_model(
     request: Request,
     app: DiveHostAPI = Depends(get_app),
-    settings: LLMConfig | None = None,
+    settings: dict[str, list[LLMConfig]] | None = None,
 ) -> StreamingResponse:
     """Verify if a model supports streaming capabilities.
 
@@ -205,8 +207,10 @@ async def verify_model(
         CompletionEventStreamContextManager
     """
     dive_host = app.dive_host["default"]
-    if not settings:
-        settings = dive_host.config.llm
+
+    llm_configs = settings.get("modelSettings") if settings else None
+    if not llm_configs:
+        llm_configs = [dive_host.config.llm]
     stream = EventStreamContextManager()
     test_service = ModelVerifyService(lambda x: stream.write(json.dumps(x)))
     response = stream.get_response()
@@ -229,7 +233,7 @@ async def verify_model(
             await stack.enter_async_context(stream)
             stack.enter_context(handle_connection())
             results = await test_service.test_models(
-                [settings], ["connection", "tools"]
+                llm_configs, ["connection", "tools"]
             )
             await stream.write(
                 json.dumps(
