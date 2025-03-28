@@ -2,9 +2,9 @@ import asyncio
 import json
 from collections.abc import Callable, Generator
 from contextlib import AsyncExitStack, contextmanager
-from typing import Annotated, Literal
+from typing import Literal
 
-from fastapi import APIRouter, Body, Depends, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
