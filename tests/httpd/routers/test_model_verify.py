@@ -15,7 +15,7 @@ MOCK_MODEL_SETTING = {
     "temperature": 0.7,
     "topP": 0.9,
     "maxTokens": 4000,
-    "configuration": {"baseURL": "https://api.openai.com/v1"},
+    "configuration": {"base_url": "https://api.openai.com/v1"},
 }
 
 
@@ -23,6 +23,7 @@ def test_do_verify_model(test_client):
     """Test the /api/model_verify POST endpoint."""
     if not os.environ.get("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY is not set")
+    MOCK_MODEL_SETTING["apiKey"] = os.environ.get("OPENAI_API_KEY")
     client, _ = test_client
 
     # Prepare test data
