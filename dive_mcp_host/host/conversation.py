@@ -156,10 +156,15 @@ class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
         """Query the conversation.
 
         Args:
-            query: The query to ask the conversation.
+            query: The query to ask the conversation. Can be a string, HumanMessage, or
+                list of messages.
+                For resending messages, pass the messages to resend here.
             stream_mode: The mode to stream the response.
-            modify: The messages to modify.
-            is_resend: Whether the query is a resend.
+            modify: Messages to modify in the conversation state. Used for modifying
+                messages without resending, e.g. when confirming tool call parameters.
+            is_resend: If True, indicates that query contains messages to resend. The
+                messages in query and all subsequent messages in the state will be
+                removed. Any messages in modify that appear in query will be ignored.
 
         Returns:
             An async generator of the response.
@@ -169,12 +174,11 @@ class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
         """
         resend_msg = []
         if is_resend and query:
-            if isinstance(query, BaseMessage):
-                resend_msg = [query]
-            elif isinstance(query, str):
-                raise MessageTypeError("Cannot resend a string")
-            else:
-                resend_msg = query
+            resend_msg = [query] if isinstance(query, BaseMessage) else query
+            if not all(isinstance(msg, BaseMessage) and msg.id for msg in resend_msg):
+                raise MessageTypeError(
+                    "All resending messages must be instances of BaseMessage with an ID"
+                )
 
         async def _stream_response() -> AsyncGenerator[dict[str, Any] | Any, None]:
             if modify or resend_msg:
