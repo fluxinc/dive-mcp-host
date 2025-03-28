@@ -36,6 +36,9 @@ jobs:
         POSTGRES_URI_ASYNC: postgresql+asyncpg://mcp:mcp@postgres:5432/mcp
         SQLITE_URI: sqlite:///dummy.db
         SQLITE_URI_ASYNC: sqlite+aiosqlite:///dummy.db
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        OLLAMA_URL: ${{ env.OLLAMA_URL }}
+        OLLAMA_MODEL: ${{ env.OLLAMA_MODEL }}
       run: |
         uv run --extra dev pytest
 
