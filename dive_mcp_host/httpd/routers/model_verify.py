@@ -218,7 +218,7 @@ async def verify_model(
     """
     dive_host = app.dive_host["default"]
     if not settings:
-        settings = dive_host._config.llm  # noqa: SLF001
+        settings = dive_host.config.llm
     stream = EventStreamContextManager()
     test_service = ModelVerifyService(lambda x: stream.write(json.dumps(x)))
     response = stream.get_response()
