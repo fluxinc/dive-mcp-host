@@ -129,6 +129,26 @@ class ModelManager:
         return self._current_setting
 
     @property
+    def full_config(self) -> ModelConfig | None:
+        """Get the full model configuration.
+
+        Returns:
+            Model configuration or None if configuration is not found.
+        """
+        if not self._config_dict:
+            return None
+
+        return ModelConfig(
+            activeProvider=self._config_dict.get(
+                "activeProvider", self._config_dict.get("active_provider", "")
+            ),
+            enableTools=self._config_dict.get(
+                "enableTools", self._config_dict.get("enable_tools", True)
+            ),
+            configs=self._config_dict.get("configs", {}),
+        )
+
+    @property
     def config_path(self) -> str:
         """Get the configuration path."""
         return self._config_path
@@ -176,14 +196,18 @@ class ModelManager:
                 "activeProvider": provider,
                 "enableTools": enable_tools,
                 "configs": {
-                    provider: upload_model_settings,
+                    provider: upload_model_settings.model_dump(
+                        by_alias=True, exclude_none=True
+                    ),
                 },
             }
         else:
             self._config_dict["activeProvider"] = provider
             if "configs" not in self._config_dict:
                 self._config_dict["configs"] = {}
-            self._config_dict["configs"][provider] = upload_model_settings
+            self._config_dict["configs"][provider] = upload_model_settings.model_dump(
+                by_alias=True, exclude_none=True
+            )
             self._config_dict["enableTools"] = enable_tools
 
         with Path(self._config_path).open("w", encoding="utf-8") as f:
@@ -202,7 +226,11 @@ class ModelManager:
             True if successful.
         """
         with Path(self._config_path).open("w", encoding="utf-8") as f:
-            json.dump(upload_model_settings, f, indent=2)
+            json.dump(
+                upload_model_settings.model_dump(by_alias=True, exclude_none=True),
+                f,
+                indent=2,
+            )
 
 
 if __name__ == "__main__":

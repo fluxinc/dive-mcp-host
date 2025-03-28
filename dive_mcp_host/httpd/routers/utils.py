@@ -105,7 +105,7 @@ class EventStreamContextManager:
                 continue
             yield "data: " + chunk + "\n\n"
 
-        yield "data: [Done]\n\n"
+        yield "data: [DONE]\n\n"
 
     def get_response(self) -> StreamingResponse:
         """Get the streaming response.
@@ -402,8 +402,8 @@ class ChatProcessor:
                 else:
                     # idk what is this
                     logger.warning("Unknown message type: %s", message)
-            elif res_type == "values" and len(res_content["messages"]) >= 2:  # type: ignore[index]  # noqa: PLR2004
-                latest_messages = res_content["messages"]  # type: ignore  # noqa: PGH003
+            elif res_type == "values" and len(res_content["messages"]) >= 2:  # type: ignore  # noqa: PLR2004
+                latest_messages = res_content["messages"]  # type: ignore
             else:
                 pass
 

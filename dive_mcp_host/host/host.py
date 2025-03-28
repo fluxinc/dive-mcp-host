@@ -1,17 +1,18 @@
 import logging
-from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Any, Self, TypedDict
+from typing import TYPE_CHECKING, Self
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import MessagesState
 from langgraph.prebuilt.tool_node import ToolNode
 
 from dive_mcp_host.host.agents import AgentFactory, get_chat_agent_factory
 from dive_mcp_host.host.conf import HostConfig
 from dive_mcp_host.host.conversation import Conversation
+from dive_mcp_host.host.errors import ThreadNotFoundError
 from dive_mcp_host.host.helpers.checkpointer import get_checkpointer
 from dive_mcp_host.host.helpers.context import ContextProtocol
 from dive_mcp_host.host.tools import McpServerInfo, ToolManager
@@ -19,6 +20,9 @@ from dive_mcp_host.models import load_model
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
+
+
+logger = logging.getLogger(__name__)
 
 
 class DiveMcpHost(ContextProtocol):
@@ -99,7 +103,7 @@ class DiveMcpHost(ContextProtocol):
         )
         self._model = model
 
-    def conversation[T: Mapping[str, Any]](  # noqa: PLR0913 Is there a better way to do this?
+    def conversation[T: MessagesState](  # noqa: PLR0913 Is there a better way to do this?
         self,
         *,
         thread_id: str | None = None,
@@ -181,43 +185,36 @@ class DiveMcpHost(ContextProtocol):
         """
         return self._tool_manager.mcp_server_info
 
-    async def get_messages(self, thread_id: str) -> list[BaseMessage]:
+    @property
+    def model(self) -> BaseChatModel:
+        """The model of the host."""
+        if self._model is None:
+            raise RuntimeError("Model not initialized")
+        return self._model
+
+    async def get_messages(self, thread_id: str, user_id: str) -> list[BaseMessage]:
         """Get messages of a specific thread.
 
         Args:
             thread_id: The thread ID to retrieve messages for.
+            user_id: The user ID to retrieve messages for.
 
         Returns:
             A list of messages.
+
+        Raises:
+            ThreadNotFoundError: If the thread is not found.
         """
         if self._checkpointer is None:
             return []
 
-        try:
-
-            class State(TypedDict):
-                messages: list
-
-            def node(state: State) -> State:
-                return state
-
-            builder = StateGraph(State)
-            builder.add_node(node)
-            builder.add_edge(START, "node")
-            builder.add_edge("node", END)
-            graph = builder.compile(checkpointer=self._checkpointer)
-
-            state = await graph.aget_state(
-                {
-                    "configurable": {
-                        "thread_id": thread_id,
-                    }
-                },
-            )
-
-            return state.values.get("messages", [])
-
-        except (AttributeError, KeyError, TypeError, IndexError) as e:
-            logging.error("Error retrieving thread details for %s: %s", thread_id, e)
-
-        return []
+        if ckp := await self._checkpointer.aget(
+            {
+                "configurable": {
+                    "thread_id": thread_id,
+                    "user_id": user_id,
+                }
+            }
+        ):
+            return ckp["channel_values"].get("messages", [])
+        raise ThreadNotFoundError(thread_id)

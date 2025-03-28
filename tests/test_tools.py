@@ -240,7 +240,7 @@ async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) 
             ]
             assert len(responses) == len(fake_responses) + 1  # plus one tool message
             # need more understanding of the response structure
-            tool_message = responses[-1][1][0]  # type: ignore noqa: PGH003
+            tool_message = responses[-1][1][0]  # type: ignore
             assert isinstance(tool_message, ToolMessage)
             assert tool_message.name == "echo"
             assert json.loads(str(tool_message.content))[0]["text"] == "Hello, world!"
