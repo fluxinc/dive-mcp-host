@@ -8,17 +8,17 @@ from random import randint
 from fastapi import UploadFile
 from PIL import Image
 
-from .store import SUPPORTED_DOCUMENT_EXTENSIONS, SUPPORTED_IMAGE_EXTENSIONS, Store
+from dive_mcp_host.httpd.conf.envs import RESOURCE_DIR
 
-ROOT = Path.cwd()
-UPLOAD_DIR = ROOT.joinpath("uploads")
+from .store import SUPPORTED_DOCUMENT_EXTENSIONS, SUPPORTED_IMAGE_EXTENSIONS, Store
 
 
 class LocalStore(Store):
     """Local store implementation."""
 
-    def __init__(self, upload_dir: Path = UPLOAD_DIR) -> None:
+    def __init__(self, root_dir: Path = RESOURCE_DIR) -> None:
         """Initialize the local store."""
+        upload_dir = root_dir / "upload"
         upload_dir.mkdir(parents=True, exist_ok=True)
         self.upload_dir = upload_dir
 

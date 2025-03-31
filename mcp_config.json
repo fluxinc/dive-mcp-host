@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "biggo-mcp-server": {
+            "transport": "command",
+            "command": "uvx",
+            "args": [
+                "BigGo-MCP-Server@latest"
+            ]
+        }
+    }
+}

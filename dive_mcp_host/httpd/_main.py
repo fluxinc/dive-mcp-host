@@ -4,12 +4,14 @@ Support Restful API and websocket.
 """
 
 import socket
+from pathlib import Path
 
 import uvicorn
 
 from dive_mcp_host.httpd.app import create_app
 from dive_mcp_host.httpd.conf.arguments import Arguments
-from dive_mcp_host.httpd.conf.service.manager import ServiceManager
+from dive_mcp_host.httpd.conf.envs import RESOURCE_DIR
+from dive_mcp_host.httpd.conf.service.manager import ConfigLocation, ServiceManager
 
 
 def main() -> None:
@@ -21,7 +23,19 @@ def main() -> None:
     if service_config_manager.current_setting is None:
         raise ValueError("Service config manager is not initialized")
 
-    app = create_app(str(args.httpd_config))
+    # Overwrite defaults from command line arguments
+    resource_dir = Path(args.working_dir) if args.working_dir else RESOURCE_DIR
+    service_config_manager.overwrite_paths(
+        ConfigLocation(
+            mcp_server_config_path=str(args.mcp_config),
+            model_config_path=str(args.llm_config),
+            prompt_config_path=str(args.custom_rules),
+            command_alias_config_path=str(args.command_alias_config),
+        ),
+        resource_dir=resource_dir,
+    )
+
+    app = create_app(service_config_manager)
 
     if args.port:
         uvicorn.run(

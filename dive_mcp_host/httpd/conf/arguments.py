@@ -5,6 +5,8 @@ from typing import Annotated, Self
 
 from pydantic import AfterValidator, BaseModel, Field, model_validator
 
+from dive_mcp_host.httpd.conf.envs import DIVE_CONFIG_DIR
+
 type StrPath = str | Path
 
 
@@ -88,7 +90,7 @@ class Arguments(BaseModel):
     @model_validator(mode="after")
     def rewrite_default_path(self) -> Self:
         """Rewrite default config file path according to working directory."""
-        cwd = Path(self.working_dir) if self.working_dir else Path.cwd()
+        cwd = Path(self.working_dir) if self.working_dir else DIVE_CONFIG_DIR
         if not self.httpd_config:
             self.httpd_config = cwd.joinpath("dive_httpd.json")
         if not self.llm_config:
