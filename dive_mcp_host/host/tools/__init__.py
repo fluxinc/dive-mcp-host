@@ -10,7 +10,6 @@ from asyncio import CancelledError
 from collections.abc import AsyncGenerator
 from contextlib import (
     AbstractAsyncContextManager,
-    AsyncExitStack,
     asynccontextmanager,
     suppress,
 )
@@ -37,7 +36,7 @@ from dive_mcp_host.host.errors import (
 from dive_mcp_host.host.helpers.context import ContextProtocol
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Awaitable, Callable
+    from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping
 
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
@@ -88,7 +87,13 @@ class ToolManager(ContextProtocol):
         """Initialize the ToolManager."""
         self._configs = configs
         self._mcp_servers = dict[str, McpServer]()
-        self._async_exit_stack = AsyncExitStack()
+        self._mcp_servers_task = dict[str, tuple[asyncio.Task, asyncio.Event]]()
+        self._lock = asyncio.Lock()
+
+        self._mcp_servers = {
+            name: McpServer(name=name, config=config)
+            for name, config in self._configs.items()
+        }
 
     def langchain_tools(
         self,
@@ -101,20 +106,60 @@ class ToolManager(ContextProtocol):
             ),
         )
 
+    async def _launch_tools(self, servers: Mapping[str, McpServer]) -> None:
+        async def tool_process(
+            server: McpServer, exit_signal: asyncio.Event, ready: asyncio.Event
+        ) -> None:
+            async with server:
+                ready.set()
+                await exit_signal.wait()
+
+        async with self._lock:
+            for name, server in servers.items():
+                event = asyncio.Event()
+                ready = asyncio.Event()
+                task = asyncio.create_task(tool_process(server, event, ready))
+                await ready.wait()
+                self._mcp_servers_task[name] = (task, event)
+
+    async def _shutdown_tools(self, servers: Iterable[str]) -> None:
+        async with self._lock:
+            for name in servers:
+                task, event = self._mcp_servers_task.pop(name, (None, None))
+                if not (task and event):
+                    continue
+                event.set()
+                await task
+                del self._mcp_servers[name]
+
+    async def reload(self, new_configs: dict[str, ServerConfig]) -> None:
+        """Reload the MCP servers."""
+        to_shutdown = set(self._configs.keys()) - set(new_configs.keys())
+        to_launch = set(new_configs.keys()) - set(self._configs.keys())
+
+        # check if the config has changed
+        for key in set(self._configs) - to_shutdown:
+            if self._configs[key] != new_configs[key]:
+                to_shutdown.add(key)
+                to_launch.add(key)
+
+        self._configs = new_configs
+
+        await self._shutdown_tools(to_shutdown)
+
+        launch_servers = {}
+        for l_key in to_launch:
+            new_server = McpServer(name=l_key, config=new_configs[l_key])
+            launch_servers[l_key] = new_server
+            self._mcp_servers[l_key] = new_server
+        await self._launch_tools(launch_servers)
+
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
         """Get the langchain tools for the MCP servers."""
-        # start tools
-        self._mcp_servers = {
-            name: McpServer(name=name, config=config)
-            for name, config in self._configs.items()
-        }
-
         # we can manipulate the stack to add or remove tools
-        async with self._async_exit_stack:
-            async with asyncio.TaskGroup() as tg:
-                for tool in self._mcp_servers.values():
-                    tg.create_task(self._async_exit_stack.enter_async_context(tool))
-            yield self
+        await self._launch_tools(self._mcp_servers)
+        yield self
+        await self._shutdown_tools(list(self._mcp_servers.keys()))
 
     @property
     def mcp_server_info(self) -> dict[str, McpServerInfo]:
