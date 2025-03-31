@@ -48,8 +48,8 @@ jobs:
         SQLITE_URI: sqlite:///dummy.db
         SQLITE_URI_ASYNC: sqlite+aiosqlite:///dummy.db
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        OLLAMA_URL: ${{ env.OLLAMA_URL }}
-        OLLAMA_MODEL: ${{ env.OLLAMA_MODEL }}
+        OLLAMA_URL: ${{ vars.OLLAMA_URL }}
+        OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL }}
       run: |
         uv run --extra dev pytest
 
