@@ -1,9 +1,17 @@
+import datetime
+import json
 from typing import TYPE_CHECKING, Annotated, TypeVar
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
-from dive_mcp_host.httpd.database.models import Chat, ChatMessage, QueryInput
+from dive_mcp_host.httpd.database.models import (
+    Chat,
+    ChatMessage,
+    Message,
+    QueryInput,
+    Role,
+)
 from dive_mcp_host.httpd.dependencies import get_app, get_dive_user
 from dive_mcp_host.httpd.routers.models import (
     ResultResponse,
@@ -193,6 +201,101 @@ async def get_chat(
             chat_id=chat_id,
             user_id=dive_user["user_id"],
         )
+
+    if chat is None:
+        raise UserInputError("Chat not found")
+
+    checkpointer_messages = await app.dive_host["default"].get_messages(
+        thread_id=chat_id,
+        user_id=dive_user["user_id"] or "",
+    )
+
+    checkpointer_chat_message = []
+
+    for index, msg in enumerate(checkpointer_messages):
+        if msg.type == "human":
+            msg_content = ""
+            if isinstance(msg.content, str):
+                msg_content = msg.content
+            elif isinstance(msg.content, list):
+                first_content = msg.content[0] if msg.content else {}
+                msg_content = (
+                    first_content.get("text", "")
+                    if isinstance(first_content, dict)
+                    else ""
+                )
+            else:
+                msg_content = ""
+            checkpointer_chat_message.append(
+                Message(
+                    id=index,
+                    createdAt=datetime.datetime.now(datetime.UTC),
+                    content=msg_content,
+                    role=Role("user"),
+                    chatId=chat_id,
+                    messageId=msg.id or "",
+                    files="[]",
+                    resource_usage=None,
+                )
+            )
+        if msg.type == "ai":
+            checkpointer_chat_message.append(
+                Message(
+                      id=index,
+                      createdAt=datetime.datetime.now(datetime.UTC),
+                      content=str(msg.content),
+                      role=Role("assistant"),
+                      chatId=chat_id,
+                      messageId=msg.id or "",
+                      files="[]",
+                      resource_usage=None,
+                )
+            )
+            tool_calls = msg.additional_kwargs.get("tool_calls", [])
+            if tool_calls:
+                tool_call_array = []
+                for tool_call in tool_calls:
+                    function = tool_call.get("function", {})
+                    tool_call_array.append(
+                        {
+                            "name": function.get("name", ""),
+                            "args": json.loads(function.get("arguments", "{}")),
+                        }
+                    )
+                content = json.dumps(tool_call_array)
+                checkpointer_chat_message.append(
+                    Message(
+                        id=index,
+                        createdAt=datetime.datetime.now(datetime.UTC),
+                        content=content,
+                        role=Role("tool_call"),
+                        chatId=chat_id,
+                        messageId=msg.id or "",
+                        files="[]",
+                        resource_usage=None,
+                    )
+                )
+        if msg.type == "tool":
+            checkpointer_chat_message.append(
+                Message(
+                    id=index,
+                    createdAt=datetime.datetime.now(datetime.UTC),
+                    content=str(msg.content),
+                    role=Role("tool_result"),
+                    chatId=chat_id,
+                    messageId=msg.id or "",
+                    files="[]",
+                    resource_usage=None,
+                )
+            )
+    # print(
+    #     json.dumps(
+    #         checkpointer_chat_message,
+    #         default=lambda o: o.dict() if hasattr(o, "dict") else str(o),
+    #     )
+    # )
+
+    # TODO:  merge with msg_store chat by message_id
     return DataResult(success=True, message=None, data=chat)
 
 
