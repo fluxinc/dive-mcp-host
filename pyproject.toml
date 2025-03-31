@@ -24,7 +24,7 @@ dependencies = [
     "langgraph-prebuilt>=0.1.3",
     "langgraph>=0.3.18",
     "fastapi>=0.115.0",
-    "mcp>=1.4.0",
+    "mcp>=1.6.0",
     "pydantic>=2.10",
     "pywin32>=306; sys_platform == 'win32' or platform_system == 'Windows'",
     "sqlite-vec>=0.1.0",
