@@ -8,10 +8,10 @@ import pytest
 import pytest_asyncio
 from pydantic import AnyUrl
 
+from dive_mcp_host.httpd.conf.envs import RESOURCE_DIR
 from dive_mcp_host.httpd.conf.service.manager import (
     ServiceManager,
 )
-from dive_mcp_host.httpd.store.local import UPLOAD_DIR
 
 # Register custom mark
 integration = pytest.mark.integration
@@ -37,10 +37,12 @@ class TestServiceManager:
                         "uri": "sqlite:///checkpoints.sqlite",
                     },
                     "local_file_cache_prefix": "test_prefix",
+                    "resource_dir": "/test/resource",
                     "config_location": {
                         "mcp_server_config_path": "/test/mcp_config.json",
                         "model_config_path": "/test/model_config.json",
                         "prompt_config_path": "/test/prompt_config.json",
+                        "command_alias_config_path": "/test/command_alias.json",
                     },
                 },
                 f,
@@ -69,7 +71,7 @@ class TestServiceManager:
         assert manager.current_setting.checkpointer.uri == AnyUrl(
             "sqlite:///checkpoints.sqlite"
         )
-        assert manager.current_setting.upload_dir == UPLOAD_DIR
+        assert manager.current_setting.resource_dir == Path("/test/resource")
         assert manager.current_setting.local_file_cache_prefix == "test_prefix"
         assert (
             manager.current_setting.config_location.mcp_server_config_path
@@ -78,10 +80,8 @@ class TestServiceManager:
 
     def test_default_config_path(self):
         """Test the default configuration path."""
-        with patch("pathlib.Path.cwd") as mock_cwd:
-            mock_cwd.return_value = Path("/test")
-            manager = ServiceManager()
-            assert manager.config_path == "/test/serviceConfig.json"
+        manager = ServiceManager()
+        assert manager.config_path == str(Path.cwd() / "dive_httpd.json")
 
     def test_initialize_with_missing_config_file(self):
         """Test initializing with a missing configuration file."""
@@ -111,8 +111,8 @@ class TestServiceManagerIntegration:
                 "checkpointer": {
                     "uri": "sqlite:///checkpoints.sqlite",
                 },
-                "upload_dir": str(Path(tmp_dir) / "uploads"),
                 "local_file_cache_prefix": "integration_test",
+                "resource_dir": "/test/resource",
                 "config_location": {
                     "mcp_server_config_path": str(Path(tmp_dir) / "mcp_config.json"),
                 },
@@ -138,7 +138,7 @@ class TestServiceManagerIntegration:
         assert manager.current_setting.checkpointer.uri == AnyUrl(
             "sqlite:///checkpoints.sqlite"
         )
-        assert Path(manager.current_setting.upload_dir).name == "uploads"
+        assert manager.current_setting.resource_dir == Path("/test/resource")
 
         # Test that default values are properly applied for unspecified options
         assert manager.current_setting.db.echo is False
@@ -155,7 +155,7 @@ class TestServiceManagerIntegration:
             "checkpointer": {
                 "uri": "sqlite:///checkpoints.sqlite",
             },
-            "upload_dir": str(UPLOAD_DIR),
+            "resource_dir": str(RESOURCE_DIR),
         }
 
         # Setting environment variable config
@@ -167,7 +167,7 @@ class TestServiceManagerIntegration:
 
             assert env_manager.current_setting is not None
             assert env_manager.current_setting.db.uri == "sqlite:///env_var_test.sqlite"
-            assert env_manager.current_setting.upload_dir == UPLOAD_DIR
+            assert env_manager.current_setting.resource_dir == RESOURCE_DIR
 
     @pytest.mark.asyncio
     async def test_environment_config_precedence(self, test_config_path):
@@ -180,7 +180,7 @@ class TestServiceManagerIntegration:
             "checkpointer": {
                 "uri": "sqlite:///checkpoints.sqlite",
             },
-            "upload_dir": str(UPLOAD_DIR),
+            "resource_dir": str(RESOURCE_DIR),
         }
 
         # Setting environment variable config
@@ -193,4 +193,4 @@ class TestServiceManagerIntegration:
 
             assert manager.current_setting is not None
             assert manager.current_setting.db.uri == "sqlite:///env_precedence.sqlite"
-            assert manager.current_setting.upload_dir == UPLOAD_DIR
+            assert manager.current_setting.resource_dir == RESOURCE_DIR
