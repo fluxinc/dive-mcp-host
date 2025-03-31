@@ -24,7 +24,7 @@ class LocalFileCache:
         """Initialize the local file cache.
 
         Args:
-            root_cache_dir: The root cache directory.
+            root_dir: The root directory for the config
             cache_file_prefix: The prefix of the cache file.
 
         """
