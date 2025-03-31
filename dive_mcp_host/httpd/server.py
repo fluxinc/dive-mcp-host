@@ -127,21 +127,36 @@ class DiveHostAPI(FastAPI):
         if self._service_config_manager.current_setting is None:
             raise ValueError("MCPServer config manager is not initialized")
 
+        if self._command_alias_config_manager.current_config is None:
+            raise ValueError("Command alias config manager is not initialized")
+
+        mcp_servers: dict[str, ServerConfig] = {}
+        for (
+            server_name,
+            server_config,
+        ) in self._mcp_server_config_manager.get_enabled_servers().items():
+            # Apply command alias
+            if server_config.command:
+                command = self._command_alias_config_manager.current_config.get(
+                    server_config.command, server_config.command
+                )
+            else:
+                command = ""
+
+            mcp_servers[server_name] = ServerConfig(
+                name=server_name,
+                command=command,
+                args=server_config.args or [],
+                env=server_config.env or {},
+                enabled=server_config.enabled,
+                url=server_config.url or None,
+                transport=server_config.transport,
+            )
+
         return HostConfig(
             llm=self._model_config_manager.current_setting,
             checkpointer=self._service_config_manager.current_setting.checkpointer,
-            mcp_servers={
-                server_name: ServerConfig(
-                    name=server_name,
-                    command=server_config.command or "",
-                    args=server_config.args or [],
-                    env=server_config.env or {},
-                    enabled=server_config.enabled,
-                    url=server_config.url or None,
-                    transport=server_config.transport,
-                )
-                for server_name, server_config in self._mcp_server_config_manager.get_enabled_servers().items()  # noqa: E501
-            },
+            mcp_servers=mcp_servers,
         )
 
     async def ready(self) -> bool:
