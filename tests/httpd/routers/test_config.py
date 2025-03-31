@@ -8,7 +8,7 @@ from tests import helper
 # Mock data
 MOCK_MCP_CONFIG = {
     "default": McpServerConfig(
-        transport="command",
+        transport="command",  # type: ignore  # Test backward compatibility
         enabled=True,
         command="node",
         args=["./mcp-server.js"],
@@ -55,7 +55,7 @@ def test_get_mcp_server(test_client):
             "config": {
                 "mcpServers": {
                     "echo": {
-                        "transport": "command",
+                        "transport": "stdio",
                         "enabled": True,
                         "command": "python3",
                         "args": [
@@ -106,7 +106,7 @@ def test_post_mcp_server(test_client):
             "config": {
                 "mcpServers": {
                     "default": {
-                        "transport": "command",
+                        "transport": "stdio",
                         "enabled": True,
                         "command": "node",
                         "args": [

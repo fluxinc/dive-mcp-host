@@ -39,3 +39,29 @@ class MessageTypeError(MCPHostError, ValueError):
         if msg is None:
             msg = "Message is not the correct type"
         super().__init__(msg)
+
+
+class InvalidMcpServerError(MCPHostError, ValueError):
+    """Exception raised when a MCP server is not valid."""
+
+    def __init__(self, mcp_server: str, reason: str | None = None) -> None:
+        """Initialize the error."""
+        if reason is None:
+            reason = "Invalid MCP server"
+        super().__init__(f"{mcp_server}: {reason}")
+
+
+class McpSessionNotInitializedError(MCPHostError):
+    """Exception raised when a MCP session is not initialized."""
+
+    def __init__(self, mcp_server: str) -> None:
+        """Initialize the error."""
+        super().__init__(f"MCP session not initialized for {mcp_server}")
+
+
+class McpSessionClosedOrFailedError(MCPHostError):
+    """Exception raised when a MCP session is closed or failed."""
+
+    def __init__(self, mcp_server: str, state: str) -> None:
+        """Initialize the error."""
+        super().__init__(f"MCP session {state} for {mcp_server}")

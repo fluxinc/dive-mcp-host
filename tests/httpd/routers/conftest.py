@@ -67,7 +67,7 @@ def config_files() -> Generator[ConfigFileNames, None, None]:
             Config(
                 mcpServers={
                     "echo": ServerConfig(
-                        transport="command",
+                        transport="stdio",
                         command="python3",
                         args=[
                             "-m",

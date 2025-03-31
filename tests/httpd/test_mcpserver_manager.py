@@ -29,6 +29,8 @@ class TestMCPServerManager:
                 {
                     "mcpServers": {
                         "test_server": {
+                            # Although the transport setting has been changed to stdio,
+                            # we keep "command" here for compatibility.
                             "transport": "command",
                             "enabled": True,
                             "command": "test_command",
@@ -62,7 +64,7 @@ class TestMCPServerManager:
         manager.initialize()
         assert manager.current_config is not None
         assert "test_server" in manager.current_config.mcp_servers
-        assert manager.current_config.mcp_servers["test_server"].transport == "command"
+        assert manager.current_config.mcp_servers["test_server"].transport == "stdio"
 
     @pytest.mark.asyncio
     async def test_initialize(self, mock_config_file):

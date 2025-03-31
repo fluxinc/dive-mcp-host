@@ -94,8 +94,10 @@ class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
             checkpointer=self._checkpointer,
             store=self._store,
         )
-        yield self
-        self._agent = None
+        try:
+            yield self
+        finally:
+            self._agent = None
 
     async def update_messages(
         self,

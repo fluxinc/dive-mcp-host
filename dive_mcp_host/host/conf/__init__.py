@@ -75,6 +75,8 @@ class ServerConfig(BaseModel):
     enabled: bool = True
     exclude_tools: list[str] = Field(default_factory=list)
     url: str | None = None
+    keep_alive: float | None = None
+    transport: Literal["stdio", "sse", "websocket"]
 
 
 class HostConfig(BaseModel):
