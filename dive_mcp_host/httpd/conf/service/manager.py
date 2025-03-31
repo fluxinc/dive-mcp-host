@@ -6,7 +6,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from dive_mcp_host.host.conf import CheckpointerConfig
-from dive_mcp_host.httpd.store.local import UPLOAD_DIR
+from dive_mcp_host.httpd.conf.envs import DIVE_CONFIG_DIR, RESOURCE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ class ConfigLocation(BaseModel):
     mcp_server_config_path: str | None = None
     model_config_path: str | None = None
     prompt_config_path: str | None = None
+    command_alias_config_path: str | None = None
 
 
 class ServiceConfig(BaseModel):
@@ -37,7 +38,7 @@ class ServiceConfig(BaseModel):
 
     db: DBConfig = Field(default_factory=DBConfig)
     checkpointer: CheckpointerConfig
-    upload_dir: Path = UPLOAD_DIR
+    resource_dir: Path = RESOURCE_DIR
     local_file_cache_prefix: str = "dive_mcp_host"
     config_location: ConfigLocation = Field(default_factory=ConfigLocation)
 
@@ -62,7 +63,7 @@ class ServiceManager:
 
     def __init__(self, config_path: str | None = None) -> None:
         """Initialize the ServiceManager."""
-        self._config_path: str = config_path or str(Path.cwd() / "serviceConfig.json")
+        self._config_path: str = config_path or str(DIVE_CONFIG_DIR / "dive_httpd.json")
         self._current_setting: ServiceConfig | None = None
 
     def initialize(self) -> bool:
@@ -81,6 +82,15 @@ class ServiceManager:
 
         self._current_setting = ServiceConfig.model_validate_json(config_content)
         return True
+
+    def overwrite_paths(
+        self, config_location: ConfigLocation, resource_dir: Path = RESOURCE_DIR
+    ) -> None:
+        """Overwrite the paths."""
+        if self._current_setting is None:
+            raise ValueError("Service configuration not found")
+        self._current_setting.config_location = config_location
+        self._current_setting.resource_dir = resource_dir
 
     @property
     def current_setting(self) -> ServiceConfig | None:

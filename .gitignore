@@ -35,6 +35,6 @@ dmypy.json
 /site
 Pipfile.lock
 poetry.lock
-<<<<<<< HEAD
 config.json
 .ruff_cache/
+cli_config.json

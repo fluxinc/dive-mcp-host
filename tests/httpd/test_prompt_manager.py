@@ -20,7 +20,7 @@ class TestPromptManager:
     def mock_custom_rules_file(self):
         """Create a mock custom rules file."""
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".customrules", delete=False
+            mode="w", suffix="custom_rules", delete=False
         ) as f:
             f.write("Test custom rules content")
             rules_path = f.name
@@ -30,8 +30,8 @@ class TestPromptManager:
 
     def test_multiple_instances(self):
         """Test that multiple instances can be created with different configurations."""
-        path1 = "/test/path1/.customrules"
-        path2 = "/test/path2/.customrules"
+        path1 = "/test/path1/custom_rules"
+        path2 = "/test/path2/custom_rules"
 
         manager1 = PromptManager(path1)
         manager2 = PromptManager(path2)
@@ -42,7 +42,7 @@ class TestPromptManager:
 
     def test_custom_rules_path_setting(self):
         """Test if the custom rules path is set correctly."""
-        test_path = "/test/path/.customrules"
+        test_path = "/test/path/custom_rules"
         manager = PromptManager(test_path)
         assert manager.custom_rules_path == test_path
 
@@ -51,6 +51,7 @@ class TestPromptManager:
         manager = PromptManager()
         # Set a test prompt
         test_prompt = "This is a test prompt"
+        manager.initialize()
         manager.set_prompt("test_key", test_prompt)
 
         # Get the prompt
@@ -85,7 +86,7 @@ class TestPromptManager:
 
     def test_load_custom_rules_file_not_found(self):
         """Test loading custom rules when file not found."""
-        manager = PromptManager("/non/existent/path/.customrules")
+        manager = PromptManager("/non/existent/path/custom_rules")
         custom_rules = manager.load_custom_rules()
         assert custom_rules == ""
 
@@ -104,6 +105,7 @@ class TestPromptManager:
         """Test system prompt initialization during PromptManager initialization."""
         # Initialize with custom rules path
         manager = PromptManager(mock_custom_rules_file)
+        manager.initialize()
 
         # Verify system prompt contains custom rules
         system_prompt_text = manager.get_prompt("system")
@@ -118,6 +120,7 @@ class TestPromptManager:
         ):
             # Initialize with custom rules path
             manager = PromptManager(mock_custom_rules_file)
+            manager.initialize()
 
             # Load custom rules
             custom_rules = manager.load_custom_rules()
@@ -140,7 +143,7 @@ class TestPromptManagerIntegration:
     async def test_custom_rules_path(self):
         """Set up the test custom rules file path."""
         with tempfile.TemporaryDirectory() as tmp_dir:
-            rules_path = Path(tmp_dir) / ".customrules"
+            rules_path = Path(tmp_dir) / "custom_rules"
             with rules_path.open("w") as f:
                 f.write("Integration test custom rules content")
             yield str(rules_path)
@@ -149,6 +152,7 @@ class TestPromptManagerIntegration:
         """Test the complete prompt management workflow."""
         # Initialize the PromptManager
         manager = PromptManager(test_custom_rules_path)
+        manager.initialize()
 
         # Verify system prompt contains custom rules
         system_prompt_text = manager.get_prompt("system")

@@ -6,6 +6,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, Field
 
+from dive_mcp_host.httpd.conf.envs import DIVE_CONFIG_DIR
+
 
 # Define necessary types for configuration
 class ServerConfig(BaseModel):
@@ -43,7 +45,7 @@ class MCPServerManager:
                 If not provided, it will be set to "config.json" in current
                 working directory.
         """
-        self._config_path: str = config_path or str(Path.cwd() / "config.json")
+        self._config_path: str = config_path or str(DIVE_CONFIG_DIR / "mcp_config.json")
         self._current_config: Config | None = None
 
     @property
@@ -62,6 +64,7 @@ class MCPServerManager:
         Returns:
             True if successful, False otherwise.
         """
+        logger.info("Initializing MCPServerManager from %s", self._config_path)
         env_config = os.environ.get("DIVE_MCP_CONFIG_CONTENT")
 
         if env_config:

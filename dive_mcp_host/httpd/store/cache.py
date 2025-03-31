@@ -1,8 +1,8 @@
-import os
-import platform
 from enum import StrEnum
 from logging import getLogger
 from pathlib import Path
+
+from dive_mcp_host.httpd.conf.envs import RESOURCE_DIR
 
 logger = getLogger(__name__)
 
@@ -16,24 +16,20 @@ class CacheKeys(StrEnum):
 class LocalFileCache:
     """Local file cache for the MCP host."""
 
-    def __init__(self, cache_file_prefix: str = "dive_mcp_host") -> None:
+    def __init__(
+        self,
+        root_dir: Path = RESOURCE_DIR,
+        cache_file_prefix: str = "dive_mcp_host",
+    ) -> None:
         """Initialize the local file cache.
 
         Args:
+            root_dir: The root directory for the config
             cache_file_prefix: The prefix of the cache file.
 
         """
         self._cache_file_prefix = cache_file_prefix
-
-        self._system = platform.system()
-        if self._system == "Windows":
-            self._cache_dir = Path(os.path.expandvars(r"%LOCALAPPDATA%\Dive\Cache"))
-        elif self._system == "Linux":
-            self._cache_dir = Path.expanduser(Path("~/.cache/dive"))
-        elif self._system == "Darwin":
-            self._cache_dir = Path.expanduser(Path("~/Library/Caches/Dive"))
-        else:
-            raise NotImplementedError(f"Unsupported system: {self._system}")
+        self._cache_dir = root_dir / "cache"
 
         logger.info("LocalCache directory: %s", self._cache_dir)
         logger.info("LocalCache file prefix: %s", self._cache_file_prefix)

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from dive_mcp_host.httpd.conf.service.manager import ServiceManager
 from dive_mcp_host.httpd.middlewares import default_state, error_handler
 from dive_mcp_host.httpd.routers.chat import chat
 from dive_mcp_host.httpd.routers.config import config
@@ -20,9 +21,14 @@ async def lifespan(app: DiveHostAPI) -> AsyncGenerator[None, None]:
     await app.cleanup()
 
 
-def create_app(config_path: str) -> DiveHostAPI:
+def create_app(
+    service_config_manager: ServiceManager,
+) -> DiveHostAPI:
     """Create the FastAPI app."""
-    app = DiveHostAPI(lifespan=lifespan, config_path=config_path)
+    app = DiveHostAPI(
+        lifespan=lifespan,
+        service_config_manager=service_config_manager,
+    )
 
     app.add_middleware(BaseHTTPMiddleware, dispatch=default_state)
     app.add_middleware(BaseHTTPMiddleware, dispatch=error_handler)

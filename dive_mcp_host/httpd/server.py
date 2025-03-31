@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from dive_mcp_host.host.conf import HostConfig, ServerConfig
 from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.httpd.abort_controller import AbortController
+from dive_mcp_host.httpd.conf.command_alias.manager import CommandAliasManager
 from dive_mcp_host.httpd.conf.mcpserver.manager import MCPServerManager
 from dive_mcp_host.httpd.conf.model.manager import ModelManager
 from dive_mcp_host.httpd.conf.prompts.manager import PromptManager
@@ -30,36 +31,40 @@ class DiveHostAPI(FastAPI):
 
     def __init__(
         self,
-        config_path: str | None = None,
+        service_config_manager: ServiceManager,
         *args: Any,
         **kwargs: Any,
     ) -> None:
         """Initialize the DiveHostAPI."""
         super().__init__(*args, **kwargs)
-        self._config_path = config_path
+        self._service_config_manager = service_config_manager
 
-    def _load_configs(self) -> None:
-        """Load all configs."""
-        self._service_config_manager = ServiceManager(self._config_path)
-        self._service_config_manager.initialize()
         if self._service_config_manager.current_setting is None:
             raise ValueError("Service manager is not initialized")
 
         self._mcp_server_config_manager = MCPServerManager(
             self._service_config_manager.current_setting.config_location.mcp_server_config_path
         )
-        self._mcp_server_config_manager.initialize()
-
         self._model_config_manager = ModelManager(
             self._service_config_manager.current_setting.config_location.model_config_path
         )
-        self._model_config_manager.initialize()
-
         self._prompt_config_manager = PromptManager(
             self._service_config_manager.current_setting.config_location.prompt_config_path
         )
+        self._command_alias_config_manager = CommandAliasManager(
+            self._service_config_manager.current_setting.config_location.command_alias_config_path
+        )
 
         self._abort_controller = AbortController()
+
+    def _load_configs(self) -> None:
+        """Load all configs."""
+        logger.info("Loading configs")
+        self._mcp_server_config_manager.initialize()
+        self._model_config_manager.initialize()
+        self._prompt_config_manager.initialize()
+        self._command_alias_config_manager.initialize()
+        logger.info("Configs loaded")
 
     @asynccontextmanager
     async def prepare(self) -> AsyncGenerator[None, None]:
@@ -96,10 +101,10 @@ class DiveHostAPI(FastAPI):
         # Store
         # ================================================
         self._store = LocalStore(
-            self._service_config_manager.current_setting.upload_dir
+            root_dir=self._service_config_manager.current_setting.resource_dir
         )
         self._local_file_cache = LocalFileCache(
-            self._service_config_manager.current_setting.local_file_cache_prefix
+            root_dir=self._service_config_manager.current_setting.resource_dir
         )
 
         # ================================================
@@ -122,21 +127,36 @@ class DiveHostAPI(FastAPI):
         if self._service_config_manager.current_setting is None:
             raise ValueError("MCPServer config manager is not initialized")
 
+        if self._command_alias_config_manager.current_config is None:
+            raise ValueError("Command alias config manager is not initialized")
+
+        mcp_servers: dict[str, ServerConfig] = {}
+        for (
+            server_name,
+            server_config,
+        ) in self._mcp_server_config_manager.get_enabled_servers().items():
+            # Apply command alias
+            if server_config.command:
+                command = self._command_alias_config_manager.current_config.get(
+                    server_config.command, server_config.command
+                )
+            else:
+                command = ""
+
+            mcp_servers[server_name] = ServerConfig(
+                name=server_name,
+                command=command,
+                args=server_config.args or [],
+                env=server_config.env or {},
+                enabled=server_config.enabled,
+                url=server_config.url or None,
+                transport=server_config.transport,
+            )
+
         return HostConfig(
             llm=self._model_config_manager.current_setting,
             checkpointer=self._service_config_manager.current_setting.checkpointer,
-            mcp_servers={
-                server_name: ServerConfig(
-                    name=server_name,
-                    command=server_config.command or "",
-                    args=server_config.args or [],
-                    env=server_config.env or {},
-                    enabled=server_config.enabled,
-                    url=server_config.url or None,
-                    transport=server_config.transport,
-                )
-                for server_name, server_config in self._mcp_server_config_manager.get_enabled_servers().items()  # noqa: E501
-            },
+            mcp_servers=mcp_servers,
         )
 
     async def ready(self) -> bool:
