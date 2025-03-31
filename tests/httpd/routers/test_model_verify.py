@@ -1,6 +1,9 @@
 import json
+import os
 import re
+from typing import cast
 
+import pytest
 from fastapi import status
 
 from tests import helper
@@ -12,12 +15,15 @@ MOCK_MODEL_SETTING = {
     "temperature": 0.7,
     "topP": 0.9,
     "maxTokens": 4000,
-    "configuration": {"baseURL": "https://api.openai.com/v1"},
+    "configuration": {"base_url": "https://api.openai.com/v1"},
 }
 
 
 def test_do_verify_model(test_client):
     """Test the /api/model_verify POST endpoint."""
+    if not os.environ.get("OPENAI_API_KEY"):
+        pytest.skip("OPENAI_API_KEY is not set")
+    MOCK_MODEL_SETTING["apiKey"] = os.environ.get("OPENAI_API_KEY")
     client, _ = test_client
 
     # Prepare test data
@@ -35,7 +41,7 @@ def test_do_verify_model(test_client):
     assert response.status_code == status.HTTP_200_OK
 
     # Parse JSON response
-    response_data = response.json()
+    response_data = cast(dict, response.json())
 
     # Validate response structure
     assert response_data["success"] is True

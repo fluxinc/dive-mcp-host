@@ -1,6 +1,7 @@
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
+from copy import deepcopy
 from typing import TYPE_CHECKING, Self
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -166,6 +167,14 @@ class DiveMcpHost(ContextProtocol):
         """
         # NOTE: Do Not restart MCP Servers when there is on-going query.
         raise NotImplementedError
+
+    @property
+    def config(self) -> HostConfig:
+        """A copy of the current host configuration.
+
+        Note: Do not modify the returned config. Use `reload` to change the config.
+        """
+        return deepcopy(self._config)
 
     @property
     def tools(self) -> Sequence[BaseTool]:
