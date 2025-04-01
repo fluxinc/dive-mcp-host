@@ -215,7 +215,6 @@ async def get_chat(
     for index, msg in enumerate(checkpointer_messages):
         if msg.type == "human":
             # find msg from msg_store by id in checkpointer
-            print(msg.id)
             db_message = next((m for m in chat.messages if m.message_id == msg.id), None)
             if db_message:
                 final_chat_message.append(db_message)
@@ -275,14 +274,8 @@ async def get_chat(
                     resource_usage=None,
                 )
             )
-    print(
-        json.dumps(
-            final_chat_message,
-            default=lambda o: o.dict() if hasattr(o, "dict") else str(o),
-        )
-    )
 
-    # TODO:  merge with msg_store chat by message_id
+    chat.messages = final_chat_message
     return DataResult(success=True, message=None, data=chat)
 
 
