@@ -1,4 +1,7 @@
+from collections.abc import Generator
+import json
 from os import getenv
+import re
 
 POSTGRES_URI = getenv("POSTGRES_URI", "postgresql://mcp:mcp@localhost:5432/mcp")
 SQLITE_URI = getenv("SQLITE_URI", "sqlite:///dummy.db")
@@ -48,3 +51,19 @@ def dict_subset(superset: dict, subset: dict) -> bool:
                 f"{key} is not equal {superset[key]} and {value}"
             )
     return True
+
+
+def extract_stream(content: str) -> Generator[dict[str, dict], None, None]:
+    """Extract the stream from the content.
+
+    Args:
+        content: The content to extract the stream from
+
+    Returns: The stream from the content
+    """
+    assert content.startswith("data: ")
+    assert content.endswith("data: [DONE]\n\n")
+    data_messages = re.findall(r"data: (.*?)\n\n", content)
+    for data in data_messages:
+        if data != "[DONE]":
+            yield json.loads(data)
