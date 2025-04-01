@@ -33,7 +33,7 @@ def create_app(
     app.add_middleware(BaseHTTPMiddleware, dispatch=default_state)
     app.add_middleware(BaseHTTPMiddleware, dispatch=error_handler)
     app.include_router(openai, prefix="/v1/openai")
-    app.include_router(chat, prefix="/chat")
+    app.include_router(chat, prefix="/api/chat")
     app.include_router(tools, prefix="/api/tools")
     app.include_router(config, prefix="/api/config")
     app.include_router(model_verify, prefix="/model_verify")
