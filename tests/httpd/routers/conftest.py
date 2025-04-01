@@ -129,5 +129,7 @@ async def test_client(
     service_manager = ServiceManager(config_files.service_config_file)
     service_manager.initialize()
     app = create_app(service_manager)
+    app.set_status_report_info(listen="127.0.0.1")
+    app.set_listen_port(61990)
     with TestClient(app) as client:
         yield client, app

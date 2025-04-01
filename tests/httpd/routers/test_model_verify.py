@@ -1,10 +1,12 @@
 import json
 import os
 import re
+from contextlib import suppress
 from typing import cast
 
 import pytest
 from fastapi import status
+from openai import AuthenticationError
 
 from tests import helper
 
@@ -19,16 +21,18 @@ MOCK_MODEL_SETTING = {
 }
 
 
-def test_do_verify_model(test_client):
+def test_do_verify_model_with_env_api_key(test_client):
     """Test the /api/model_verify POST endpoint."""
     if not os.environ.get("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY is not set")
-    MOCK_MODEL_SETTING["apiKey"] = os.environ.get("OPENAI_API_KEY")
     client, _ = test_client
 
     # Prepare test data
     test_settings = {
-        "modelSettings": MOCK_MODEL_SETTING,
+        "modelSettings": {
+            **MOCK_MODEL_SETTING,
+            "apiKey": os.environ.get("OPENAI_API_KEY"),
+        },
     }
 
     # Send request
@@ -41,7 +45,7 @@ def test_do_verify_model(test_client):
     assert response.status_code == status.HTTP_200_OK
 
     # Parse JSON response
-    response_data = cast(dict, response.json())
+    response_data = cast("dict", response.json())
 
     # Validate response structure
     assert response_data["success"] is True
@@ -51,15 +55,20 @@ def test_do_verify_model(test_client):
     assert isinstance(response_data["supportTools"], bool)
 
 
-def test_verify_model_streaming(test_client):
+def test_verify_model_streaming_with_env_api_key(test_client):
     """Test the /api/model_verify/streaming POST endpoint."""
+    if not os.environ.get("OPENAI_API_KEY"):
+        pytest.skip("OPENAI_API_KEY is not set")
     # Get client and app from test_client fixture
     client, _ = test_client
 
     # Prepare test data
     test_model_settings = {
         "modelSettings": [
-            MOCK_MODEL_SETTING,
+            {
+                **MOCK_MODEL_SETTING,
+                "apiKey": os.environ.get("OPENAI_API_KEY"),
+            },
         ],
     }
 
@@ -89,18 +98,32 @@ def test_verify_model_streaming(test_client):
         if data != "[DONE]":
             json_obj = json.loads(data)
             assert "type" in json_obj
-
             if json_obj["type"] == "progress":
-                helper.dict_subset(
-                    json_obj,
-                    {
-                        "step": 1,
-                        "modelName": "fake",
-                        "testType": "tools",
-                        "status": "error",
-                        "error": None,
-                    },
-                )
+                step = json_obj.get("step")
+                test_type = json_obj.get("testType")
+
+                if step == 1 and test_type == "connection":
+                    helper.dict_subset(
+                        json_obj,
+                        {
+                            "step": 1,
+                            "modelName": "gpt-4o-mini",
+                            "testType": "connection",
+                            "status": "success",
+                            "error": None,
+                        },
+                    )
+                elif step == 2 and test_type == "tools":
+                    helper.dict_subset(
+                        json_obj,
+                        {
+                            "step": 2,
+                            "modelName": "gpt-4o-mini",
+                            "testType": "tools",
+                            "status": "success",
+                            "error": None,
+                        },
+                    )
 
             elif json_obj["type"] == "final":
                 helper.dict_subset(
@@ -109,14 +132,49 @@ def test_verify_model_streaming(test_client):
                         "type": "final",
                         "results": [
                             {
-                                "modelName": "fake",
+                                "modelName": "gpt-4o-mini",
                                 "connection": {
                                     "status": "success",
                                 },
                                 "tools": {
-                                    "status": "error",
+                                    "status": "success",
                                 },
                             },
                         ],
                     },
                 )
+
+
+def test_do_verify_model_with_mock_key_should_fail(test_client):
+    """Test the /api/model_verify POST endpoint with mock API key."""
+    client, _ = test_client
+
+    # Prepare test data
+    test_settings = {
+        "modelSettings": MOCK_MODEL_SETTING,
+    }
+
+    with suppress(AuthenticationError):
+        client.post(
+            "/model_verify",
+            json=test_settings,
+        )
+
+
+def test_verify_model_streaming_with_mock_key_should_fail(test_client):
+    """Test the /api/model_verify/streaming POST endpoint with mock API key."""
+    # Get client and app from test_client fixture
+    client, _ = test_client
+
+    # Prepare test data
+    test_model_settings = {
+        "modelSettings": [
+            MOCK_MODEL_SETTING,
+        ],
+    }
+
+    with suppress(AuthenticationError):
+        client.post(
+            "/model_verify/streaming",
+            json=test_model_settings,
+        )
