@@ -336,6 +336,8 @@ def setup_command_alias():
     os.environ["DIVE_COMMAND_ALIAS_CONTENT"] = json.dumps(
         {"python3": "alternate-python3", "node": "alternate-node"}
     )
+    yield
+    del os.environ["DIVE_COMMAND_ALIAS_CONTENT"]
 
 
 def test_get_mcp_server_with_alias(setup_command_alias, test_client):

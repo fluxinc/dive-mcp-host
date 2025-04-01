@@ -55,8 +55,8 @@ class Arguments(BaseModel):
         description="Network interface to bind the server to.",
     )
 
-    port: int = Field(
-        default=61990,
+    port: int | None = Field(
+        default=None,
         description="TCP port number to listen on. Use 0 for automatic port selection.",
     )
 
