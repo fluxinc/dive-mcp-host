@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -8,13 +8,10 @@ from langchain_core.messages import (
     AIMessage,
     BaseMessage,
     HumanMessage,
-    RemoveMessage,
     SystemMessage,
     ToolCall,
     ToolMessage,
 )
-from langchain_core.runnables import RunnableConfig
-from langgraph.graph.message import MessagesState
 from pydantic import AnyUrl
 
 from dive_mcp_host.host.conf import CheckpointerConfig, HostConfig, LLMConfig
@@ -318,6 +315,7 @@ async def test_abort_conversation() -> None:
                 )
             ]
             assert len(responses) == 1
+
 
 @pytest.mark.asyncio
 async def test_resend_message(sqlite_uri: str) -> None:

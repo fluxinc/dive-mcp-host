@@ -6,13 +6,12 @@ import pytest
 from fastapi import status
 from fastapi.responses import StreamingResponse
 
-from tests import helper
-
 from dive_mcp_host.httpd.routers.openai import (
     CompletionEventStreamContextManager,
     OpenaiModel,
     StreamMessage,
 )
+from tests import helper
 
 
 @pytest.fixture(autouse=True)
