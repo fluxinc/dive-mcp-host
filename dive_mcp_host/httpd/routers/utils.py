@@ -408,9 +408,9 @@ class ChatProcessor:
         for message in latest_messages[::-1]:
             if user_message and ai_message:
                 break
-            if isinstance(message, HumanMessage):
+            if not user_message and isinstance(message, HumanMessage):
                 user_message = message
-            elif isinstance(message, AIMessage):
+            elif not ai_message and isinstance(message, AIMessage):
                 ai_message = message
         return user_message, ai_message
 
