@@ -215,14 +215,12 @@ class DiveHostAPI(FastAPI):
 
     def set_status_report_info(
         self,
-        listen: str | None = None,
-        port: int | None = None,
+        listen: str,
         report_status_file: str | None = None,
         report_status_fd: int | None = None,
     ) -> None:
         """Set the status report info."""
         self._listen_ip = listen
-        self._listen_port = port
         self._report_status_file = report_status_file
         self._report_status_fd = report_status_fd
 

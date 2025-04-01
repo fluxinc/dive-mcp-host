@@ -41,3 +41,5 @@ cli_config.json
 status_report.json
 db.sqlite-shm
 db.sqlite-wal
+cache/
+uploads/
