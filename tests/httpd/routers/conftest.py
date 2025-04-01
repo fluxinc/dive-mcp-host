@@ -43,15 +43,16 @@ def config_files() -> Generator[ConfigFileNames, None, None]:
             prefix="testModelConfig_", suffix=".json"
         ) as model_config_file,
         tempfile.NamedTemporaryFile(suffix=".testCustomrules") as prompt_config_file,
+        tempfile.NamedTemporaryFile(suffix=".sqlite") as db_file,
     ):
         service_config_file.write(
             ServiceConfig(
                 db=DBConfig(
-                    uri="sqlite:///test_db.sqlite",
-                    async_uri="sqlite+aiosqlite:///test_db.sqlite",
+                    uri=f"sqlite:///{db_file.name}",
+                    async_uri=f"sqlite+aiosqlite:///{db_file.name}",
                 ),
                 checkpointer=CheckpointerConfig(
-                    uri=AnyUrl("sqlite:///test_db.sqlite"),
+                    uri=AnyUrl(f"sqlite:///{db_file.name}"),
                 ),
                 config_location=ConfigLocation(
                     mcp_server_config_path=mcp_server_config_file.name,

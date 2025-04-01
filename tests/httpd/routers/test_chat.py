@@ -4,21 +4,22 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import cast
 from unittest import mock
 
 import pytest
 from fastapi import status
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
+from langchain_core.messages import AIMessage
 
+from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.httpd.app import DiveHostAPI
 from dive_mcp_host.httpd.conf.service.manager import ServiceManager
 from dive_mcp_host.httpd.database.models import Chat
 from dive_mcp_host.httpd.dependencies import get_app, get_dive_user
 from dive_mcp_host.httpd.routers.chat import chat
-from dive_mcp_host.httpd.routers.models import (
-    UserInputError,
-)
+from dive_mcp_host.httpd.routers.models import UserInputError
 from dive_mcp_host.httpd.routers.utils import EventStreamContextManager
 from tests import helper
 
@@ -479,58 +480,50 @@ def test_create_chat(client, monkeypatch):
                     )
 
 
-def test_edit_chat(client, monkeypatch):
+def test_edit_chat(test_client):
     """Test the /api/chat/edit endpoint."""
-
-    # Mock EventStreamContextManager.get_response to return a custom StreamingResponse
-    def mock_response(*args, **kwargs):
-        # Return a streaming response with specific test content
-        return StreamingResponse(
-            content=iter(
-                [
-                    (
-                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
-                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
-                        '\\"title\\":\\"Test Chat\\"}}"}\n\n'
-                    ),
-                    (
-                        'data: {"message":"{\\"type\\":\\"text\\",'
-                        '\\"content\\":\\"\\"}"}\n\n'
-                    ),
-                    (
-                        'data: {"message":"{\\"type\\":\\"text\\",'
-                        '\\"content\\":\\"Edited response\\"}"}\n\n'
-                    ),
-                    (
-                        'data: {"message":"{\\"type\\":\\"message_info\\",'
-                        '\\"content\\":{\\"userMessageId\\":\\"test-user-msg\\",'
-                        '\\"assistantMessageId\\":\\"test-ai-msg\\"}}"}\n\n'
-                    ),
-                    (
-                        'data: {"message":"{\\"type\\":\\"chat_info\\",'
-                        '\\"content\\":{\\"id\\":\\"test-chat-id\\",'
-                        '\\"title\\":\\"Test Chat\\"}}"}\n\n'
-                    ),
-                    "data: [DONE]\n\n",
-                ]
-            ),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-        )
-
-    monkeypatch.setattr(EventStreamContextManager, "get_response", mock_response)
-    monkeypatch.setattr(
-        EventStreamContextManager,
-        "add_task",
-        lambda *_args, **_kwargs: None,
-    )
-
+    client, app = test_client
     test_file = io.BytesIO(b"test file content")
+    test_chat_id = "test_edit_chat"
+    response = client.post(
+        "/api/chat",
+        data={
+            "chatId": test_chat_id,
+            "message": "test message",
+            "filepaths": ["test_path.txt"],
+        },
+        files={"files": ("test.txt", test_file, "text/plain")},
+    )
+    assert response.status_code == SUCCESS_CODE
+    assert response.headers.get("Content-Type").startswith("text/event-stream")
+
+    user_message_id = ""
+    ai_message_id = ""
+    fist_ai_reply = ""
+    for json_obj in helper.extract_stream(response.text):
+        content = json_obj["message"]["content"]
+        match json_obj["message"]["type"]:
+            case "chat_info":
+                assert content["id"] == test_chat_id  # type: ignore
+            case "message_info":
+                user_message_id = content["userMessageId"]  # type: ignore
+                ai_message_id = content["assistantMessageId"]  # type: ignore
+                assert user_message_id
+                assert ai_message_id
+            case "text":
+                fist_ai_reply = content
+
+    ai_messages = [
+        AIMessage(content="message 1"),
+        AIMessage(content="message 2"),
+    ]
+    host = cast(dict[str, DiveMcpHost], app.dive_host)["default"]
+    host.model.responses = ai_messages  # type: ignore
     response = client.post(
         "/api/chat/edit",
         data={
-            "chatId": TEST_CHAT_ID,
-            "messageId": TEST_MESSAGE_ID,
+            "chatId": test_chat_id,
+            "messageId": user_message_id,
             "content": "edited message",
             "filepaths": ["test_edit_path.txt"],
         },
@@ -538,45 +531,39 @@ def test_edit_chat(client, monkeypatch):
     )
 
     assert response.status_code == SUCCESS_CODE
-    assert "text/event-stream" in response.headers["Content-Type"]
+    assert response.headers.get("Content-Type").startswith("text/event-stream")
 
-    content = response.text
-
-    # assert the basic format
-    assert "data: " in content
-    assert "data: [DONE]\n\n" in content
-
-    # extract and parse the JSON data
-    data_messages = re.findall(r"data: (.*?)\n\n", content)
-    for data in data_messages:
-        if data != "[DONE]":
-            # parse the outer JSON
-            json_obj = json.loads(data)
-            assert "message" in json_obj
-
-            # parse the inner JSON string
-            if json_obj["message"]:
-                inner_json = json.loads(json_obj["message"])
-                assert "type" in inner_json
-                assert "content" in inner_json
-
-                # assert the specific type of message
-                if inner_json["type"] == "chat_info":
-                    helper.dict_subset(
-                        inner_json["content"],
-                        {
-                            "id": "test-chat-id",
-                            "title": "Test Chat",
-                        },
-                    )
-                elif inner_json["type"] == "message_info":
-                    helper.dict_subset(
-                        inner_json["content"],
-                        {
-                            "userMessageId": "test-user-msg",
-                            "assistantMessageId": "test-ai-msg",
-                        },
-                    )
+    new_user_message_id = ""
+    new_ai_message_id = ""
+    for json_obj in helper.extract_stream(response.text):
+        content = json_obj["message"]["content"]
+        match json_obj["message"]["type"]:
+            case "chat_info":
+                assert content["id"] == test_chat_id  # type: ignore
+            case "message_info":
+                new_user_message_id = content["userMessageId"]  # type: ignore
+                new_ai_message_id = content["assistantMessageId"]  # type: ignore
+                assert new_user_message_id
+                assert new_ai_message_id
+                assert new_ai_message_id != ai_message_id
+                assert new_user_message_id == user_message_id
+            case "text":
+                assert fist_ai_reply != content
+    response = client.get(f"/api/chat/{test_chat_id}")
+    assert response.status_code == SUCCESS_CODE
+    response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "data": {
+                "messages": [
+                    {"messageId": new_user_message_id},
+                    {"messageId": new_ai_message_id},
+                ]
+            },
+        },
+    )
 
 
 def test_edit_chat_missing_params(client):
