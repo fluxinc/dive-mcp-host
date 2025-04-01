@@ -1,6 +1,7 @@
+import json
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, exists, insert, select
+from sqlalchemy import delete, exists, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,7 +16,9 @@ from dive_mcp_host.httpd.database.models import (
 )
 from dive_mcp_host.httpd.database.orm_models import Chat as ORMChat
 from dive_mcp_host.httpd.database.orm_models import Message as ORMMessage
-from dive_mcp_host.httpd.database.orm_models import ResourceUsage as ORMResourceUsage
+from dive_mcp_host.httpd.database.orm_models import (
+    ResourceUsage as ORMResourceUsage,
+)
 
 from .abstract import AbstractMessageStore
 
@@ -251,21 +254,20 @@ class BaseMessageStore(AbstractMessageStore):
     ) -> None:
         """Delete all messages after a specific message in a chat."""
         query = (
-            select(ORMMessage.id)
-            .where(ORMMessage.message_id == message_id)
+            delete(ORMMessage)
             .where(ORMMessage.chat_id == chat_id)
-        )
-        anchor_id = await self._session.scalar(query)
-
-        if anchor_id is not None:
-            query = (
-                delete(ORMMessage)
-                .where(ORMMessage.chat_id == chat_id)
-                .where(ORMMessage.id > anchor_id)
+            .where(
+                ORMMessage.created_at
+                > (
+                    select(ORMMessage.created_at)
+                    .where(ORMMessage.chat_id == chat_id)
+                    .where(ORMMessage.message_id == message_id)
+                    .scalar_subquery()
+                )
             )
-            await self._session.execute(query)
+        )
+        await self._session.execute(query)
 
-    # NOTE: Might change, currently not used
     async def update_message_content(
         self,
         message_id: str,
@@ -282,7 +284,47 @@ class BaseMessageStore(AbstractMessageStore):
         Returns:
             Updated Message object.
         """
-        raise NotImplementedError
+        # Prepare files list
+        files = []
+        if data.images:
+            files.extend(data.images)
+        if data.documents:
+            files.extend(data.documents)
+
+        # Update the message content and files with a single query
+        query = (
+            update(ORMMessage)
+            .where(
+                ORMMessage.message_id == message_id,
+                ORMMessage.chat_id == ORMChat.id,
+                ORMChat.user_id == user_id,
+            )
+            .values(content=data.text or "", files=json.dumps(files) if files else "")
+            .returning(ORMMessage)
+            .options(selectinload(ORMMessage.resource_usage))
+        )
+        updated_message = await self._session.scalar(query)
+        if updated_message is None:
+            raise ValueError(f"Message {message_id} not found or access denied")
+
+        resource_usage = (
+            ResourceUsage.model_validate(
+                updated_message.resource_usage,
+                from_attributes=True,
+            )
+            if updated_message.resource_usage is not None
+            else None
+        )
+        return Message(
+            id=updated_message.id,
+            createdAt=updated_message.created_at,
+            content=updated_message.content,
+            role=Role(updated_message.role),
+            chatId=updated_message.chat_id,
+            messageId=updated_message.message_id,
+            files=updated_message.files,
+            resource_usage=resource_usage,
+        )
 
     async def get_next_ai_message(
         self,
