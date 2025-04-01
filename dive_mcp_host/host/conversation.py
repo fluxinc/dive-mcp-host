@@ -99,53 +99,32 @@ class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
         finally:
             self._agent = None
 
-    async def update_messages(
+    async def _get_updates_for_resend(
         self,
         resend: list[BaseMessage],
         update: list[BaseMessage],
-    ) -> None:
-        """Update conversation state for resend messages or update messages.
-
-        Args:
-            resend: Messages to remove and their subsequent messages.
-            update: New messages to update. Update messages in resend will be ignored.
-        """
-        resend_ids = {msg.id for msg in resend}
-        if resend_ids:
-            to_update = [i for i in update if i.id not in resend_ids]
-            if state := await self.active_agent.aget_state(
-                RunnableConfig(
-                    configurable={
-                        "thread_id": self._thread_id,
-                        "user_id": self._user_id,
-                    },
-                )
-            ):
-                drop_after = False
-                for msg in cast(MessagesState, state.values)["messages"]:
-                    assert msg.id is not None  # all messages from the agent have an ID
-                    if drop_after:
-                        to_update.append(RemoveMessage(msg.id))
-                    elif msg.id in resend_ids:
-                        to_update.append(RemoveMessage(msg.id))
-                        drop_after = True
-            else:
-                raise ThreadNotFoundError(self._thread_id)
-        else:
-            to_update = update.copy()
-
-        if len(to_update) > 0:
-            await self.active_agent.aupdate_state(
-                RunnableConfig(
-                    configurable={
-                        "thread_id": self._thread_id,
-                        "user_id": self._user_id,
-                    },
-                ),
-                values={
-                    "messages": to_update,
+    ) -> list[BaseMessage]:
+        if not self._checkpointer:
+            return update
+        resend_map = {msg.id: msg for msg in resend}
+        to_update = [i for i in update if i.id not in resend_map]
+        if state := await self.active_agent.aget_state(
+            RunnableConfig(
+                configurable={
+                    "thread_id": self._thread_id,
+                    "user_id": self._user_id,
                 },
             )
+        ):
+            drop_after = False
+            for msg in cast(MessagesState, state.values)["messages"]:
+                assert msg.id is not None  # all messages from the agent have an ID
+                if msg.id in resend_map:
+                    drop_after = True
+                elif drop_after:
+                    to_update.append(RemoveMessage(msg.id))
+            return to_update
+        raise ThreadNotFoundError(self._thread_id)
 
     def query(
         self,
@@ -174,26 +153,26 @@ class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
         Raises:
             MessageTypeError: If the messages to modify are invalid.
         """
-        resend_msg = []
-        if is_resend and query:
-            resend_msg = [query] if isinstance(query, BaseMessage) else query
-            if not all(isinstance(msg, BaseMessage) and msg.id for msg in resend_msg):
-                raise MessageTypeError(
-                    "All resending messages must be instances of BaseMessage with an ID"
-                )
 
         async def _stream_response() -> AsyncGenerator[dict[str, Any] | Any, None]:
-            if modify or resend_msg:
-                await self.update_messages(
-                    resend=resend_msg,  # type: ignore
-                    update=modify or [],
+            query_msgs = _convert_query_to_messages(query)
+            if is_resend and query_msgs:
+                if len(query_msgs) == 0 or not all(
+                    isinstance(msg, BaseMessage) and msg.id for msg in query_msgs
+                ):
+                    raise MessageTypeError("Resending messages must has an ID")
+                query_msgs += await self._get_updates_for_resend(
+                    query_msgs, modify or []
                 )
+            elif modify:
+                query_msgs = [*query_msgs, *modify]
             signal = asyncio.Event()
             self._abort_signal = signal
-            if query:
-                init_state = self._agent_factory.create_initial_state(query=query)
+            if query_msgs:
+                init_state = self._agent_factory.create_initial_state(query=query_msgs)
             else:
                 init_state = None
+            logger.debug("init_state: %s", query_msgs)
             config = self._agent_factory.create_config(
                 user_id=self._user_id,
                 thread_id=self._thread_id,
@@ -208,3 +187,17 @@ class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
                 yield response
 
         return _stream_response()
+
+
+def _convert_query_to_messages(
+    query: str | HumanMessage | list[BaseMessage] | None,
+) -> list[BaseMessage]:
+    if isinstance(query, BaseMessage):
+        return [query]
+    if isinstance(query, str):
+        return [HumanMessage(content=query)]
+    if isinstance(query, list):
+        return [
+            i if isinstance(i, BaseMessage) else HumanMessage(content=i) for i in query
+        ]
+    return []

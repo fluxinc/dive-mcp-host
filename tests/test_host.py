@@ -6,14 +6,12 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import (
     AIMessage,
+    BaseMessage,
     HumanMessage,
-    RemoveMessage,
     SystemMessage,
     ToolCall,
     ToolMessage,
 )
-from langchain_core.runnables import RunnableConfig
-from langgraph.graph.message import MessagesState
 from pydantic import AnyUrl
 
 from dive_mcp_host.host.conf import CheckpointerConfig, HostConfig, LLMConfig
@@ -21,7 +19,6 @@ from dive_mcp_host.host.errors import ThreadNotFoundError
 from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.host.tools import ServerConfig
 from dive_mcp_host.models.fake import FakeMessageToolModel, default_responses
-from tests.helper import SQLITE_URI
 
 
 @pytest.fixture
@@ -112,7 +109,9 @@ async def test_query_two_messages() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_messages(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
+async def test_get_messages(
+    sqlite_uri, echo_tool_stdio_config: dict[str, ServerConfig]
+) -> None:
     """Test the get_messages."""
     user_id = "default"
     config = HostConfig(
@@ -121,7 +120,7 @@ async def test_get_messages(echo_tool_stdio_config: dict[str, ServerConfig]) -> 
             modelProvider="dive",
         ),
         mcp_servers=echo_tool_stdio_config,
-        checkpointer=CheckpointerConfig(uri=AnyUrl(SQLITE_URI)),
+        checkpointer=CheckpointerConfig(uri=AnyUrl(sqlite_uri)),
     )
 
     async with DiveMcpHost(config) as mcp_host:
@@ -319,8 +318,8 @@ async def test_abort_conversation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_update_messages(sqlite_uri: str) -> None:
-    """Test the update_messages method with different scenarios."""
+async def test_resend_message(sqlite_uri: str) -> None:
+    """Test the resend_message method."""
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
@@ -334,119 +333,42 @@ async def test_update_messages(sqlite_uri: str) -> None:
         conversation = mcp_host.conversation()
         model = cast("FakeMessageToolModel", mcp_host.model)
         async with conversation:
-            # First, let's create some initial messages
-            initial_messages = [
-                HumanMessage(content="First message", id="msg1"),
-                AIMessage(content="First response", id="msg2"),
-                HumanMessage(content="Second message", id="msg3"),
-                AIMessage(content="Second response", id="msg4"),
-            ]
-
-            # Setup Initial State
-            model.responses = [initial_messages[1]]
-            model.i = 0
-            async for _ in conversation.query(
-                initial_messages[0],
-                stream_mode=["messages"],
-            ):
-                ...
-            model.responses = [initial_messages[3]]
-            model.i = 0
-            async for _ in conversation.query(
-                initial_messages[2],
-                stream_mode=["messages"],
-            ):
-                ...
-
-            # Test case 1: Remove a message and its subsequent messages
-            resend = [HumanMessage(content="Second message", id="msg3")]
-            update = []
-            await conversation.update_messages(resend=resend, update=update)  # type: ignore
-
-            # Verify state after removal
-            state = await conversation.active_agent.aget_state(
-                RunnableConfig(
-                    configurable={
-                        "thread_id": conversation.thread_id,
-                        "user_id": conversation._user_id,
-                    },
-                )
+            resps = cast(
+                list[tuple[str, dict[str, list[BaseMessage]]]],
+                [
+                    i
+                    async for i in conversation.query(
+                        HumanMessage(content="Hello, world!"),
+                        stream_mode=["values"],
+                    )
+                ],
             )
-            messages = cast(MessagesState, state.values)["messages"]
-            assert len(messages) == 2
-            assert messages[0].id == "msg1"
-            assert messages[1].id == "msg2"
+            assert len(resps) == 2
+            _, msgs = resps[-1]
+            assert isinstance(msgs["messages"][0], HumanMessage)
+            human_message_id = msgs["messages"][0].id
+            assert msgs["messages"][0].content == "Hello, world!"
+            assert isinstance(msgs["messages"][1], AIMessage)
+            ai_message_id = msgs["messages"][1].id
+            assert msgs["messages"][1].content == model.responses[0].content
 
-            # Test case 2: Add new messages
-            new_messages = [
-                HumanMessage(content="New message", id="msg5"),
-                AIMessage(content="New response", id="msg6"),
-            ]
-            await conversation.update_messages(resend=[], update=new_messages)
-
-            # Verify state after adding new messages
-            state = await conversation.active_agent.aget_state(
-                RunnableConfig(
-                    configurable={
-                        "thread_id": conversation.thread_id,
-                        "user_id": conversation._user_id,
-                    },
-                )
+            model.responses = [AIMessage(content="2")]
+            resend = [HumanMessage(content="Resend message!", id=human_message_id)]
+            resps = cast(
+                list[tuple[str, dict[str, list[BaseMessage]]]],
+                [
+                    i
+                    async for i in conversation.query(
+                        resend,  # type: ignore
+                        stream_mode=["values"],
+                        is_resend=True,
+                    )
+                ],
             )
-            messages = cast(MessagesState, state.values)["messages"]
-            assert len(messages) == 4
-            assert messages[2].id == "msg5"
-            assert messages[3].id == "msg6"
-
-            # Test case 3: Update existing message
-            updated_message = HumanMessage(content="Updated message", id="msg1")
-            await conversation.update_messages(resend=[], update=[updated_message])
-
-            # Verify state after updating message
-            state = await conversation.active_agent.aget_state(
-                RunnableConfig(
-                    configurable={
-                        "thread_id": conversation.thread_id,
-                        "user_id": conversation._user_id,
-                    },
-                )
-            )
-            messages = cast(MessagesState, state.values)["messages"]
-            assert len(messages) == 4
-            assert messages[0].content == "Updated message"
-
-            # Test case 4: Messages in resend should be ignored in update
-            resend = [HumanMessage(content="New message", id="msg5")]
-            update = [HumanMessage(content="Should be ignored", id="msg5")]
-            await conversation.update_messages(resend=resend, update=update)  # type: ignore
-
-            # Verify state after ignoring message in resend
-            state = await conversation.active_agent.aget_state(
-                RunnableConfig(
-                    configurable={
-                        "thread_id": conversation.thread_id,
-                        "user_id": conversation._user_id,
-                    },
-                )
-            )
-            messages = cast(MessagesState, state.values)["messages"]
-            assert len(messages) == 2  # msg5 and msg6 should be removed
-            assert messages[0].id == "msg1"
-            assert messages[1].id == "msg2"
-
-            # Test case 5: RemoveMessage in update
-            remove_message = RemoveMessage("msg2")
-            await conversation.update_messages(resend=[], update=[remove_message])
-
-            # Verify state after removing message
-            state = await conversation.active_agent.aget_state(
-                RunnableConfig(
-                    configurable={
-                        "thread_id": conversation.thread_id,
-                        "user_id": conversation._user_id,
-                    },
-                )
-            )
-            messages = cast(MessagesState, state.values)["messages"]
-            assert len(messages) == 1
-            assert messages[0].id == "msg1"
+            assert len(resps) == 2
+            _, msgs = resps[-1]
+            assert len(msgs["messages"]) == 2
+            assert msgs["messages"][0].content == "Resend message!"
+            assert msgs["messages"][0].id == human_message_id
+            assert msgs["messages"][1].content == "2"
+            assert msgs["messages"][1].id != ai_message_id

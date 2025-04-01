@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import UTC, datetime
 
@@ -19,20 +20,15 @@ from dive_mcp_host.httpd.database.models import (
     ChatMessage,
     Message,
     NewMessage,
+    QueryInput,
     ResourceUsage,
     Role,
 )
 from dive_mcp_host.httpd.database.msg_store.base import BaseMessageStore
 from dive_mcp_host.httpd.database.msg_store.sqlite import SQLiteMessageStore
-from dive_mcp_host.httpd.database.orm_models import (
-    Chat as ORMChat,
-)
-from dive_mcp_host.httpd.database.orm_models import (
-    Message as ORMMessage,
-)
-from dive_mcp_host.httpd.database.orm_models import (
-    Users as ORMUsers,
-)
+from dive_mcp_host.httpd.database.orm_models import Chat as ORMChat
+from dive_mcp_host.httpd.database.orm_models import Message as ORMMessage
+from dive_mcp_host.httpd.database.orm_models import Users as ORMUsers
 from tests.helper import SQLITE_URI, SQLITE_URI_ASYNC
 
 # Fixtures for database setup and teardown
@@ -567,3 +563,135 @@ async def test_create_chat_duplicate(
     result = await session.scalar(query)
     assert result is not None
     assert result.title == title  # Title should not be updated
+
+
+@pytest.mark.asyncio
+async def test_update_message_content(
+    message_store: BaseMessageStore,
+    sample_chat: ORMChat,
+    sample_messages: dict[str, ORMMessage],
+    session: AsyncSession,
+):
+    """Test updating message content."""
+    # Get the user message to update
+    user_message = sample_messages["user_message"]
+
+    # Create update data
+    update_data = QueryInput(
+        text="Updated message content",
+        images=["image1.jpg", "image2.jpg"],
+        documents=["doc1.pdf", "doc2.pdf"],
+    )
+
+    # Update the message
+    updated_message = await message_store.update_message_content(
+        message_id=user_message.message_id,
+        data=update_data,
+        user_id=sample_chat.user_id,
+    )
+
+    # Verify the returned message
+    assert updated_message is not None
+    assert isinstance(updated_message, Message)
+    assert updated_message.message_id == user_message.message_id
+    assert updated_message.content == "Updated message content"
+    assert updated_message.role == Role.USER
+    assert updated_message.chat_id == sample_chat.id
+
+    # Verify files were updated correctly
+    expected_files = ["image1.jpg", "image2.jpg", "doc1.pdf", "doc2.pdf"]
+    assert json.loads(updated_message.files) == expected_files
+
+    # Verify the message was actually updated in the database
+    query = select(ORMMessage).where(ORMMessage.message_id == user_message.message_id)
+    db_message = await session.scalar(query)
+    assert db_message is not None
+    assert db_message.content == "Updated message content"
+    assert json.loads(db_message.files) == expected_files
+
+
+@pytest.mark.asyncio
+async def test_update_message_content_not_found(
+    message_store: BaseMessageStore,
+    sample_chat: ORMChat,
+):
+    """Test updating a non-existent message."""
+    # Create update data
+    update_data = QueryInput(
+        text="Updated message content", images=["image1.jpg"], documents=["doc1.pdf"]
+    )
+
+    # Try to update a non-existent message
+    with pytest.raises(
+        ValueError, match="Message non_existent_message not found or access denied"
+    ):
+        await message_store.update_message_content(
+            message_id="non_existent_message",
+            data=update_data,
+            user_id=sample_chat.user_id,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_message_content_wrong_user(
+    message_store: BaseMessageStore,
+    sample_chat: ORMChat,
+    sample_messages: dict[str, ORMMessage],
+):
+    """Test updating a message with wrong user ID."""
+    # Get the user message to update
+    user_message = sample_messages["user_message"]
+
+    # Create update data
+    update_data = QueryInput(
+        text="Updated message content", images=["image1.jpg"], documents=["doc1.pdf"]
+    )
+
+    # Try to update the message with wrong user ID
+    with pytest.raises(
+        ValueError,
+        match=f"Message {user_message.message_id} not found or access denied",
+    ):
+        await message_store.update_message_content(
+            message_id=user_message.message_id,
+            data=update_data,
+            user_id="wrong_user_id",
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_message_content_empty_data(
+    message_store: BaseMessageStore,
+    sample_chat: ORMChat,
+    sample_messages: dict[str, ORMMessage],
+    session: AsyncSession,
+):
+    """Test updating a message with empty data."""
+    # Get the user message to update
+    user_message = sample_messages["user_message"]
+
+    # Create update data with empty fields
+    update_data = QueryInput(text=None, images=None, documents=None)
+
+    # Update the message
+    updated_message = await message_store.update_message_content(
+        message_id=user_message.message_id,
+        data=update_data,
+        user_id=sample_chat.user_id,
+    )
+
+    # Verify the returned message
+    assert updated_message is not None
+    assert isinstance(updated_message, Message)
+    assert updated_message.message_id == user_message.message_id
+    assert updated_message.content == ""
+    assert updated_message.files == ""
+    assert updated_message.role == Role.USER
+    assert updated_message.chat_id == sample_chat.id
+
+    # Verify the message was actually updated in the database
+    query = select(ORMMessage).where(ORMMessage.message_id == user_message.message_id)
+    db_message = await session.scalar(query)
+    assert db_message is not None
+    assert db_message.content == ""
+    assert db_message.files == ""

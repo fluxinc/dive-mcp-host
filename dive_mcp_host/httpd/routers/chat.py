@@ -103,7 +103,7 @@ async def edit_chat(  # noqa: PLR0913
     files: Annotated[list[UploadFile] | None, File()] = None,
     filepaths: Annotated[list[str] | None, Form()] = None,
 ) -> StreamingResponse:
-    """Edit a chat.
+    """Edit a message in a chat and query again.
 
     Args:
         request (Request): The request object.
@@ -131,20 +131,8 @@ async def edit_chat(  # noqa: PLR0913
 
     async def process() -> None:
         async with stream:
-            dive_user = request.state.dive_user
-            async with app.db_sessionmaker() as session:
-                await app.msg_store(session).update_message_content(
-                    message_id, query_input, dive_user["user_id"]
-                )
-
-                next_ai_message = await app.msg_store(session).get_next_ai_message(
-                    chat_id, message_id
-                )
-                await session.commit()
             processor = ChatProcessor(app, request.state, stream)
-            await processor.handle_chat(
-                chat_id, query_input, next_ai_message.message_id
-            )
+            await processor.handle_chat(chat_id, query_input, message_id)
 
     stream.add_task(process)
     return response
