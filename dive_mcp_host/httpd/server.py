@@ -1,9 +1,13 @@
+import os
 from collections.abc import AsyncGenerator
 from contextlib import AsyncExitStack, asynccontextmanager
+from datetime import UTC, datetime
 from logging import getLogger
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
 from fastapi import FastAPI
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -24,6 +28,35 @@ from dive_mcp_host.httpd.store.local import LocalStore
 logger = getLogger(__name__)
 
 
+class Listen(BaseModel):
+    """Listen of the DiveHostAPI."""
+
+    ip: str | None = None
+    port: int | None = None
+
+
+class Server(BaseModel):
+    """Server of the DiveHostAPI."""
+
+    listen: Listen = Field(default_factory=Listen)
+
+
+class Status(BaseModel):
+    """Status of the DiveHostAPI."""
+
+    state: Literal["UP", "FAILED"]
+    last_error: str | None = None
+    error_code: str | None = None
+
+
+class ReportStatus(BaseModel):
+    """Report the status of the DiveHostAPI."""
+
+    timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    server: Server = Field(default_factory=Server)
+    status: Status
+
+
 class DiveHostAPI(FastAPI):
     """DiveHostAPI is a FastAPI application that is used to host the DiveHost API."""
 
@@ -38,6 +71,11 @@ class DiveHostAPI(FastAPI):
         """Initialize the DiveHostAPI."""
         super().__init__(*args, **kwargs)
         self._service_config_manager = service_config_manager
+
+        self._listen_ip: str | None = None
+        self._listen_port: int | None = None
+        self._report_status_file: str | None = None
+        self._report_status_fd: int | None = None
 
         if self._service_config_manager.current_setting is None:
             raise ValueError("Service manager is not initialized")
@@ -70,7 +108,6 @@ class DiveHostAPI(FastAPI):
     async def prepare(self) -> AsyncGenerator[None, None]:
         """Setup the DiveHostAPI."""
         logger.info("Server Prepare")
-
         self._load_configs()
 
         # ================================================
@@ -175,6 +212,52 @@ class DiveHostAPI(FastAPI):
         logger.info("Server Cleanup")
         await self._engine.dispose()
         logger.info("Server Cleanup Complete")
+
+    def set_status_report_info(
+        self,
+        listen: str,
+        report_status_file: str | None = None,
+        report_status_fd: int | None = None,
+    ) -> None:
+        """Set the status report info."""
+        self._listen_ip = listen
+        self._report_status_file = report_status_file
+        self._report_status_fd = report_status_fd
+
+    def set_listen_port(self, port: int) -> None:
+        """Set the listen port."""
+        self._listen_port = port
+
+    def report_status(self, error: str | None = None) -> None:
+        """Report the status of the DiveHostAPI."""
+        if error:
+            msg = ReportStatus(
+                status=Status(state="FAILED", last_error=error),
+            )
+
+        elif self._listen_ip and self._listen_port:
+            msg = ReportStatus(
+                server=Server(
+                    listen=Listen(ip=self._listen_ip, port=self._listen_port)
+                ),
+                status=Status(state="UP"),
+            )
+        else:
+            raise ValueError("Status info not complete")
+
+        if self._report_status_file:
+            logger.info("Report status to file: %s", self._report_status_file)
+            with Path(self._report_status_file).open("w") as f:
+                f.write(msg.model_dump_json())
+
+        elif self._report_status_fd:
+            logger.info("Report status to fd: %s", self._report_status_fd)
+            os.write(
+                self._report_status_fd,
+                msg.model_dump_json().encode(),
+            )
+        else:
+            logger.info("No fd or file to report status")
 
     @property
     def db_sessionmaker(self) -> async_sessionmaker[AsyncSession]:
