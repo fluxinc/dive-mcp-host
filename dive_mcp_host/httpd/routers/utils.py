@@ -89,7 +89,7 @@ class EventStreamContextManager:
             data (str): The data to write to the stream.
         """
         if isinstance(data, BaseModel):
-            data = json.dumps({"message": data.model_dump(mode="json")})
+            data = json.dumps({"message": data.model_dump(mode="json", by_alias=True)})
         await self.queue.put(data)
 
     async def _generate(self) -> AsyncGenerator[str, None]:
@@ -360,7 +360,7 @@ class ChatProcessor:
 
         raise RuntimeError("Unreachable")
 
-    async def _handle_response(  # noqa: C901, PLR0912
+    async def _handle_response(
         self, response: AsyncIterator[dict[str, Any] | Any]
     ) -> tuple[HumanMessage | Any, AIMessage | Any]:
         user_message = None
@@ -405,13 +405,15 @@ class ChatProcessor:
             if event_type and content:
                 await self.stream.write(StreamMessage(type=event_type, content=content))
 
-        for message in latest_messages[::-1]:
-            if user_message and ai_message:
-                break
-            if isinstance(message, HumanMessage):
-                user_message = message
-            elif isinstance(message, AIMessage):
-                ai_message = message
+        # Find the most recent user and AI messages from newest to oldest
+        user_message = next(
+            (msg for msg in reversed(latest_messages) if isinstance(msg, HumanMessage)),
+            None,
+        )
+        ai_message = next(
+            (msg for msg in reversed(latest_messages) if isinstance(msg, AIMessage)),
+            None,
+        )
         return user_message, ai_message
 
     async def _generate_title(self, query: str) -> str:

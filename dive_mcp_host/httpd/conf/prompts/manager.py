@@ -2,6 +2,7 @@ import logging
 import os
 from pathlib import Path
 
+from dive_mcp_host.httpd.conf.envs import DIVE_CONFIG_DIR
 from dive_mcp_host.httpd.conf.prompts.system import system_prompt
 
 # Logger setup
@@ -24,7 +25,13 @@ class PromptManager:
             custom_rules_path: Optional path to the custom rules file.
         """
         self.prompts: dict[str, str] = {}
-        self.custom_rules_path = custom_rules_path or str(Path.cwd() / ".customrules")
+        self.custom_rules_path = custom_rules_path or str(
+            DIVE_CONFIG_DIR / "custom_rules"
+        )
+
+    def initialize(self) -> None:
+        """Initialize the PromptManager."""
+        logger.info("Initializing PromptManager from %s", self.custom_rules_path)
         if custom_rules := os.environ.get("DIVE_CUSTOM_RULES_CONTENT"):
             self.prompts["system"] = system_prompt(custom_rules)
         elif (path := Path(self.custom_rules_path)) and path.exists():
