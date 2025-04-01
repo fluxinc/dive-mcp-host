@@ -210,37 +210,24 @@ async def get_chat(
         user_id=dive_user["user_id"] or "",
     )
 
-    checkpointer_chat_message = []
+    final_chat_message = []
 
     for index, msg in enumerate(checkpointer_messages):
         if msg.type == "human":
-            msg_content = ""
-            if isinstance(msg.content, str):
-                msg_content = msg.content
-            elif isinstance(msg.content, list):
-                first_content = msg.content[0] if msg.content else {}
-                msg_content = (
-                    first_content.get("text", "")
-                    if isinstance(first_content, dict)
-                    else ""
-                )
-            else:
-                msg_content = ""
-            checkpointer_chat_message.append(
-                Message(
-                    id=index,
-                    createdAt=datetime.datetime.now(datetime.UTC),
-                    content=msg_content,
-                    role=Role("user"),
-                    chatId=chat_id,
-                    messageId=msg.id or "",
-                    files="[]",
-                    resource_usage=None,
-                )
-            )
+            # find msg from msg_store by id in checkpointer
+            print(msg.id)
+            db_message = next((m for m in chat.messages if m.message_id == msg.id), None)
+            if db_message:
+                final_chat_message.append(db_message)
+
         if msg.type == "ai":
-            checkpointer_chat_message.append(
-                Message(
+            # find msg from msg_store by id in checkpointer
+            db_message = next((m for m in chat.messages if m.message_id == msg.id), None)
+            if db_message:
+                final_chat_message.append(db_message)
+            else:
+                final_chat_message.append(
+                    Message(
                       id=index,
                       createdAt=datetime.datetime.now(datetime.UTC),
                       content=str(msg.content),
@@ -263,7 +250,7 @@ async def get_chat(
                         }
                     )
                 content = json.dumps(tool_call_array)
-                checkpointer_chat_message.append(
+                final_chat_message.append(
                     Message(
                         id=index,
                         createdAt=datetime.datetime.now(datetime.UTC),
@@ -276,7 +263,7 @@ async def get_chat(
                     )
                 )
         if msg.type == "tool":
-            checkpointer_chat_message.append(
+            final_chat_message.append(
                 Message(
                     id=index,
                     createdAt=datetime.datetime.now(datetime.UTC),
@@ -288,12 +275,12 @@ async def get_chat(
                     resource_usage=None,
                 )
             )
-    # print(
-    #     json.dumps(
-    #         checkpointer_chat_message,
-    #         default=lambda o: o.dict() if hasattr(o, "dict") else str(o),
-    #     )
-    # )
+    print(
+        json.dumps(
+            final_chat_message,
+            default=lambda o: o.dict() if hasattr(o, "dict") else str(o),
+        )
+    )
 
     # TODO:  merge with msg_store chat by message_id
     return DataResult(success=True, message=None, data=chat)
