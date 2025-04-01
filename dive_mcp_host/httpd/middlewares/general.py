@@ -22,7 +22,9 @@ async def error_handler(request: Request, call_next: Callable) -> Response:
     except UserInputError as e:
         return Response(
             status_code=400,
-            content=ResultResponse(success=False, message=e.message),
+            content=ResultResponse(success=False, message=e.message).model_dump_json(
+                by_alias=True
+            ),
         )
 
 

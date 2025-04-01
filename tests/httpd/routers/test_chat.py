@@ -361,24 +361,27 @@ def test_delete_chat(client):
         assert response_data["success"] is True
 
 
-# def test_abort_chat(client):
-#     """Test the /api/chat/{chat_id}/abort endpoint."""
-#     # Send request
-#     response = client.post(f"/api/chat/{TEST_CHAT_ID}/abort")
+@pytest.mark.asyncio
+async def test_abort_chat(test_client):
+    """Test the /api/chat/{chat_id}/abort endpoint."""
+    client, app = test_client
+    app.dive_host["default"]._model.sleep = 3  # type: ignore # 10 seconds
 
-#     print(response.json())
+    response = client.post("/api/chat", data={"message": "long long time"})
 
-#     # Verify response status code
-#     assert response.status_code == SUCCESS_CODE
+    assert response.status_code == SUCCESS_CODE
 
-#     # Parse JSON response
-#     response_data = response.json()
+    line = await anext(response.aiter_lines())
+    message = json.loads(line[5:])["message"]  # type: ignore
 
-#     # Validate response structure
-#     assert "success" in response_data
-#     assert response_data["success"] is True
-#     assert "message" in response_data
-#     assert "Chat abort signal sent successfully" in response_data["message"]
+    assert message["type"] == "chat_info"
+    chat_id = message["content"]["id"]
+
+    abort_response = client.post(f"/api/chat/{chat_id}/abort")
+    assert abort_response.status_code == SUCCESS_CODE
+    abort_message = abort_response.json()
+
+    assert abort_message["success"]  # type: ignore
 
 
 def test_create_chat(client, monkeypatch):
