@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from logging import getLogger
 
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -12,13 +13,21 @@ from dive_mcp_host.httpd.routers.openai import openai
 from dive_mcp_host.httpd.routers.tools import tools
 from dive_mcp_host.httpd.server import DiveHostAPI
 
+logger = getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: DiveHostAPI) -> AsyncGenerator[None, None]:
     """Lifespan for the FastAPI app."""
-    async with app.prepare():
-        yield
-    await app.cleanup()
+    try:
+        async with app.prepare():
+            app.report_status()
+            yield
+    except Exception as e:
+        logger.exception("Error in lifespan")
+        app.report_status(error=str(e))
+    finally:
+        await app.cleanup()
 
 
 def create_app(
