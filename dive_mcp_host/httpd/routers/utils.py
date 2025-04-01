@@ -360,7 +360,7 @@ class ChatProcessor:
 
         raise RuntimeError("Unreachable")
 
-    async def _handle_response(  # noqa: C901, PLR0912
+    async def _handle_response(
         self, response: AsyncIterator[dict[str, Any] | Any]
     ) -> tuple[HumanMessage | Any, AIMessage | Any]:
         user_message = None
