@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from dive_mcp_host.host.conf import LLMConfig
+from dive_mcp_host.httpd.conf.envs import DIVE_CONFIG_DIR
 from dive_mcp_host.httpd.routers.models import ModelConfig
 
 # Logger setup
@@ -22,13 +23,16 @@ class ModelManager:
                 If not provided, it will be set to "modelConfig.json" in current
                 working directory.
         """
-        self._config_path: str = config_path or str(Path.cwd() / "modelConfig.json")
+        self._config_path: str = config_path or str(
+            DIVE_CONFIG_DIR / "model_config.json"
+        )
         self._current_setting: LLMConfig | None = None
         self._enable_tools: bool = True
         self._config_dict: dict[str, Any] | None = None
 
     def initialize(self) -> bool:
         """Initialize the ModelManager."""
+        logger.info("Initializing ModelManager from %s", self._config_path)
         if env_config := os.environ.get("DIVE_MODEL_CONFIG_CONTENT"):
             config_content = env_config
         else:

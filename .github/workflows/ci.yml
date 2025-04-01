@@ -56,5 +56,5 @@ jobs:
     - name: Lint with Ruff
       if: ${{always()}}
       run: |
-        ruff check --config pyproject.toml --statistics .
+        ruff check --config pyproject.toml .
         ruff format --config pyproject.toml --check .

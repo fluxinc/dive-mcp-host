@@ -14,6 +14,7 @@ from dive_mcp_host.httpd.conf.service.manager import (
     ConfigLocation,
     DBConfig,
     ServiceConfig,
+    ServiceManager,
 )
 from dive_mcp_host.httpd.routers.models import ModelConfig
 
@@ -125,6 +126,10 @@ async def test_client(
     Returns:
         A tuple of the test client and the app.
     """
-    app = create_app(config_files.service_config_file)
+    service_manager = ServiceManager(config_files.service_config_file)
+    service_manager.initialize()
+    app = create_app(service_manager)
+    app.set_status_report_info(listen="127.0.0.1")
+    app.set_listen_port(61990)
     with TestClient(app) as client:
         yield client, app

@@ -1,3 +1,7 @@
+import json
+import os
+
+import pytest
 from fastapi import status
 
 from dive_mcp_host.host.conf import LLMConfig
@@ -322,5 +326,98 @@ def test_post_custom_rules(test_client):
             "success": True,
             "message": None,
             "rules": custom_rules,
+        },
+    )
+
+
+@pytest.fixture
+def setup_command_alias():
+    """Setup the command alias."""
+    os.environ["DIVE_COMMAND_ALIAS_CONTENT"] = json.dumps(
+        {"python3": "alternate-python3", "node": "alternate-node"}
+    )
+    yield
+    del os.environ["DIVE_COMMAND_ALIAS_CONTENT"]
+
+
+def test_get_mcp_server_with_alias(setup_command_alias, test_client):
+    """Test the /api/config/mcpserver GET endpoint."""
+    client, _ = test_client
+    # Send request
+    response = client.get("/api/config/mcpserver")
+
+    assert response.status_code == SUCCESS_CODE
+    response_data = response.json()
+
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "message": None,
+            "config": {
+                "mcpServers": {
+                    "echo": {
+                        "transport": "stdio",
+                        "enabled": True,
+                        "command": "python3",
+                        "args": [
+                            "-m",
+                            "dive_mcp_host.host.tools.echo",
+                            "--transport=stdio",
+                        ],
+                        "env": {"NODE_ENV": "production"},
+                        "url": None,
+                    },
+                },
+            },
+        },
+    )
+
+
+def test_post_mcp_server_with_alias(setup_command_alias, test_client):
+    """Test the /api/config/mcpserver POST endpoint."""
+    client, _ = test_client
+    # Prepare request data - convert McpServerConfig objects to dict
+    mock_server_dict = {}
+    for key, value in MOCK_MCP_CONFIG.items():
+        mock_server_dict[key] = value.model_dump()
+
+    server_data = {"mcpServers": mock_server_dict}
+
+    response = client.post(
+        "/api/config/mcpserver",
+        json=server_data,
+    )
+    assert response.status_code == SUCCESS_CODE
+    response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+        },
+    )
+
+    response = client.get("/api/config/mcpserver")
+    assert response.status_code == SUCCESS_CODE
+    response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "message": None,
+            "config": {
+                "mcpServers": {
+                    "default": {
+                        "transport": "stdio",
+                        "enabled": True,
+                        "command": "node",
+                        "args": [
+                            "./mcp-server.js",
+                        ],
+                        "env": {"NODE_ENV": "production"},
+                        "url": None,
+                    },
+                },
+            },
         },
     )
