@@ -19,9 +19,10 @@ from json import JSONDecodeError
 from json import loads as json_loads
 from typing import TYPE_CHECKING, Any, Literal, Self
 
+import anyio
 import httpx
 from langchain_core.tools import BaseTool, ToolException
-from mcp import ClientSession, StdioServerParameters, stdio_client, types
+from mcp import ClientSession, McpError, StdioServerParameters, stdio_client, types
 from mcp.client.sse import sse_client
 from mcp.client.websocket import websocket_client
 from pydantic import BaseModel, ConfigDict
@@ -243,7 +244,7 @@ class McpServer(ContextProtocol):
                 raise
             await asyncio.sleep(self.KEEP_ALIVE_INTERVAL)
 
-    async def _client_watcher(self) -> None:
+    async def _client_watcher(self) -> None:  # noqa: C901, PLR0915
         """Client watcher task.
 
         Restart the client if need.
@@ -296,18 +297,39 @@ class McpServer(ContextProtocol):
                             in [ClientState.CLOSED, ClientState.RESTARTING],
                         )
             # cannot launch local sse server
-            except InvalidMcpServerError as e:
+            except* InvalidMcpServerError as e:
                 self._exception = e
                 should_break = True
-            except (FileNotFoundError, PermissionError) as e:
-                self._exception = InvalidMcpServerError(self.name, str(e))
+            except* (
+                FileNotFoundError,
+                PermissionError,
+                McpError,
+                httpx.ConnectError,
+                httpx.InvalidURL,
+                httpx.TooManyRedirects,
+            ) as eg:
+                self._exception = InvalidMcpServerError(self.name, str(eg.exceptions))
                 should_break = True
-            except asyncio.CancelledError:
+            except* httpx.HTTPStatusError as eg:
+                for e in eg.exceptions:
+                    if (
+                        isinstance(e, httpx.HTTPStatusError)
+                        and e.response.status_code < 500  # noqa: PLR2004
+                        and e.response.status_code != 429  # noqa: PLR2004
+                    ):
+                        should_break = True
+                        break
+                self._exception = InvalidMcpServerError(self.name, str(eg.exceptions))
+            except* asyncio.CancelledError as e:
                 should_break = True
                 logger.debug("Client watcher cancelled for %s", self.name)
-            except BaseException as e:
-                self._exception = InvalidMcpServerError(self.name, str(e))
-                logger.exception("Client initialization error for %s: %s", self.name, e)
+            except* BaseException as eg:
+                self._exception = InvalidMcpServerError(self.name, str(eg.exceptions))
+                logger.exception(
+                    "Client initialization error for %s: %s",
+                    self.name,
+                    eg.exceptions,
+                )
 
             self._retries += 1
             self._session = None
@@ -354,13 +376,25 @@ class McpServer(ContextProtocol):
                 self.__change_state(
                     ClientState.CLOSED, [ClientState.INIT, ClientState.RUNNING], False
                 )
-                await self._cond.wait_for(
-                    lambda: self._session_count == 0,
+                logger.debug(
+                    "%s: wait all sessions to be closed. now is %s",
+                    self.name,
+                    self._session_count,
                 )
+            async with self._cond, asyncio.timeout(30):
+                try:
+                    await self._cond.wait_for(
+                        lambda: self._session_count == 0,
+                    )
+                except TimeoutError:
+                    logger.warning(
+                        "Timeout to wait %d sessions to be closed",
+                        self._session_count,
+                    )
             with suppress(Exception):
-                task.cancel()
-                await task
-                logger.debug("client watcher task awaited: %s", self.name)
+                async with asyncio.timeout(10):
+                    task.cancel()
+                    await task
 
     def _get_client(
         self,
@@ -542,9 +576,18 @@ class McpServer(ContextProtocol):
             # We should handle different exception types appropriately
             # For example, connection errors might need restart
             # while application-level errors might just need to be propagated
-            except (httpx.HTTPError, httpx.StreamError) as e:
+            except (
+                httpx.HTTPError,
+                httpx.StreamError,
+                httpx.TimeoutException,
+                httpx.TooManyRedirects,
+                anyio.BrokenResourceError,
+                anyio.ClosedResourceError,
+                anyio.EndOfStream,
+                McpError,
+                Exception,  # Before we know the exception type
+            ) as e:
                 async with self._cond:
-                    self._session_count -= 1
                     self.__change_state(
                         ClientState.RESTARTING, [ClientState.RUNNING], e
                     )
@@ -558,7 +601,7 @@ class McpServer(ContextProtocol):
                     },
                 )
                 raise
-            else:
+            finally:
                 async with self._cond:
                     self._session_count -= 1
                     self._cond.notify_all()
