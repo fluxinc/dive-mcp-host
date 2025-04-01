@@ -7,7 +7,6 @@ import logging
 import os
 import signal
 import time
-from asyncio import CancelledError
 from collections.abc import AsyncGenerator
 from contextlib import (
     AbstractAsyncContextManager,

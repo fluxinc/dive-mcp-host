@@ -174,52 +174,50 @@ async def test_tool_manager_reload(
     echo_tool_stdio_config: dict[str, ServerConfig],
 ) -> None:
     """Test the tool manager's reload."""
-    pytest.skip("broken")  # prevent block ci
-    echo_tool_stdio_config["fetch"] = ServerConfig(
-        name="fetch",
-        transport="stdio",
-        command="uvx",
-        args=["mcp-server-fetch"],
-    )
     async with ToolManager(echo_tool_stdio_config) as tool_manager:
-        # tools = tool_manager.langchain_tools()
-        pass
-        # assert sorted([i.name for i in tools]) == ["echo", "ignore"]
+        tools = tool_manager.langchain_tools()
+        assert sorted([i.name for i in tools]) == ["echo", "ignore"]
 
-        # # test reload with same config
-        # # await tool_manager.reload(echo_tool_stdio_config)
-        # tools = tool_manager.langchain_tools()
-        # assert sorted([i.name for i in tools]) == ["echo", "ignore"]
+        # test reload with same config
+        await tool_manager.reload(echo_tool_stdio_config)
+        tools = tool_manager.langchain_tools()
+        assert sorted([i.name for i in tools]) == ["echo", "ignore"]
 
-        # # test reload with modified config
-        # new_config = echo_tool_stdio_config.copy()
-        # # await tool_manager.reload(new_config)
-        # tools = tool_manager.langchain_tools()
-        # assert sorted([i.name for i in tools]) == ["echo", "echo", "ignore", "ignore"]
+        # test reload with modified config
+        new_config = echo_tool_stdio_config.copy()
+        new_config["fetch"] = ServerConfig(
+            name="fetch",
+            command="uvx",
+            args=["mcp-server-fetch"],
+            transport="stdio",
+        )
+        await tool_manager.reload(new_config)
+        tools = tool_manager.langchain_tools()
+        assert sorted([i.name for i in tools]) == ["echo", "fetch", "ignore"]
 
-        # # test remove tool
-        # # await tool_manager.reload(echo_tool_stdio_config)
-        # tools = tool_manager.langchain_tools()
-        # assert sorted([i.name for i in tools]) == ["echo", "ignore"]
+        # test remove tool
+        await tool_manager.reload(echo_tool_stdio_config)
+        tools = tool_manager.langchain_tools()
+        assert sorted([i.name for i in tools]) == ["echo", "ignore"]
 
-        # # verify tools still work after reload
-        # for tool in tools:
-        #     result = await tool.ainvoke(
-        #         ToolCall(
-        #             name=tool.name,
-        #             id="123",
-        #             args={"message": "Hello, world!"},
-        #             type="tool_call",
-        #         ),
-        #     )
-        #     assert isinstance(result, ToolMessage)
-        #     if tool.name == "echo":
-        #         assert json.loads(str(result.content))[0]["text"] == "Hello, world!"
+        # verify tools still work after reload
+        for tool in tools:
+            result = await tool.ainvoke(
+                ToolCall(
+                    name=tool.name,
+                    id="123",
+                    args={"message": "Hello, world!"},
+                    type="tool_call",
+                ),
+            )
+            assert isinstance(result, ToolMessage)
+            if tool.name == "echo":
+                assert json.loads(str(result.content))[0]["text"] == "Hello, world!"
 
-        # # remove all tools
-        # # await tool_manager.reload({})
-        # tools = tool_manager.langchain_tools()
-        # assert len(tools) == 0
+        # remove all tools
+        await tool_manager.reload({})
+        tools = tool_manager.langchain_tools()
+        assert len(tools) == 0
 
 
 @pytest.mark.asyncio
