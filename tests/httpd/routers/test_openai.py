@@ -1,9 +1,12 @@
 import asyncio
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import status
 from fastapi.responses import StreamingResponse
+
+from tests import helper
 
 from dive_mcp_host.httpd.routers.openai import (
     CompletionEventStreamContextManager,
@@ -53,13 +56,14 @@ def test_get_openai(test_client):
     assert response.status_code == status.HTTP_200_OK
 
     # Parse JSON response
-    response_data = response.json()
-
-    # Validate response structure
-    assert "success" in response_data
-    assert isinstance(response_data["success"], bool)
-    assert "message" in response_data
-    assert isinstance(response_data["message"], str)
+    response_data = cast(dict, response.json())
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "message": "Welcome to Dive Compatible API! 🚀",
+        },
+    )
 
 
 def test_list_models(test_client):
