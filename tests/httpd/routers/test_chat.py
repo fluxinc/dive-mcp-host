@@ -2,9 +2,9 @@ import asyncio
 import io
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from unittest import mock
 
 import pytest
@@ -13,10 +13,11 @@ from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
 
-from dive_mcp_host.host.host import DiveMcpHost
+if TYPE_CHECKING:
+    from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.httpd.app import DiveHostAPI
 from dive_mcp_host.httpd.conf.service.manager import ServiceManager
-from dive_mcp_host.httpd.database.models import Chat
+from dive_mcp_host.httpd.database.models import Chat, Message, Role
 from dive_mcp_host.httpd.dependencies import get_app, get_dive_user
 from dive_mcp_host.httpd.routers.chat import chat
 from dive_mcp_host.httpd.routers.models import UserInputError
@@ -29,19 +30,6 @@ BAD_REQUEST_CODE = status.HTTP_400_BAD_REQUEST
 TEST_CHAT_ID = "test_chat_123"
 TEST_MESSAGE_ID = "test_message_456"
 TEST_USER_ID = "test_user_123"
-
-
-@dataclass
-class Message:
-    """Mock message for testing."""
-
-    role: str
-    content: str
-    chatId: str  # noqa: N815
-    messageId: str  # noqa: N815
-    id: int
-    createdAt: datetime  # noqa: N815
-    files: str = "[]"  # Modified to string type to match the actual database model
 
 
 @dataclass
@@ -83,7 +71,7 @@ class MockDatabase:
             ),
             messages=[
                 Message(
-                    role="user",
+                    role=Role.USER,
                     content="Mock user message",
                     chatId=chat_id,
                     messageId="msg_user",
@@ -91,7 +79,7 @@ class MockDatabase:
                     createdAt=datetime.now(UTC),
                 ),
                 Message(
-                    role="assistant",
+                    role=Role.ASSISTANT,
                     content="Mock assistant message",
                     chatId=chat_id,
                     messageId="msg_assistant",
@@ -114,7 +102,7 @@ class MockDatabase:
     async def get_next_ai_message(self, chat_id, _message_id, **_kwargs):
         """Get the next AI message."""
         return Message(
-            role="assistant",
+            role=Role.ASSISTANT,
             content="Mock next AI message",
             chatId=chat_id,
             messageId="next_ai_msg",
@@ -182,6 +170,7 @@ class MockDiveHostAPI:
         self.db = MockDatabase()
         self.store = MockStore()
         self.mcp = MockMcpServerManager()
+        self.dive_host = {"default": MockDiveHost()}
 
     def db_sessionmaker(self):
         """Return a mock session context manager."""
@@ -201,6 +190,30 @@ class MockDiveHostAPI:
     def msg_store(self, _session):
         """Return the database mock."""
         return self.db
+
+
+class MockDiveHost:
+    """Mock DiveHost for testing."""
+
+    async def get_messages(self, thread_id, user_id):  # noqa: ARG002
+        """Mock get_messages method."""
+
+        @dataclass
+        class MockMessageObject:
+            """Mock BaseMessage for testing."""
+
+            type: str
+            id: str
+            content: str
+            additional_kwargs: dict = field(default_factory=dict)
+
+        return [
+            MockMessageObject(
+                type="human",
+                id="test_msg_user",
+                content="Test user message",
+            )
+        ]
 
 
 @pytest.fixture
@@ -296,7 +309,7 @@ def test_get_chat(client):
             ),
             messages=[
                 Message(
-                    role="user",
+                    role=Role.USER,
                     content="Test user message",
                     chatId=TEST_CHAT_ID,
                     messageId="test_msg_user",
@@ -517,7 +530,7 @@ def test_edit_chat(test_client):
         AIMessage(content="message 1"),
         AIMessage(content="message 2"),
     ]
-    host = cast(dict[str, DiveMcpHost], app.dive_host)["default"]
+    host = cast("dict[str, DiveMcpHost]", app.dive_host)["default"]
     host.model.responses = ai_messages  # type: ignore
     response = client.post(
         "/api/chat/edit",
