@@ -39,6 +39,7 @@ class Role(StrEnum):
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
 
+
 class NewMessage(BaseModel):
     """Represents a message within a chat conversation."""
 

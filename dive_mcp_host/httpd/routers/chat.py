@@ -185,12 +185,12 @@ async def get_chat(
         DataResult[ChatMessage]: The chat and its messages.
     """
     async with app.db_sessionmaker() as session:
-        chat = await app.msg_store(session).get_chat_with_messages(
+        db_store_chat = await app.msg_store(session).get_chat_with_messages(
             chat_id=chat_id,
             user_id=dive_user["user_id"],
         )
 
-    if chat is None:
+    if db_store_chat is None:
         raise UserInputError("Chat not found")
 
     checkpointer_messages = await app.dive_host["default"].get_messages(
@@ -198,73 +198,80 @@ async def get_chat(
         user_id=dive_user["user_id"] or "",
     )
 
-    final_chat_message = []
+    final_chat_messages = []
+    db_store_message_map = {msg.message_id: msg for msg in db_store_chat.messages}
 
-    for index, msg in enumerate(checkpointer_messages):
-        if msg.type == "human":
-            # find msg from msg_store by id in checkpointer
-            db_message = next((m for m in chat.messages if m.message_id == msg.id), None)
-            if db_message:
-                final_chat_message.append(db_message)
+    for index, checkpointer_msg in enumerate(checkpointer_messages):
+        db_message = (
+            db_store_message_map.get(checkpointer_msg.id or "")
+            if checkpointer_msg.id
+            else None
+        )
 
-        if msg.type == "ai":
-            # find msg from msg_store by id in checkpointer
-            db_message = next((m for m in chat.messages if m.message_id == msg.id), None)
+        if checkpointer_msg.type in ("human", "ai"):
+            # human and ai use msg_store message if id is matched
             if db_message:
-                final_chat_message.append(db_message)
-            else:
-                final_chat_message.append(
-                    Message(
-                      id=index,
-                      createdAt=datetime.datetime.now(datetime.UTC),
-                      content=str(msg.content),
-                      role=Role("assistant"),
-                      chatId=chat_id,
-                      messageId=msg.id or "",
-                      files="[]",
-                      resource_usage=None,
-                )
-            )
-            tool_calls = msg.additional_kwargs.get("tool_calls", [])
-            if tool_calls:
-                tool_call_array = []
-                for tool_call in tool_calls:
-                    function = tool_call.get("function", {})
-                    tool_call_array.append(
-                        {
-                            "name": function.get("name", ""),
-                            "args": json.loads(function.get("arguments", "{}")),
-                        }
-                    )
-                content = json.dumps(tool_call_array)
-                final_chat_message.append(
+                final_chat_messages.append(db_message)
+            elif checkpointer_msg.type == "ai":
+                final_chat_messages.append(
                     Message(
                         id=index,
                         createdAt=datetime.datetime.now(datetime.UTC),
-                        content=content,
-                        role=Role("tool_call"),
+                        content=str(checkpointer_msg.content),
+                        role=Role("assistant"),
                         chatId=chat_id,
-                        messageId=msg.id or "",
+                        messageId=checkpointer_msg.id or "",
                         files="[]",
                         resource_usage=None,
                     )
                 )
-        if msg.type == "tool":
-            final_chat_message.append(
+
+                # tool call
+                tool_calls = checkpointer_msg.additional_kwargs.get("tool_calls", [])
+                if tool_calls:
+                    tool_call_array = []
+                    for tool_call in tool_calls:
+                        function = tool_call.get("function", {})
+                        tool_call_array.append(
+                            {
+                                "name": function.get("name", ""),
+                                "args": json.loads(function.get("arguments", "{}")),
+                            }
+                        )
+                    content = json.dumps(tool_call_array)
+                    final_chat_messages.append(
+                        Message(
+                            id=index,
+                            createdAt=datetime.datetime.now(datetime.UTC),
+                            content=content,
+                            role=Role("tool_call"),
+                            chatId=chat_id,
+                            messageId=checkpointer_msg.id or "",
+                            files="[]",
+                            resource_usage=None,
+                        )
+                    )
+
+        # tool result
+        elif checkpointer_msg.type == "tool":
+            final_chat_messages.append(
                 Message(
                     id=index,
                     createdAt=datetime.datetime.now(datetime.UTC),
-                    content=str(msg.content),
+                    content=str(checkpointer_msg.content),
                     role=Role("tool_result"),
                     chatId=chat_id,
-                    messageId=msg.id or "",
+                    messageId=checkpointer_msg.id or "",
                     files="[]",
                     resource_usage=None,
                 )
             )
 
-    chat.messages = final_chat_message
-    return DataResult(success=True, message=None, data=chat)
+    chat_with_messages = ChatMessage(
+        chat=db_store_chat.chat,
+        messages=final_chat_messages,
+    )
+    return DataResult(success=True, message=None, data=chat_with_messages)
 
 
 @chat.delete("/{chat_id}")

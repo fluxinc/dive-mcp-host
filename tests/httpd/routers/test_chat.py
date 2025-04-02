@@ -4,7 +4,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from unittest import mock
 
 import pytest
@@ -13,7 +13,8 @@ from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
 
-from dive_mcp_host.host.host import DiveMcpHost
+if TYPE_CHECKING:
+    from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.httpd.app import DiveHostAPI
 from dive_mcp_host.httpd.conf.service.manager import ServiceManager
 from dive_mcp_host.httpd.database.models import Chat, Message, Role
@@ -29,6 +30,7 @@ BAD_REQUEST_CODE = status.HTTP_400_BAD_REQUEST
 TEST_CHAT_ID = "test_chat_123"
 TEST_MESSAGE_ID = "test_message_456"
 TEST_USER_ID = "test_user_123"
+
 
 @dataclass
 class ChatWithMessages:
@@ -199,6 +201,7 @@ class MockDiveHost:
         @dataclass
         class MockMessageObject:
             """Mock BaseMessage for testing."""
+
             type: str
             id: str
             content: str
@@ -527,7 +530,7 @@ def test_edit_chat(test_client):
         AIMessage(content="message 1"),
         AIMessage(content="message 2"),
     ]
-    host = cast(dict[str, DiveMcpHost], app.dive_host)["default"]
+    host = cast("dict[str, DiveMcpHost]", app.dive_host)["default"]
     host.model.responses = ai_messages  # type: ignore
     response = client.post(
         "/api/chat/edit",
