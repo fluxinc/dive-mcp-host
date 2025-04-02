@@ -70,7 +70,7 @@ class ChatAgentFactory(AgentFactory[AgentState]):
             messages=initial_messages(query),
             is_last_step=False,
             today_datetime=today_datetime(),
-            remaining_steps=1,
+            remaining_steps=100,
         )
 
     def state_type(
