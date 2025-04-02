@@ -89,7 +89,7 @@ class EventStreamContextManager:
             data (str): The data to write to the stream.
         """
         if isinstance(data, BaseModel):
-            data = json.dumps({"message": data.model_dump(mode="json", by_alias=True)})
+            data = json.dumps({"message": data.model_dump_json(by_alias=True)})
         await self.queue.put(data)
 
     async def _generate(self) -> AsyncGenerator[str, None]:
