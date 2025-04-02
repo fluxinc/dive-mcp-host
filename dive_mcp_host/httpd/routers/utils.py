@@ -143,7 +143,7 @@ class ChatProcessor:
     async def handle_chat(
         self,
         chat_id: str | None,
-        query_input: str | QueryInput | None,
+        query_input: QueryInput | None,
         regenerate_message_id: str | None,
     ) -> tuple[str, TokenUsage]:
         """Handle chat."""
@@ -164,7 +164,20 @@ class ChatProcessor:
         )
 
         start = time.time()
-        user_message, ai_message = await self._process_chat(chat_id, query_input)
+        if regenerate_message_id and isinstance(query_input, QueryInput):
+            user_message, ai_message = await self._process_chat(
+                chat_id,
+                await self._query_input_to_message(
+                    query_input, message_id=regenerate_message_id
+                ),
+                is_resend=True,
+            )
+        else:
+            user_message, ai_message = await self._process_chat(
+                chat_id,
+                query_input,
+                is_resend=False,
+            )
         end = time.time()
         duration = ai_message.response_metadata.get("total_duration")
         assert user_message.id
@@ -184,6 +197,15 @@ class ChatProcessor:
 
             if regenerate_message_id:
                 await db.delete_messages_after(chat_id, regenerate_message_id)
+                assert query_input
+                await db.update_message_content(
+                    user_message.id,
+                    QueryInput(
+                        text=query_input.text or "",
+                        images=query_input.images or [],
+                        documents=query_input.documents or [],
+                    ),
+                )
             elif isinstance(query_input, QueryInput):
                 files = (query_input.images or []) + (query_input.documents or [])
                 await db.create_message(
@@ -285,6 +307,7 @@ class ChatProcessor:
         query_input: str | QueryInput | BaseMessage | None,
         history: list[BaseMessage] | None = None,
         tools: list | None = None,
+        is_resend: bool = False,
     ) -> tuple[HumanMessage, AIMessage]:
         messages = [*history] if history else []
 
@@ -293,44 +316,7 @@ class ChatProcessor:
             if isinstance(query_input, str):
                 messages.append(HumanMessage(content=query_input))
             elif isinstance(query_input, QueryInput):
-                content = []
-
-                if query_input.text:
-                    content.append(
-                        {
-                            "type": "text",
-                            "text": query_input.text,
-                        }
-                    )
-
-                for image in query_input.images or []:
-                    local_path = image
-                    base64_image = await self.store.get_image(local_path)
-                    content.append(
-                        {
-                            "type": "text",
-                            "text": f"![Image]({base64_image})",
-                        }
-                    )
-                    content.append(
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": base64_image,
-                            },
-                        }
-                    )
-
-                for document in query_input.documents or []:
-                    local_path = document
-                    content.append(
-                        {
-                            "type": "text",
-                            "text": f"![Document]({local_path})",
-                        }
-                    )
-
-                messages.append(HumanMessage(content=content))
+                messages.append(await self._query_input_to_message(query_input))
             else:
                 messages.append(query_input)
 
@@ -355,8 +341,10 @@ class ChatProcessor:
                     self.app.abort_controller.abort_signal(chat_id, conversation.abort)
                 )
             await stack.enter_async_context(conversation)
-            response = conversation.query(messages, stream_mode=["messages", "values"])
-            return await self._handle_response(response)
+            response_generator = conversation.query(
+                messages, stream_mode=["messages", "values"], is_resend=is_resend
+            )
+            return await self._handle_response(response_generator)
 
         raise RuntimeError("Unreachable")
 
@@ -489,3 +477,45 @@ class ChatProcessor:
                     history.append(HumanMessage(content=content))
 
         return history
+
+    async def _query_input_to_message(
+        self, query_input: QueryInput, message_id: str | None = None
+    ) -> HumanMessage:
+        """Convert query input to message."""
+        content = []
+
+        if query_input.text:
+            content.append(
+                {
+                    "type": "text",
+                    "text": query_input.text,
+                }
+            )
+
+        for image in query_input.images or []:
+            local_path = image
+            base64_image = await self.store.get_image(local_path)
+            content.append(
+                {
+                    "type": "text",
+                    "text": f"![Image]({base64_image})",
+                }
+            )
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": base64_image,
+                    },
+                }
+            )
+
+        for document in query_input.documents or []:
+            local_path = document
+            content.append(
+                {
+                    "type": "text",
+                    "text": f"![Document]({local_path})",
+                }
+            )
+        return HumanMessage(content=content, id=message_id)

@@ -1,9 +1,17 @@
+import datetime
+import json
 from typing import TYPE_CHECKING, Annotated, TypeVar
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
-from dive_mcp_host.httpd.database.models import Chat, ChatMessage, QueryInput
+from dive_mcp_host.httpd.database.models import (
+    Chat,
+    ChatMessage,
+    Message,
+    QueryInput,
+    Role,
+)
 from dive_mcp_host.httpd.dependencies import get_app, get_dive_user
 from dive_mcp_host.httpd.routers.models import (
     ResultResponse,
@@ -95,7 +103,7 @@ async def edit_chat(  # noqa: PLR0913
     files: Annotated[list[UploadFile] | None, File()] = None,
     filepaths: Annotated[list[str] | None, Form()] = None,
 ) -> StreamingResponse:
-    """Edit a chat.
+    """Edit a message in a chat and query again.
 
     Args:
         request (Request): The request object.
@@ -123,20 +131,8 @@ async def edit_chat(  # noqa: PLR0913
 
     async def process() -> None:
         async with stream:
-            dive_user = request.state.dive_user
-            async with app.db_sessionmaker() as session:
-                await app.msg_store(session).update_message_content(
-                    message_id, query_input, dive_user["user_id"]
-                )
-
-                next_ai_message = await app.msg_store(session).get_next_ai_message(
-                    chat_id, message_id
-                )
-                await session.commit()
             processor = ChatProcessor(app, request.state, stream)
-            await processor.handle_chat(
-                chat_id, query_input, next_ai_message.message_id
-            )
+            await processor.handle_chat(chat_id, query_input, message_id)
 
     stream.add_task(process)
     return response
@@ -189,11 +185,93 @@ async def get_chat(
         DataResult[ChatMessage]: The chat and its messages.
     """
     async with app.db_sessionmaker() as session:
-        chat = await app.msg_store(session).get_chat_with_messages(
+        db_store_chat = await app.msg_store(session).get_chat_with_messages(
             chat_id=chat_id,
             user_id=dive_user["user_id"],
         )
-    return DataResult(success=True, message=None, data=chat)
+
+    if db_store_chat is None:
+        raise UserInputError("Chat not found")
+
+    checkpointer_messages = await app.dive_host["default"].get_messages(
+        thread_id=chat_id,
+        user_id=dive_user["user_id"] or "",
+    )
+
+    final_chat_messages = []
+    db_store_message_map = {msg.message_id: msg for msg in db_store_chat.messages}
+
+    for index, checkpointer_msg in enumerate(checkpointer_messages):
+        db_message = (
+            db_store_message_map.get(checkpointer_msg.id or "")
+            if checkpointer_msg.id
+            else None
+        )
+
+        if checkpointer_msg.type in ("human", "ai"):
+            # human and ai use msg_store message if id is matched
+            if db_message:
+                final_chat_messages.append(db_message)
+            elif checkpointer_msg.type == "ai":
+                final_chat_messages.append(
+                    Message(
+                        id=index,
+                        createdAt=datetime.datetime.now(datetime.UTC),
+                        content=str(checkpointer_msg.content),
+                        role=Role("assistant"),
+                        chatId=chat_id,
+                        messageId=checkpointer_msg.id or "",
+                        files="[]",
+                        resource_usage=None,
+                    )
+                )
+
+                # tool call
+                tool_calls = checkpointer_msg.additional_kwargs.get("tool_calls", [])
+                if tool_calls:
+                    tool_call_array = []
+                    for tool_call in tool_calls:
+                        function = tool_call.get("function", {})
+                        tool_call_array.append(
+                            {
+                                "name": function.get("name", ""),
+                                "args": json.loads(function.get("arguments", "{}")),
+                            }
+                        )
+                    content = json.dumps(tool_call_array)
+                    final_chat_messages.append(
+                        Message(
+                            id=index,
+                            createdAt=datetime.datetime.now(datetime.UTC),
+                            content=content,
+                            role=Role("tool_call"),
+                            chatId=chat_id,
+                            messageId=checkpointer_msg.id or "",
+                            files="[]",
+                            resource_usage=None,
+                        )
+                    )
+
+        # tool result
+        elif checkpointer_msg.type == "tool":
+            final_chat_messages.append(
+                Message(
+                    id=index,
+                    createdAt=datetime.datetime.now(datetime.UTC),
+                    content=str(checkpointer_msg.content),
+                    role=Role("tool_result"),
+                    chatId=chat_id,
+                    messageId=checkpointer_msg.id or "",
+                    files="[]",
+                    resource_usage=None,
+                )
+            )
+
+    chat_with_messages = ChatMessage(
+        chat=db_store_chat.chat,
+        messages=final_chat_messages,
+    )
+    return DataResult(success=True, message=None, data=chat_with_messages)
 
 
 @chat.delete("/{chat_id}")
