@@ -99,7 +99,6 @@ class EventStreamContextManager:
             if chunk is None:  # End signal
                 continue
             yield "data: " + chunk + "\n\n"
-
         yield "data: [DONE]\n\n"
 
     def get_response(self) -> StreamingResponse:
@@ -154,7 +153,7 @@ class ChatProcessor:
         title_await = None
 
         if isinstance(query_input, QueryInput) and query_input.text:
-            title_await = self._generate_title(query_input.text)
+            title_await = asyncio.create_task(self._generate_title(query_input.text))
 
         await self.stream.write(
             StreamMessage(
@@ -179,6 +178,10 @@ class ChatProcessor:
                 is_resend=False,
             )
         end = time.time()
+        if ai_message is None:
+            if title_await:
+                title_await.cancel()
+            return "", TokenUsage()
         duration = ai_message.response_metadata.get("total_duration")
         assert user_message.id
         assert ai_message.id
