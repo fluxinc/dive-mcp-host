@@ -2,6 +2,9 @@ import asyncio
 import io
 import json
 import re
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
@@ -374,24 +377,36 @@ def test_delete_chat(client):
         assert response_data["success"] is True
 
 
-# def test_abort_chat(client):
-#     """Test the /api/chat/{chat_id}/abort endpoint."""
-#     # Send request
-#     response = client.post(f"/api/chat/{TEST_CHAT_ID}/abort")
+def test_abort_chat(test_client):
+    """Test the /api/chat/{chat_id}/abort endpoint."""
+    client, app = test_client
+    # fake model sleep few seconds
+    app.dive_host["default"]._model.sleep = 3  # type: ignore
 
-#     print(response.json())
+    # abort a non-existent chat
+    with pytest.raises(UserInputError) as excinfo:
+        client.post("/api/chat/00000000-0000-0000-0000-000000000000/abort")
+    assert "Chat not found" in str(excinfo.value)
 
-#     # Verify response status code
-#     assert response.status_code == SUCCESS_CODE
+    fake_id = uuid.uuid4()
 
-#     # Parse JSON response
-#     response_data = response.json()
+    def create_chat():
+        response = client.post(
+            "/api/chat",
+            data={"message": "long long time", "chatId": fake_id},
+        )
+        line = next(response.iter_lines())
+        message = json.loads(line[5:])["message"]  # type: ignore
+        assert message["content"]["id"] == fake_id
 
-#     # Validate response structure
-#     assert "success" in response_data
-#     assert response_data["success"] is True
-#     assert "message" in response_data
-#     assert "Chat abort signal sent successfully" in response_data["message"]
+    with ThreadPoolExecutor(1) as executor:
+        executor.submit(create_chat)
+        time.sleep(2)
+
+        abort_response = client.post(f"/api/chat/{fake_id}/abort")
+        assert abort_response.status_code == SUCCESS_CODE
+        abort_message = abort_response.json()
+        assert abort_message["success"]  # type: ignore
 
 
 def test_create_chat(client, monkeypatch):
