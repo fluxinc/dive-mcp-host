@@ -187,7 +187,7 @@ class DiveHostAPI(FastAPI):
                 env=server_config.env or {},
                 enabled=server_config.enabled,
                 url=server_config.url or None,
-                transport=server_config.transport,
+                transport=server_config.transport or "stdio",
             )
 
         return HostConfig(

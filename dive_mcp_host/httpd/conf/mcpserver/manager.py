@@ -10,13 +10,16 @@ from dive_mcp_host.httpd.conf.envs import DIVE_CONFIG_DIR
 
 
 # Define necessary types for configuration
-class ServerConfig(BaseModel):
-    """Server configuration model."""
+class MCPServerConfig(BaseModel):
+    """MCP Server configuration model."""
 
-    transport: Annotated[
-        Literal["stdio", "sse", "websocket"],
-        BeforeValidator(lambda v: "stdio" if v == "command" else v),
-    ]
+    transport: (
+        Annotated[
+            Literal["stdio", "sse", "websocket"],
+            BeforeValidator(lambda v: "stdio" if v == "command" else v),
+        ]
+        | None
+    ) = "stdio"
     enabled: bool = True
     command: str | None = None
     args: list[str] | None = None
@@ -25,9 +28,9 @@ class ServerConfig(BaseModel):
 
 
 class Config(BaseModel):
-    """Configuration model."""
+    """Model of mcp_config.json."""
 
-    mcp_servers: dict[str, ServerConfig] = Field(alias="mcpServers")
+    mcp_servers: dict[str, MCPServerConfig] = Field(alias="mcpServers")
 
 
 # Logger setup
@@ -76,7 +79,7 @@ class MCPServerManager:
         config_dict = json.loads(config_content)
         self._current_config = Config(**config_dict)
 
-    def get_enabled_servers(self) -> dict[str, ServerConfig]:
+    def get_enabled_servers(self) -> dict[str, MCPServerConfig]:
         """Get list of enabled server names.
 
         Returns:

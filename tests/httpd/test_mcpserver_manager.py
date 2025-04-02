@@ -9,8 +9,8 @@ import pytest_asyncio
 
 from dive_mcp_host.httpd.conf.mcpserver.manager import (
     Config,
+    MCPServerConfig,
     MCPServerManager,
-    ServerConfig,
 )
 
 # Register custom mark
@@ -142,7 +142,7 @@ class TestMCPServerManager:
         # Create new configuration
         new_config = Config(
             mcpServers={
-                "new_server": ServerConfig(
+                "new_server": MCPServerConfig(
                     transport="websocket",
                     enabled=True,
                     url="ws://new.url",
@@ -209,7 +209,7 @@ class TestMCPServerManagerIntegration:
 
         # Create a new configuration with additional server
         current_servers = manager.current_config.mcp_servers.copy()
-        current_servers["new_server"] = ServerConfig(
+        current_servers["new_server"] = MCPServerConfig(
             transport="sse",
             enabled=True,
             url="http://new.server",
@@ -237,3 +237,52 @@ class TestMCPServerManagerIntegration:
             env_manager.initialize()
             assert env_manager.current_config is not None
             assert len(env_manager.current_config.mcp_servers) == 0
+
+
+def test_mcp_server_config_validation():
+    """Test the validation of MCP server configuration."""
+    content = """{
+    "mcpServers": {
+        "filesystem": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "/tmp"
+            ],
+            "enabled": true
+        },
+        "yt-dlp": {
+            "command": "np",
+            "transport": "sse",
+            "args": [
+                "-y",
+                "@someone/some-package"
+            ],
+            "enabled": false,
+            "env": {
+                "NODE_ENV": "production"
+            }
+        }
+    }
+}
+"""
+    config = Config(**json.loads(content))
+    # The default transport is stdio
+    assert config.mcp_servers["filesystem"].transport == "stdio"
+    assert config.mcp_servers["filesystem"].enabled is True
+    assert config.mcp_servers["filesystem"].command == "npx"
+    assert config.mcp_servers["filesystem"].args == [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/tmp",  # noqa: S108
+    ]
+    assert config.mcp_servers["filesystem"].env is None
+    assert config.mcp_servers["yt-dlp"].transport == "sse"
+    assert config.mcp_servers["yt-dlp"].enabled is False
+    assert config.mcp_servers["yt-dlp"].command == "np"
+    assert config.mcp_servers["yt-dlp"].args == [
+        "-y",
+        "@someone/some-package",
+    ]
+    assert config.mcp_servers["yt-dlp"].env == {"NODE_ENV": "production"}
