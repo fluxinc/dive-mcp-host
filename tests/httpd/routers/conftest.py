@@ -9,7 +9,7 @@ from pydantic import AnyUrl
 
 from dive_mcp_host.host.conf import CheckpointerConfig, LLMConfig
 from dive_mcp_host.httpd.app import DiveHostAPI, create_app
-from dive_mcp_host.httpd.conf.mcpserver.manager import Config, ServerConfig
+from dive_mcp_host.httpd.conf.mcpserver.manager import Config, MCPServerConfig
 from dive_mcp_host.httpd.conf.service.manager import (
     ConfigLocation,
     DBConfig,
@@ -68,7 +68,7 @@ def config_files() -> Generator[ConfigFileNames, None, None]:
         mcp_server_config_file.write(
             Config(
                 mcpServers={
-                    "echo": ServerConfig(
+                    "echo": MCPServerConfig(
                         transport="stdio",
                         command="python3",
                         args=[
