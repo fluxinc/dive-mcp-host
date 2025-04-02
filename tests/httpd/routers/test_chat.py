@@ -180,6 +180,9 @@ def test_create_chat(test_client):
     assert "data: " in content
     assert "data: [DONE]\n\n" in content
 
+    has_chat_info = False
+    has_message_info = False
+
     # extract and parse the JSON data
     data_messages = re.findall(r"data: (.*?)\n\n", content)
     for data in data_messages:
@@ -196,14 +199,16 @@ def test_create_chat(test_client):
 
                 # assert the specific type of message
                 if inner_json["type"] == "chat_info":
+                    has_chat_info = True
                     helper.dict_subset(
                         inner_json["content"],
                         {
-                            "id": "test-chat-id",
+                            "id": chat_id,
                             "title": "New Chat",
                         },
                     )
-                elif inner_json["type"] == "message_info":
+                if inner_json["type"] == "message_info":
+                    has_message_info = True
                     helper.dict_subset(
                         inner_json["content"],
                         {
@@ -211,6 +216,9 @@ def test_create_chat(test_client):
                             "assistantMessageId": "test-ai-msg",
                         },
                     )
+
+    assert has_chat_info
+    assert has_message_info
 
 
 def test_edit_chat(test_client):
@@ -234,8 +242,9 @@ def test_edit_chat(test_client):
     ai_message_id = ""
     fist_ai_reply = ""
     for json_obj in helper.extract_stream(response.text):
-        content = json_obj["message"]["content"]
-        match json_obj["message"]["type"]:
+        message = json.loads(json_obj["message"])
+        content = message["content"]
+        match message["type"]:
             case "chat_info":
                 assert content["id"] == test_chat_id  # type: ignore
             case "message_info":
@@ -269,8 +278,9 @@ def test_edit_chat(test_client):
     new_user_message_id = ""
     new_ai_message_id = ""
     for json_obj in helper.extract_stream(response.text):
-        content = json_obj["message"]["content"]
-        match json_obj["message"]["type"]:
+        message = json.loads(json_obj["message"])
+        content = message["content"]
+        match message["type"]:
             case "chat_info":
                 assert content["id"] == test_chat_id  # type: ignore
             case "message_info":
