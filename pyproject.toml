@@ -25,18 +25,18 @@ dependencies = [
     "langgraph-prebuilt>=0.1.3",
     "langgraph>=0.3.18",
     "fastapi>=0.115.0",
-    "mcp>=1.4.0",
+    "mcp==1.6.0",
     "pydantic>=2.10",
     "pywin32>=306; sys_platform == 'win32' or platform_system == 'Windows'",
     "sqlite-vec>=0.1.0",
     "psycopg[binary]>=3.2.5",
-    "alembic>=1.15.1,< 1.16", # Alembic doesn't use SemVer https://alembic.sqlalchemy.org/en/latest/front.html#versioning-scheme
+    "alembic>=1.15.1,< 1.16",                                                # Alembic doesn't use SemVer https://alembic.sqlalchemy.org/en/latest/front.html#versioning-scheme
     "sqlalchemy[asyncio]>=2.0.38",
     "psycopg2-binary>=2.9.10",
     "asyncpg>=0.30.0",
     "python-multipart>=0.0.20",
     "pillow>=11.1.0",
-	"websockets >= 15.0"
+    "websockets >= 15.0",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -49,9 +49,10 @@ clipboard = []
 dev = [
     "pytest",
     "pytest-asyncio",
-	"pytest-integration",
+    "pytest-integration",
+    "pytest-timeout",
     "langchain-community",
-    "ruff"
+    "ruff",
 ]
 
 [project.urls]
@@ -67,9 +68,8 @@ python_files = "test_*.py"
 python_functions = "test_*"
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
-markers = [
-    "integration: mark test as integration test",
-]
+markers = ["integration: mark test as integration test"]
+timeout = 60
 
 [tool.ruff]
 target-version = "py312"
@@ -135,14 +135,7 @@ lint.ignore = [
 lint.extend-select = ["I"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/test_*.py" = [
-    "S101",
-    "ANN",
-    "D107",
-    "ARG001",
-    "PLR2004",
-    "SLF001",
-]
+"**/test_*.py" = ["S101", "ANN", "D107", "ARG001", "PLR2004", "SLF001"]
 "dive_mcp_host/cli/**/*.py" = ["S101", "ANN", "D107", "T201"]
 
 [tool.ruff.format]

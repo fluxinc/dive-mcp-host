@@ -293,13 +293,13 @@ class ChatProcessor:
             tuple[str, TokenUsage]: The result and token usage.
         """
         _, ai_message = await self._process_chat(chat_id, query_input, history, tools)
-        assert ai_message.usage_metadata
+        usage = TokenUsage()
+        if ai_message.usage_metadata:
+            usage.total_input_tokens = ai_message.usage_metadata["input_tokens"]
+            usage.total_output_tokens = ai_message.usage_metadata["output_tokens"]
+            usage.total_tokens = ai_message.usage_metadata["total_tokens"]
 
-        return str(ai_message.content), TokenUsage(
-            totalInputTokens=ai_message.usage_metadata["input_tokens"],
-            totalOutputTokens=ai_message.usage_metadata["output_tokens"],
-            totalTokens=ai_message.usage_metadata["total_tokens"],
-        )
+        return str(ai_message.content), usage
 
     async def _process_chat(
         self,

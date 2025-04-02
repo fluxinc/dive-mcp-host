@@ -166,7 +166,43 @@ class DiveMcpHost(ContextProtocol):
         Conversations can be resumed after reload by using the same thread_id.
         """
         # NOTE: Do Not restart MCP Servers when there is on-going query.
-        raise NotImplementedError
+        if self._exit_stack is None:
+            raise RuntimeError("Host not initialized")
+
+        # Update config
+        old_config = self._config
+        self._config = new_config
+
+        try:
+            # Reload model if needed
+            if old_config.llm != new_config.llm:
+                self._model = None
+                await self._init_models()
+
+            await self._tool_manager.reload(new_config.mcp_servers)
+            self._tools = self._tool_manager.langchain_tools()
+
+            # Reload checkpointer if needed
+            if old_config.checkpointer != new_config.checkpointer:
+                if self._checkpointer is not None:
+                    await self._exit_stack.aclose()
+                    self._checkpointer = None
+
+                if new_config.checkpointer:
+                    checkpointer = get_checkpointer(str(new_config.checkpointer.uri))
+                    self._checkpointer = await self._exit_stack.enter_async_context(
+                        checkpointer
+                    )
+                    await self._checkpointer.setup()
+
+            # Call the reloader function to handle service restart
+            await reloader()
+
+        except Exception as e:
+            # Restore old config if reload fails
+            self._config = old_config
+            logging.error("Failed to reload host: %s", e)
+            raise
 
     @property
     def config(self) -> HostConfig:
