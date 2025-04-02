@@ -5,12 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import signal
 import time
-from asyncio import CancelledError
 from collections.abc import AsyncGenerator
 from contextlib import (
     AbstractAsyncContextManager,
-    AsyncExitStack,
     asynccontextmanager,
     suppress,
 )
@@ -20,9 +19,10 @@ from json import JSONDecodeError
 from json import loads as json_loads
 from typing import TYPE_CHECKING, Any, Literal, Self
 
+import anyio
 import httpx
 from langchain_core.tools import BaseTool, ToolException
-from mcp import ClientSession, StdioServerParameters, stdio_client, types
+from mcp import ClientSession, McpError, StdioServerParameters, stdio_client, types
 from mcp.client.sse import sse_client
 from mcp.client.websocket import websocket_client
 from pydantic import BaseModel, ConfigDict
@@ -37,7 +37,7 @@ from dive_mcp_host.host.errors import (
 from dive_mcp_host.host.helpers.context import ContextProtocol
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Awaitable, Callable
+    from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping
 
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
@@ -88,7 +88,13 @@ class ToolManager(ContextProtocol):
         """Initialize the ToolManager."""
         self._configs = configs
         self._mcp_servers = dict[str, McpServer]()
-        self._async_exit_stack = AsyncExitStack()
+        self._mcp_servers_task = dict[str, tuple[asyncio.Task, asyncio.Event]]()
+        self._lock = asyncio.Lock()
+
+        self._mcp_servers = {
+            name: McpServer(name=name, config=config)
+            for name, config in self._configs.items()
+        }
 
     def langchain_tools(
         self,
@@ -101,20 +107,60 @@ class ToolManager(ContextProtocol):
             ),
         )
 
+    async def _launch_tools(self, servers: Mapping[str, McpServer]) -> None:
+        async def tool_process(
+            server: McpServer, exit_signal: asyncio.Event, ready: asyncio.Event
+        ) -> None:
+            async with server:
+                ready.set()
+                await exit_signal.wait()
+
+        async with self._lock:
+            for name, server in servers.items():
+                event = asyncio.Event()
+                ready = asyncio.Event()
+                task = asyncio.create_task(tool_process(server, event, ready))
+                await ready.wait()
+                self._mcp_servers_task[name] = (task, event)
+
+    async def _shutdown_tools(self, servers: Iterable[str]) -> None:
+        async with self._lock:
+            for name in servers:
+                task, event = self._mcp_servers_task.pop(name, (None, None))
+                if not (task and event):
+                    continue
+                event.set()
+                await task
+                del self._mcp_servers[name]
+
+    async def reload(self, new_configs: dict[str, ServerConfig]) -> None:
+        """Reload the MCP servers."""
+        to_shutdown = set(self._configs.keys()) - set(new_configs.keys())
+        to_launch = set(new_configs.keys()) - set(self._configs.keys())
+
+        # check if the config has changed
+        for key in set(self._configs) - to_shutdown:
+            if self._configs[key] != new_configs[key]:
+                to_shutdown.add(key)
+                to_launch.add(key)
+
+        self._configs = new_configs
+
+        await self._shutdown_tools(to_shutdown)
+
+        launch_servers = {}
+        for l_key in to_launch:
+            new_server = McpServer(name=l_key, config=new_configs[l_key])
+            launch_servers[l_key] = new_server
+            self._mcp_servers[l_key] = new_server
+        await self._launch_tools(launch_servers)
+
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
         """Get the langchain tools for the MCP servers."""
-        # start tools
-        self._mcp_servers = {
-            name: McpServer(name=name, config=config)
-            for name, config in self._configs.items()
-        }
-
         # we can manipulate the stack to add or remove tools
-        async with self._async_exit_stack:
-            async with asyncio.TaskGroup() as tg:
-                for tool in self._mcp_servers.values():
-                    tg.create_task(self._async_exit_stack.enter_async_context(tool))
-            yield self
+        await self._launch_tools(self._mcp_servers)
+        yield self
+        await self._shutdown_tools(list(self._mcp_servers.keys()))
 
     @property
     def mcp_server_info(self) -> dict[str, McpServerInfo]:
@@ -176,12 +222,18 @@ class McpServer(ContextProtocol):
 
         while True:
             if self._client_status != ClientState.RUNNING:
+                logger.debug(
+                    "Keep-alive stopped for %s: client status is %s",
+                    self.name,
+                    self._client_status,
+                )
                 return
             try:
                 await asyncio.sleep(self.config.keep_alive)
                 await session.send_ping()
                 self._last_active = time.time()
             except asyncio.CancelledError:
+                logger.debug("Keep-alive cancelled for %s", self.name)
                 return
             except BaseException as e:
                 logger.error("Keep-alive error for %s: %s", self.name, e)
@@ -192,7 +244,7 @@ class McpServer(ContextProtocol):
                 raise
             await asyncio.sleep(self.KEEP_ALIVE_INTERVAL)
 
-    async def _client_watcher(self) -> None:
+    async def _client_watcher(self) -> None:  # noqa: C901, PLR0915
         """Client watcher task.
 
         Restart the client if need.
@@ -202,6 +254,7 @@ class McpServer(ContextProtocol):
         should_break = False
         while True:
             try:
+                logger.debug("Attempting to initialize client %s", self.name)
                 async with (
                     self._get_client() as streams,
                     ClientSession(*streams) as session,
@@ -226,6 +279,11 @@ class McpServer(ContextProtocol):
                         self._exception = None
                         self._retries = 0
                         self.__change_state(ClientState.RUNNING, None, None)
+                        logger.debug(
+                            "Client %s initialized successfully with %d tools",
+                            self.name,
+                            len(mcp_tools),
+                        )
 
                         # Start keep-alive task if configured
                         keep_alive_task = (
@@ -238,13 +296,40 @@ class McpServer(ContextProtocol):
                             lambda: self._client_status
                             in [ClientState.CLOSED, ClientState.RESTARTING],
                         )
-            except* FileNotFoundError:
-                self._exception = InvalidMcpServerError(self.name, "Command not found")
-                should_break = True
-            except* asyncio.CancelledError:
-                should_break = True
-            except* BaseException as e:  # noqa: BLE001
+            # cannot launch local sse server
+            except* InvalidMcpServerError as e:
                 self._exception = e
+                should_break = True
+            except* (
+                FileNotFoundError,
+                PermissionError,
+                McpError,
+                httpx.ConnectError,
+                httpx.InvalidURL,
+                httpx.TooManyRedirects,
+            ) as eg:
+                self._exception = InvalidMcpServerError(self.name, str(eg.exceptions))
+                should_break = True
+            except* httpx.HTTPStatusError as eg:
+                for e in eg.exceptions:
+                    if (
+                        isinstance(e, httpx.HTTPStatusError)
+                        and e.response.status_code < 500  # noqa: PLR2004
+                        and e.response.status_code != 429  # noqa: PLR2004
+                    ):
+                        should_break = True
+                        break
+                self._exception = InvalidMcpServerError(self.name, str(eg.exceptions))
+            except* asyncio.CancelledError as e:
+                should_break = True
+                logger.debug("Client watcher cancelled for %s", self.name)
+            except* BaseException as eg:
+                self._exception = InvalidMcpServerError(self.name, str(eg.exceptions))
+                logger.exception(
+                    "Client initialization error for %s: %s",
+                    self.name,
+                    eg.exceptions,
+                )
 
             self._retries += 1
             self._session = None
@@ -252,11 +337,13 @@ class McpServer(ContextProtocol):
                 with suppress(Exception):
                     keep_alive_task.cancel()
                     await keep_alive_task
+                    logger.debug("Keep-alive task awaited for %s", self.name)
             if self._client_status == ClientState.CLOSED:
+                logger.debug("Client %s closed, stopping watcher", self.name)
                 return
             if self._retries >= self.RETRY_LIMIT or should_break:
                 logger.warning(
-                    "client %s failed after %d retries %s",
+                    "client for [%s] failed after %d retries %s",
                     self.name,
                     self._retries,
                     self._exception,
@@ -265,6 +352,12 @@ class McpServer(ContextProtocol):
                     if self._client_status != ClientState.CLOSED:
                         self.__change_state(ClientState.FAILED, None, False)
                 return
+            logger.debug(
+                "Retrying client initialization for %s (attempt %d/%d)",
+                self.name,
+                self._retries,
+                self.RETRY_LIMIT,
+            )
             await asyncio.sleep(self.RESTART_INTERVAL)
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
@@ -283,13 +376,25 @@ class McpServer(ContextProtocol):
                 self.__change_state(
                     ClientState.CLOSED, [ClientState.INIT, ClientState.RUNNING], False
                 )
-                await self._cond.wait_for(
-                    lambda: self._session_count == 0,
+                logger.debug(
+                    "%s: wait all sessions to be closed. now is %s",
+                    self.name,
+                    self._session_count,
                 )
+            async with self._cond, asyncio.timeout(30):
+                try:
+                    await self._cond.wait_for(
+                        lambda: self._session_count == 0,
+                    )
+                except TimeoutError:
+                    logger.warning(
+                        "Timeout to wait %d sessions to be closed",
+                        self._session_count,
+                    )
             with suppress(Exception):
-                task.cancel()
-                await task
-                logger.debug("client watcher task cancelled: %s", self.name)
+                async with asyncio.timeout(10):
+                    task.cancel()
+                    await task
 
     def _get_client(
         self,
@@ -373,8 +478,8 @@ class McpServer(ContextProtocol):
         for retried in range(self.RETRY_LIMIT):
             async with self._cond:
                 if self._client_status in (ClientState.RESTARTING, ClientState.INIT):
-                    logger.warning(
-                        "wait for sessioned, %s %s",
+                    logger.debug(
+                        "Waiting for session initialization, %s status: %s",
                         self.name,
                         self._client_status,
                     )
@@ -387,6 +492,11 @@ class McpServer(ContextProtocol):
                         ],
                     )
             if self._client_status in [ClientState.FAILED, ClientState.CLOSED]:
+                logger.error(
+                    "Session failed or closed for %s: %s",
+                    self.name,
+                    self._client_status,
+                )
                 raise McpSessionClosedOrFailedError(self.name, self._client_status.name)
             now = time.time()
             if (
@@ -396,6 +506,11 @@ class McpServer(ContextProtocol):
             ):
                 # check if the session is still active
                 try:
+                    logger.debug(
+                        "Checking session health for %s (inactive for %.1f seconds)",
+                        self.name,
+                        now - self._last_active,
+                    )
                     async with asyncio.timeout(10):
                         await self._session.send_ping()
                         self._last_active = time.time()
@@ -417,9 +532,11 @@ class McpServer(ContextProtocol):
                 return self._session
             if retried < self.RETRY_LIMIT - 1:
                 logger.warning(
-                    "session not initialized, retrying, %s %s",
+                    "Session not initialized, retrying, %s status: %s (attempt %d/%d)",
                     self.name,
                     self._client_status,
+                    retried + 1,
+                    self.RETRY_LIMIT,
                     extra={
                         "mcp_server": self.name,
                         "client_status": self._client_status,
@@ -427,7 +544,8 @@ class McpServer(ContextProtocol):
                 )
                 await asyncio.sleep(self.RESTART_INTERVAL)
         logger.error(
-            "session not initialized, %s %s",
+            "Session not initialized after %d attempts, %s status: %s",
+            self.RETRY_LIMIT,
             self.name,
             self._client_status,
             extra={"mcp_server": self.name, "client_status": self._client_status},
@@ -458,9 +576,18 @@ class McpServer(ContextProtocol):
             # We should handle different exception types appropriately
             # For example, connection errors might need restart
             # while application-level errors might just need to be propagated
-            except Exception as e:
+            except (
+                httpx.HTTPError,
+                httpx.StreamError,
+                httpx.TimeoutException,
+                httpx.TooManyRedirects,
+                anyio.BrokenResourceError,
+                anyio.ClosedResourceError,
+                anyio.EndOfStream,
+                McpError,
+                Exception,  # Before we know the exception type
+            ) as e:
                 async with self._cond:
-                    self._session_count -= 1
                     self.__change_state(
                         ClientState.RESTARTING, [ClientState.RUNNING], e
                     )
@@ -474,7 +601,7 @@ class McpServer(ContextProtocol):
                     },
                 )
                 raise
-            else:
+            finally:
                 async with self._cond:
                     self._session_count -= 1
                     self._cond.notify_all()
@@ -530,11 +657,21 @@ class McpTool(BaseTool):
                     kwargs = json_loads(kwargs["kwargs"])
             else:
                 kwargs = kwargs["kwargs"]
+        logger.debug(
+            "Executing tool %s.%s with args: %s", self.toolkit_name, self.name, kwargs
+        )
         async with self.mcp_server.session() as session:
             result = await session.call_tool(self.name, arguments=kwargs)
         content = to_json(result.content).decode()
         if result.isError:
+            logger.error(
+                "Tool execution failed for %s.%s: %s",
+                self.toolkit_name,
+                self.name,
+                content,
+            )
             raise ToolException(content)
+        logger.debug("Tool %s.%s executed successfully", self.toolkit_name, self.name)
         return content
 
 
@@ -559,10 +696,10 @@ async def local_mcp_net_server_client(
     args = args or config.args
     env = env or config.env
     assert config.url is not None, "url is required"
-    if config.transport == "sse":
-        get_client = sse_client
-    elif config.transport == "websocket":
-        get_client = websocket_client
+    get_client = sse_client if config.transport == "sse" else websocket_client
+    logger.debug(
+        "Starting local MCP server %s with command: %s %s", config.name, command, args
+    )
     if not (
         subprocess := await asyncio.create_subprocess_exec(
             command,
@@ -570,34 +707,45 @@ async def local_mcp_net_server_client(
             env=env,
         )
     ):
+        logger.error("Failed to start subprocess for %s", config.name)
         raise RuntimeError("failed to start subprocess")
     retried = 0
-    should_break = False
     # it tooks time to start the server, so we need to retry
-    while retried < max_connection_retries and not should_break:
-        await asyncio.sleep(0.3 if retried == 0 else 1)
-        try:
-            with suppress(TimeoutError, httpx.ConnectError):
+    try:
+        while retried < max_connection_retries:
+            await asyncio.sleep(0.3 if retried == 0 else 1)
+            logger.debug(
+                "Attempting to connect to server %s (attempt %d/%d)",
+                config.name,
+                retried + 1,
+                max_connection_retries,
+            )
+            with suppress(TimeoutError, httpx.HTTPError):
                 async with (
                     get_client(url=config.url) as streams,
                     ClientSession(*streams) as session,
                 ):
                     async with asyncio.timeout(10):
                         await session.initialize()
+                        logger.info("Successfully connected to server %s", config.name)
                         break
-        except* CancelledError:
-            should_break = True
-        if should_break:
-            break
-        retried += 1
-    logger.info("connected to the server %s %s", config.name, retried)
-    async with get_client(url=config.url) as streams:
-        yield streams
-    try:
-        logger.debug("Terminating subprocess")
-        subprocess.terminate()
-        await asyncio.wait_for(subprocess.wait(), timeout=10)
-    except TimeoutError:
-        logger.info("Timeout to terminate mcp-server %s. Kill it.", config.name)
-        subprocess.kill()
-        await asyncio.wait_for(subprocess.wait(), timeout=10)
+            retried += 1
+        else:
+            raise InvalidMcpServerError(config.name)
+        logger.info(
+            "Connected to the server %s after %d attempts", config.name, retried
+        )
+        async with get_client(url=config.url) as streams:
+            yield streams
+    finally:
+        with suppress(TimeoutError):
+            logger.debug("Terminating subprocess for %s", config.name)
+            subprocess.terminate()
+            subprocess.send_signal(signal.SIGINT)
+            await asyncio.wait_for(subprocess.wait(), timeout=10)
+            subprocess = None
+        if subprocess:
+            logger.info("Timeout to terminate mcp-server %s. Kill it.", config.name)
+            with suppress(TimeoutError):
+                subprocess.kill()
+                await asyncio.wait_for(subprocess.wait(), timeout=10)

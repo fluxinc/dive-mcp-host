@@ -36,6 +36,8 @@ class Role(StrEnum):
 
     ASSISTANT = "assistant"
     USER = "user"
+    TOOL_CALL = "tool_call"
+    TOOL_RESULT = "tool_result"
 
 
 class NewMessage(BaseModel):

@@ -372,3 +372,82 @@ async def test_resend_message(sqlite_uri: str) -> None:
             assert msgs["messages"][0].id == human_message_id
             assert msgs["messages"][1].content == "2"
             assert msgs["messages"][1].id != ai_message_id
+
+
+@pytest.mark.asyncio
+async def test_host_reload(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
+    """Test the host reload functionality."""
+    # Initial configuration
+    initial_config = HostConfig(
+        llm=LLMConfig(
+            model="gpt-4o",
+            modelProvider="openai",
+            apiKey="fake",
+        ),
+        mcp_servers=echo_tool_stdio_config,
+    )
+
+    # New configuration with different model settings
+    new_config = HostConfig(
+        llm=LLMConfig(
+            model="fake",
+            modelProvider="dive",
+        ),
+        mcp_servers={
+            "echo": ServerConfig(
+                name="echo",
+                command="python3",
+                args=["-m", "dive_mcp_host.host.tools.echo", "--transport=stdio"],
+                transport="stdio",
+            ),
+            # Added new server
+            "fetch": ServerConfig(
+                name="fetch",
+                command="uvx",
+                args=["mcp-server-fetch"],
+                transport="stdio",
+            ),
+        },
+    )
+
+    # Mock reloader function
+    reloader_called = False
+
+    async def mock_reloader() -> None:
+        nonlocal reloader_called
+        reloader_called = True
+
+    # Test reload functionality
+    async with DiveMcpHost(initial_config) as host:
+        # Verify initial state
+        assert len(host.tools) == 2  # echo and ignore tools
+        assert host.config.llm.temperature == 0
+
+        # Perform reload
+        await host.reload(new_config, mock_reloader)
+
+        # Verify reloader was called
+        assert reloader_called
+
+        # Verify config was updated
+        assert host.config.llm.model == "fake"
+
+        # Verify tools were updated
+        assert len(host.tools) == 3  # echo, fetch, and their ignore counterparts
+        tool_names = [tool.name for tool in host.tools]
+        assert "echo" in tool_names
+        assert "fetch" in tool_names
+
+        # Test conversation still works after reload
+        async with host.conversation() as conversation:
+            responses = []
+            async for response in conversation.query("Hello"):
+                responses.append(response)
+
+            assert len(responses) > 0
+
+        # Test reload with same config
+        reloader_called = False
+        await host.reload(new_config, mock_reloader)
+        assert reloader_called
+        assert len(host.tools) == 3

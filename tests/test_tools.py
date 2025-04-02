@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import random
 import secrets
 import signal
@@ -9,6 +10,7 @@ from os import environ
 from typing import TYPE_CHECKING, cast
 from unittest.mock import patch
 
+import httpx
 import pytest
 import pytest_asyncio
 from langchain_core.messages import (
@@ -87,16 +89,26 @@ async def echo_tool_sse_server(
         "--host=localhost",
         f"--port={port}",
     )
-    yield (
-        port,
-        {
-            "echo": ServerConfig(
-                name="echo", url=f"http://localhost:{port}/sse", transport="sse"
-            )
-        },
-    )
-    proc.send_signal(signal.SIGKILL)
-    await proc.wait()
+    while True:
+        try:
+            _ = await httpx.AsyncClient().get(f"http://localhost:{port}/xxxx")
+            break
+        except httpx.HTTPStatusError:
+            break
+        except:  # noqa: E722
+            await asyncio.sleep(0.1)
+    try:
+        yield (
+            port,
+            {
+                "echo": ServerConfig(
+                    name="echo", url=f"http://localhost:{port}/sse", transport="sse"
+                )
+            },
+        )
+    finally:
+        proc.send_signal(signal.SIGKILL)
+        await proc.wait()
 
 
 @pytest.fixture
@@ -167,6 +179,57 @@ async def test_tool_manager_stdio(
                 assert json.loads(str(result.content))[0]["text"] == "Hello, world!"
             else:
                 assert json.loads(str(result.content)) == []
+
+
+@pytest.mark.asyncio
+async def test_tool_manager_reload(
+    echo_tool_stdio_config: dict[str, ServerConfig],
+) -> None:
+    """Test the tool manager's reload."""
+    async with ToolManager(echo_tool_stdio_config) as tool_manager:
+        tools = tool_manager.langchain_tools()
+        assert sorted([i.name for i in tools]) == ["echo", "ignore"]
+
+        # test reload with same config
+        await tool_manager.reload(echo_tool_stdio_config)
+        tools = tool_manager.langchain_tools()
+        assert sorted([i.name for i in tools]) == ["echo", "ignore"]
+
+        # test reload with modified config
+        new_config = echo_tool_stdio_config.copy()
+        new_config["fetch"] = ServerConfig(
+            name="fetch",
+            command="uvx",
+            args=["mcp-server-fetch"],
+            transport="stdio",
+        )
+        await tool_manager.reload(new_config)
+        tools = tool_manager.langchain_tools()
+        assert sorted([i.name for i in tools]) == ["echo", "fetch", "ignore"]
+
+        # test remove tool
+        await tool_manager.reload(echo_tool_stdio_config)
+        tools = tool_manager.langchain_tools()
+        assert sorted([i.name for i in tools]) == ["echo", "ignore"]
+
+        # verify tools still work after reload
+        for tool in tools:
+            result = await tool.ainvoke(
+                ToolCall(
+                    name=tool.name,
+                    id="123",
+                    args={"message": "Hello, world!"},
+                    type="tool_call",
+                ),
+            )
+            assert isinstance(result, ToolMessage)
+            if tool.name == "echo":
+                assert json.loads(str(result.content))[0]["text"] == "Hello, world!"
+
+        # remove all tools
+        await tool_manager.reload({})
+        tools = tool_manager.langchain_tools()
+        assert len(tools) == 0
 
 
 @pytest.mark.asyncio
@@ -268,6 +331,36 @@ async def test_mcp_tool_exception_handling(
                 )
             assert mocked.call_count == 1
         assert server._client_status in [
+            ClientState.RUNNING,
+            ClientState.RESTARTING,
+        ]
+        await server.wait([ClientState.RUNNING])
+        # Need to identify which exceptions don't require rebuilding the session
+        # This test verifies that some exceptions allow reusing the existing session
+        # while others (like network errors) require a new session to be created
+        # assert server._session == session
+        await tools[0].ainvoke(
+            ToolCall(
+                name=tools[0].name,
+                id="123",
+                args={"message": "Hello, world!"},
+                type="tool_call",
+            ),
+        )
+
+        with patch("mcp.ClientSession.call_tool") as mocked:
+            mocked.side_effect = httpx.ReadTimeout("test")
+            with pytest.raises(httpx.ReadTimeout, match="test"):
+                await tools[0].ainvoke(
+                    ToolCall(
+                        name=tools[0].name,
+                        id="123",
+                        args={"xxxx": "Hello, world!"},
+                        type="tool_call",
+                    ),
+                )
+            assert mocked.call_count == 1
+        assert server._client_status in [
             ClientState.RESTARTING,
             ClientState.RUNNING,
         ]
@@ -288,8 +381,6 @@ async def test_tool_manager_local_sse(
     echo_tool_local_sse_config: dict[str, ServerConfig],
 ) -> None:
     """Test the tool manager."""
-    import logging
-
     async with ToolManager(echo_tool_local_sse_config) as tool_manager:
         tools = tool_manager.langchain_tools()
         assert sorted([i.name for i in tools]) == ["echo", "ignore"]
@@ -401,6 +492,26 @@ async def test_mcp_server_info_no_such_file(
         assert mcp_host.mcp_server_info["sse"].initialize_result is None
         assert mcp_host.mcp_server_info["sse"].error is not None
         assert mcp_host.mcp_server_info["sse"].client_status == ClientState.FAILED
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_info_sse_connection_refused(
+    echo_tool_sse_server: AbstractAsyncContextManager[
+        tuple[int, dict[str, ServerConfig]]
+    ],
+) -> None:
+    """Test the tool manager's SSE connection refused."""
+    async with echo_tool_sse_server as (port, configs):
+        configs["echo"].url = f"http://localhost:{port + 1}/sse"
+        async with (
+            ToolManager(configs) as tool_manager,
+        ):
+            tools = tool_manager.langchain_tools()
+            assert len(tools) == 0
+            assert tool_manager.mcp_server_info["echo"].error is not None
+            assert (
+                tool_manager.mcp_server_info["echo"].client_status == ClientState.FAILED
+            )
 
 
 @pytest.mark.asyncio
