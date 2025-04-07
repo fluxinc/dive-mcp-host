@@ -152,7 +152,7 @@ class DiveMcpHost(ContextProtocol):
     async def reload(
         self,
         new_config: HostConfig,
-        reloader: Callable[[], Awaitable[None]],
+        reloader: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         """Reload the host with a new configuration.
 
@@ -196,7 +196,8 @@ class DiveMcpHost(ContextProtocol):
                     await self._checkpointer.setup()
 
             # Call the reloader function to handle service restart
-            await reloader()
+            if reloader:
+                await reloader()
 
         except Exception as e:
             # Restore old config if reload fails
