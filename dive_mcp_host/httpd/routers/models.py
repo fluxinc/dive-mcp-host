@@ -3,7 +3,7 @@ from typing import Annotated, Any, Literal, TypeVar
 
 from pydantic import BaseModel, BeforeValidator, Field, RootModel
 
-from dive_mcp_host.host.conf import LLMConfig
+from dive_mcp_host.host.conf.llm import LLMConfigTypes
 
 T = TypeVar("T")
 
@@ -54,17 +54,14 @@ class ModelType(StrEnum):
     OTHER = "other"
 
     @classmethod
-    def get_model_type(cls, llm_config: LLMConfig) -> "ModelType":
+    def get_model_type(cls, llm_config: LLMConfigTypes) -> "ModelType":
         """Get model type from model name."""
-        if llm_config.modelProvider == "ollama":
-            return cls.OLLAMA
-
-        if llm_config.modelProvider == "mistralai":
-            return cls.MISTRAL
-
-        if llm_config.modelProvider == "bedrock":
-            return cls.BEDROCK
-
+        # Direct mapping for known providers
+        try:
+            return cls(llm_config.model_provider)
+        except ValueError:
+            pass
+        # Special case for deepseek
         if "deepseek" in llm_config.model.lower():
             return cls.DEEPSEEK
 
@@ -169,12 +166,12 @@ class TokenUsage(BaseModel):
     total_tokens: int = Field(default=0, alias="totalTokens")
 
 
-class ModelConfig(BaseModel):
+class ModelFullConfigs(BaseModel):
     """Configuration for the model."""
 
     active_provider: str = Field(alias="activeProvider")
     enable_tools: bool = Field(alias="enableTools")
-    configs: dict[str, LLMConfig]
+    configs: dict[str, LLMConfigTypes]
 
 
 class UserInputError(Exception):

@@ -145,9 +145,9 @@ async def list_models(app: DiveHostAPI = Depends(get_app)) -> ModelsResult:
         success=True,
         models=[
             OpenaiModel(
-                id=m._config.llm.model,  # noqa: SLF001
+                id=m.config.llm.model,
                 type="model",
-                owned_by=m._config.llm.modelProvider,  # noqa: SLF001
+                owned_by=m.config.llm.model_provider,
             )
             for m in app.dive_host.values()
         ],

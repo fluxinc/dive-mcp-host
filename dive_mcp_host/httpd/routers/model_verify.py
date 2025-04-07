@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from dive_mcp_host.host.conf import HostConfig, LLMConfig
+from dive_mcp_host.host.conf import HostConfig
+from dive_mcp_host.host.conf.llm import LLMConfig, LLMConfigTypes
 from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.host.tools.misc import TestTool
 from dive_mcp_host.httpd.dependencies import get_app
@@ -45,7 +46,7 @@ class ModelVerifyService:
 
     async def test_models(
         self,
-        llm_configs: list[LLMConfig],
+        llm_configs: list[LLMConfigTypes],
         subjects: list[Literal["connection", "tools"]],
     ) -> dict[str, ModelVerifyResult]:
         """Test the models.
@@ -105,7 +106,7 @@ class ModelVerifyService:
 
     async def test_model(
         self,
-        llm_config: LLMConfig,
+        llm_config: LLMConfigTypes,
         subjects: list[Literal["connection", "tools"]],
         steps: int,
     ) -> ModelVerifyResult:
@@ -199,7 +200,7 @@ async def do_verify_model(
 async def verify_model(
     request: Request,
     app: DiveHostAPI = Depends(get_app),
-    settings: dict[str, list[LLMConfig]] | None = None,
+    settings: dict[str, list[LLMConfigTypes]] | None = None,
 ) -> StreamingResponse:
     """Verify if a model supports streaming capabilities.
 

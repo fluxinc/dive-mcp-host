@@ -14,7 +14,8 @@ from langchain_core.messages import (
 )
 from pydantic import AnyUrl
 
-from dive_mcp_host.host.conf import CheckpointerConfig, HostConfig, LLMConfig
+from dive_mcp_host.host.conf import CheckpointerConfig, HostConfig
+from dive_mcp_host.host.conf.llm import LLMConfig
 from dive_mcp_host.host.errors import ThreadNotFoundError
 from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.host.tools import ServerConfig

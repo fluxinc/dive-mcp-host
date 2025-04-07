@@ -3,7 +3,7 @@ from typing import TypeVar
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
-from dive_mcp_host.host.conf import LLMConfig
+from dive_mcp_host.host.conf.llm import LLMConfigTypes
 from dive_mcp_host.httpd.conf.mcpserver.manager import Config
 from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.server import DiveHostAPI
@@ -11,7 +11,7 @@ from dive_mcp_host.httpd.server import DiveHostAPI
 from .models import (
     McpServerError,
     McpServers,
-    ModelConfig,
+    ModelFullConfigs,
     ModelInterfaceDefinition,
     ModelSettingsDefinition,
     ResultResponse,
@@ -50,7 +50,7 @@ class SaveModelSettingsRequest(BaseModel):
     """Request model for saving model settings."""
 
     provider: str
-    model_settings: LLMConfig = Field(alias="modelSettings")
+    model_settings: LLMConfigTypes = Field(alias="modelSettings")
     enable_tools: bool = Field(alias="enableTools")
 
 
@@ -122,7 +122,7 @@ async def post_mcp_server(
 @config.get("/model")
 async def get_model(
     app: DiveHostAPI = Depends(get_app),
-) -> ConfigResult["ModelConfig"]:
+) -> ConfigResult["ModelFullConfigs"]:
     """Get current model configuration.
 
     Returns:
@@ -151,7 +151,7 @@ async def post_model(
     app.model_config_manager.save_single_settings(
         provider=model_settings.provider,
         upload_model_settings=model_settings.model_settings,
-        enable_tools_=model_settings.enable_tools,
+        enable_tools=model_settings.enable_tools,
     )
 
     # Reload model config
@@ -170,7 +170,7 @@ async def post_model(
 
 @config.post("/model/replaceAll")
 async def post_model_replace_all(
-    model_config: "ModelConfig",
+    model_config: "ModelFullConfigs",
     app: DiveHostAPI = Depends(get_app),
 ) -> ResultResponse:
     """Replace all model configurations.

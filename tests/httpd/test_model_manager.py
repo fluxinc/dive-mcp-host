@@ -6,9 +6,9 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 
-from dive_mcp_host.host.conf import LLMConfig
+from dive_mcp_host.host.conf.llm import LLMConfig, LLMConfiguration
 from dive_mcp_host.httpd.conf.model.manager import ModelManager
-from dive_mcp_host.httpd.routers.models import ModelConfig
+from dive_mcp_host.httpd.routers.models import ModelFullConfigs
 
 # Register custom mark
 integration = pytest.mark.integration
@@ -68,12 +68,14 @@ class TestModelManager:
         # Create model settings
         test_settings = LLMConfig(
             model="new_model",
-            modelProvider="new_provider",
-            apiKey=None,
-            configuration=None,
-            temperature=None,
-            topP=None,
-            maxTokens=None,
+            model_provider="new_provider",
+            api_key=None,
+            configuration=LLMConfiguration(
+                base_url=None,  # type: ignore
+                temperature=None,
+                top_p=None,
+            ),
+            max_tokens=None,
         )
 
         # Set mock return value
@@ -90,18 +92,20 @@ class TestModelManager:
     async def test_replace_all_settings(self, mock_replace, mock_config_file):
         """Test replacing the entire model configuration."""
         manager = ModelManager(mock_config_file)
-        new_config = ModelConfig(
+        new_config = ModelFullConfigs(
             activeProvider="replaced_provider",
             enableTools=True,
             configs={
                 "replaced_provider": LLMConfig(
                     model="replaced_model",
-                    modelProvider="replaced_provider",
-                    apiKey=None,
-                    configuration=None,
-                    temperature=None,
-                    topP=None,
-                    maxTokens=None,
+                    model_provider="replaced_provider",
+                    api_key=None,
+                    configuration=LLMConfiguration(
+                        base_url=None,  # type: ignore
+                        temperature=None,
+                        top_p=None,
+                    ),
+                    max_tokens=None,
                 )
             },
         )
@@ -125,7 +129,7 @@ class TestModelManager:
         assert result is True
         assert manager.current_setting is not None
         assert manager.current_setting.model == "test_model"
-        assert manager.current_setting.modelProvider == "test_provider"
+        assert manager.current_setting.model_provider == "test_provider"
 
     @pytest.mark.asyncio
     async def test_get_active_settings(self, mock_config_file):
@@ -136,7 +140,7 @@ class TestModelManager:
 
         assert settings is not None
         assert settings.model == "test_model"
-        assert settings.modelProvider == "test_provider"
+        assert settings.model_provider == "test_provider"
 
     @pytest.mark.asyncio
     async def test_get_available_providers(self, mock_config_file):
@@ -160,10 +164,10 @@ class TestModelManager:
 
         assert settings is not None
         assert settings.model == "test_model"
-        assert settings.modelProvider == "test_provider"
-        assert settings.apiKey == "test_key"
+        assert settings.model_provider == "test_provider"
+        assert settings.api_key == "test_key"
         assert settings.configuration is not None
-        assert settings.configuration["base_url"] == "http://test.url"
+        assert settings.configuration.base_url == "http://test.url"
 
     @pytest.mark.asyncio
     async def test_get_settings_by_provider(self, mock_config_file):
@@ -174,10 +178,10 @@ class TestModelManager:
         settings = manager.get_settings_by_provider("test_provider")
         assert settings is not None
         assert settings.model == "test_model"
-        assert settings.modelProvider == "test_provider"
-        assert settings.apiKey == "test_key"
+        assert settings.model_provider == "test_provider"
+        assert settings.api_key == "test_key"
         assert settings.configuration is not None
-        assert settings.configuration["base_url"] == "http://test.url"
+        assert settings.configuration.base_url == "http://test.url"
 
         # Test non-existing provider
         non_existing_settings = manager.get_settings_by_provider(
@@ -228,4 +232,4 @@ class TestModelManagerIntegration:
         assert result is True
         assert manager.current_setting is not None
         assert manager.current_setting.model == "fake-model"
-        assert manager.current_setting.modelProvider == "fake"
+        assert manager.current_setting.model_provider == "fake"
