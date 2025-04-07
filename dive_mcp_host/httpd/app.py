@@ -6,6 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from dive_mcp_host.httpd.conf.service.manager import ServiceManager
 from dive_mcp_host.httpd.middlewares import default_state, error_handler
+from dive_mcp_host.httpd.middlewares.general import allow_cors
 from dive_mcp_host.httpd.routers.chat import chat
 from dive_mcp_host.httpd.routers.config import config
 from dive_mcp_host.httpd.routers.model_verify import model_verify
@@ -39,6 +40,7 @@ def create_app(
         service_config_manager=service_config_manager,
     )
 
+    app.add_middleware(BaseHTTPMiddleware, dispatch=allow_cors)
     app.add_middleware(BaseHTTPMiddleware, dispatch=default_state)
     app.add_middleware(BaseHTTPMiddleware, dispatch=error_handler)
     app.include_router(openai, prefix="/v1/openai")

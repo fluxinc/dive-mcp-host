@@ -56,3 +56,15 @@ async def default_state(request: Request, call_next: Callable) -> Response:
         token_increased=0,
     )
     return await call_next(request)
+
+
+async def allow_cors(request: Request, call_next: Callable) -> Response:
+    """Allow CORS."""
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "http://localhost:5173"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = (
+        "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+    )
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
