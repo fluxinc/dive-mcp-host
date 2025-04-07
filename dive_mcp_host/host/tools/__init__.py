@@ -159,8 +159,10 @@ class ToolManager(ContextProtocol):
         """Get the langchain tools for the MCP servers."""
         # we can manipulate the stack to add or remove tools
         await self._launch_tools(self._mcp_servers)
-        yield self
-        await self._shutdown_tools(list(self._mcp_servers.keys()))
+        try:
+            yield self
+        finally:
+            await self._shutdown_tools(list(self._mcp_servers.keys()))
 
     @property
     def mcp_server_info(self) -> dict[str, McpServerInfo]:
@@ -576,6 +578,8 @@ class McpServer(ContextProtocol):
             # We should handle different exception types appropriately
             # For example, connection errors might need restart
             # while application-level errors might just need to be propagated
+            except ToolException:
+                raise
             except (
                 httpx.HTTPError,
                 httpx.StreamError,
@@ -670,7 +674,6 @@ class McpTool(BaseTool):
                 self.name,
                 content,
             )
-            raise ToolException(content)
         logger.debug("Tool %s.%s executed successfully", self.toolkit_name, self.name)
         return content
 
