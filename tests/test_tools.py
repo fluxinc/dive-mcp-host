@@ -434,9 +434,11 @@ async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) 
                     stream_mode=["messages"],
                 )
             ]
-            assert len(responses) == len(fake_responses) + 1  # plus one tool message
+            assert (
+                len(responses) == len(fake_responses) + 2
+            )  # plus one tool message, one ai message
             # need more understanding of the response structure
-            tool_message = responses[-1][1][0]  # type: ignore
+            tool_message = responses[-2][1][0]  # type: ignore
             assert isinstance(tool_message, ToolMessage)
             assert tool_message.name == "echo"
             assert json.loads(str(tool_message.content))[0]["text"] == "Hello, world!"
