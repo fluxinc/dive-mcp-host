@@ -424,6 +424,9 @@ async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) 
                     ),
                 ],
             ),
+            AIMessage(
+                content="General message",
+            ),
         ]
         cast("FakeMessageToolModel", mcp_host._model).responses = fake_responses
         async with mcp_host.conversation() as conversation:
@@ -434,9 +437,7 @@ async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) 
                     stream_mode=["messages"],
                 )
             ]
-            assert (
-                len(responses) == len(fake_responses) + 2
-            )  # plus one tool message, one ai message
+            assert len(responses) == len(fake_responses) + 1  # plus one tool message
             # need more understanding of the response structure
             tool_message = responses[-2][1][0]  # type: ignore
             assert isinstance(tool_message, ToolMessage)
