@@ -40,7 +40,12 @@ def create_app(
         service_config_manager=service_config_manager,
     )
 
-    app.add_middleware(BaseHTTPMiddleware, dispatch=allow_cors)
+    service_setting = service_config_manager.current_setting
+    if service_setting and service_setting.cors_origin:
+        app.add_middleware(
+            BaseHTTPMiddleware,
+            dispatch=allow_cors(service_setting.cors_origin),
+        )
     app.add_middleware(BaseHTTPMiddleware, dispatch=default_state)
     app.add_middleware(BaseHTTPMiddleware, dispatch=error_handler)
     app.include_router(openai, prefix="/v1/openai")

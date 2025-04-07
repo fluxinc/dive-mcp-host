@@ -11,5 +11,6 @@
     },
     "checkpointer": {
         "uri": "sqlite:///db.sqlite"
-    }
+    },
+    "cors_origin": "http://localhost:5173"
 }

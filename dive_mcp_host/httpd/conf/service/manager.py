@@ -41,6 +41,7 @@ class ServiceConfig(BaseModel):
     resource_dir: Path = RESOURCE_DIR
     local_file_cache_prefix: str = "dive_mcp_host"
     config_location: ConfigLocation = Field(default_factory=ConfigLocation)
+    cors_origin: str | None = None
 
     logging_config: dict[str, Any] = {
         "disable_existing_loggers": False,
