@@ -19,6 +19,8 @@ from dive_mcp_host.httpd.conf.service.manager import (
 )
 from dive_mcp_host.httpd.routers.models import ModelFullConfigs
 
+TEST_CHAT_ID = "41a81e8c-ed6d-4d93-8988-c8763f7b3e30"
+
 
 @dataclass(slots=True)
 class ConfigFileNames:
@@ -134,4 +136,8 @@ async def test_client(
     app.set_status_report_info(listen="127.0.0.1")
     app.set_listen_port(61990)
     with TestClient(app) as client:
+        # create a simple chat
+        client.post(
+            "/api/chat", data={"message": "Hello, world!", "chatId": TEST_CHAT_ID}
+        )
         yield client, app

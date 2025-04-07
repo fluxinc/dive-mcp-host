@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import Callable, Sequence
 from time import sleep
 from typing import Any
@@ -55,7 +56,9 @@ class FakeMessageToolModel(BaseChatModel):
         **_kwargs: Any,
     ) -> ChatResult:
         self.query_history.extend(messages)
-        response = self.responses[self.i]
+        response = self.responses[self.i].model_copy()
+        if response.id is None:
+            response.id = str(uuid.uuid4())
         if self.i < len(self.responses) - 1:
             self.i += 1
         else:

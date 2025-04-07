@@ -89,7 +89,7 @@ class EventStreamContextManager:
             data (str): The data to write to the stream.
         """
         if isinstance(data, BaseModel):
-            data = json.dumps({"message": data.model_dump(mode="json", by_alias=True)})
+            data = json.dumps({"message": data.model_dump_json(by_alias=True)})
         await self.queue.put(data)
 
     async def _generate(self) -> AsyncGenerator[str, None]:
@@ -99,7 +99,6 @@ class EventStreamContextManager:
             if chunk is None:  # End signal
                 continue
             yield "data: " + chunk + "\n\n"
-
         yield "data: [DONE]\n\n"
 
     def get_response(self) -> StreamingResponse:
@@ -140,7 +139,7 @@ class ChatProcessor:
         self.store: Store = app.store
         self.dive_host: DiveMcpHost = app.dive_host["default"]
 
-    async def handle_chat(
+    async def handle_chat(  # noqa: C901
         self,
         chat_id: str | None,
         query_input: QueryInput | None,
@@ -154,7 +153,7 @@ class ChatProcessor:
         title_await = None
 
         if isinstance(query_input, QueryInput) and query_input.text:
-            title_await = self._generate_title(query_input.text)
+            title_await = asyncio.create_task(self._generate_title(query_input.text))
 
         await self.stream.write(
             StreamMessage(
@@ -164,12 +163,19 @@ class ChatProcessor:
         )
 
         start = time.time()
-        if regenerate_message_id and isinstance(query_input, QueryInput):
+        if regenerate_message_id:
+            if query_input is None:
+                message = await self._get_history_user_input(
+                    chat_id, regenerate_message_id
+                )
+                message.id = regenerate_message_id
             user_message, ai_message = await self._process_chat(
                 chat_id,
                 await self._query_input_to_message(
                     query_input, message_id=regenerate_message_id
-                ),
+                )
+                if isinstance(query_input, QueryInput)
+                else message,
                 is_resend=True,
             )
         else:
@@ -179,6 +185,10 @@ class ChatProcessor:
                 is_resend=False,
             )
         end = time.time()
+        if ai_message is None:
+            if title_await:
+                title_await.cancel()
+            return "", TokenUsage()
         duration = ai_message.response_metadata.get("total_duration")
         assert user_message.id
         assert ai_message.id
@@ -197,15 +207,15 @@ class ChatProcessor:
 
             if regenerate_message_id:
                 await db.delete_messages_after(chat_id, regenerate_message_id)
-                assert query_input
-                await db.update_message_content(
-                    user_message.id,
-                    QueryInput(
-                        text=query_input.text or "",
-                        images=query_input.images or [],
-                        documents=query_input.documents or [],
-                    ),
-                )
+                if query_input:
+                    await db.update_message_content(
+                        user_message.id,
+                        QueryInput(
+                            text=query_input.text or "",
+                            images=query_input.images or [],
+                            documents=query_input.documents or [],
+                        ),
+                    )
             elif isinstance(query_input, QueryInput):
                 files = (query_input.images or []) + (query_input.documents or [])
                 await db.create_message(
@@ -519,3 +529,27 @@ class ChatProcessor:
                 }
             )
         return HumanMessage(content=content, id=message_id)
+
+    async def _get_history_user_input(
+        self, chat_id: str, message_id: str
+    ) -> BaseMessage:
+        """Get history user input."""
+        dive_user: DiveUser = self.request_state.dive_user
+        async with self.app.db_sessionmaker() as session:
+            db = self.app.msg_store(session)
+            chat = await db.get_chat_with_messages(chat_id, dive_user["user_id"])
+            if chat is None:
+                raise ChatError("chat not found")
+            message = next(
+                (msg for msg in chat.messages if msg.message_id == message_id),
+                None,
+            )
+            if message is None:
+                raise ChatError("message not found")
+
+            return (
+                await self._process_history_messages(
+                    [message],
+                    [],
+                )
+            )[0]
