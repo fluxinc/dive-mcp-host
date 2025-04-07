@@ -87,6 +87,11 @@ class Arguments(BaseModel):
         description="Automatically generate configuration files if they don't exist.",
     )
 
+    cors_origin: str | None = Field(
+        default=None,
+        description="CORS origin to allow.",
+    )
+
     @model_validator(mode="after")
     def rewrite_default_path(self) -> Self:
         """Rewrite default config file path according to working directory."""

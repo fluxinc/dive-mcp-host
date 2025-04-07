@@ -35,6 +35,9 @@ def main() -> None:
         resource_dir=resource_dir,
     )
 
+    if args.cors_origin:
+        service_config_manager.current_setting.cors_origin = args.cors_origin
+
     app = create_app(service_config_manager)
     app.set_status_report_info(
         listen=args.listen,
