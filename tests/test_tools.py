@@ -474,3 +474,19 @@ async def test_tool_kwargs(
                 assert json.loads(str(result.content))[0]["text"] == "Hello, world!"
             else:
                 assert json.loads(str(result.content)) == []
+
+
+@pytest.mark.asyncio
+async def test_tool_manager_uvx_failed() -> None:
+    """Test the tool manager."""
+    config = {
+        "uvx": ServerConfig(
+            name="uvx",
+            command="uvx",
+            args=["no-such-command"],
+            transport="stdio",
+        ),
+    }
+    async with asyncio.timeout(15), ToolManager(config) as tool_manager:
+        tools = tool_manager.langchain_tools()
+        assert len(tools) == 0

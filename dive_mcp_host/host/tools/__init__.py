@@ -115,23 +115,29 @@ class ToolManager(ContextProtocol):
                 ready.set()
                 await exit_signal.wait()
 
-        async with self._lock:
+        async def _launch_task(name: str, server: McpServer) -> None:
+            event = asyncio.Event()
+            ready = asyncio.Event()
+            task = asyncio.create_task(tool_process(server, event, ready))
+            await ready.wait()
+            self._mcp_servers_task[name] = (task, event)
+
+        async with self._lock, asyncio.TaskGroup() as tg:
             for name, server in servers.items():
-                event = asyncio.Event()
-                ready = asyncio.Event()
-                task = asyncio.create_task(tool_process(server, event, ready))
-                await ready.wait()
-                self._mcp_servers_task[name] = (task, event)
+                tg.create_task(_launch_task(name, server))
 
     async def _shutdown_tools(self, servers: Iterable[str]) -> None:
-        async with self._lock:
+        async def _shutdown_task(name: str) -> None:
+            task, event = self._mcp_servers_task.pop(name, (None, None))
+            if not (task and event):
+                return
+            event.set()
+            await task
+            del self._mcp_servers[name]
+
+        async with self._lock, asyncio.TaskGroup() as tg:
             for name in servers:
-                task, event = self._mcp_servers_task.pop(name, (None, None))
-                if not (task and event):
-                    continue
-                event.set()
-                await task
-                del self._mcp_servers[name]
+                tg.create_task(_shutdown_task(name))
 
     async def reload(self, new_configs: dict[str, ServerConfig]) -> None:
         """Reload the MCP servers."""
@@ -246,7 +252,7 @@ class McpServer(ContextProtocol):
                 raise
             await asyncio.sleep(self.KEEP_ALIVE_INTERVAL)
 
-    async def _client_watcher(self) -> None:  # noqa: C901, PLR0915
+    async def _client_watcher(self) -> None:  # noqa: C901, PLR0912, PLR0915
         """Client watcher task.
 
         Restart the client if need.
@@ -261,7 +267,9 @@ class McpServer(ContextProtocol):
                     self._get_client() as streams,
                     ClientSession(*streams) as session,
                 ):
-                    self._initialize_result = await session.initialize()
+                    async with asyncio.timeout(10):
+                        # When using stdio, the initialize call may block indefinitely
+                        self._initialize_result = await session.initialize()
                     tool_results = await session.list_tools()
                     self._last_active = time.time()
                     mcp_tools = [
@@ -301,6 +309,16 @@ class McpServer(ContextProtocol):
             # cannot launch local sse server
             except* InvalidMcpServerError as e:
                 self._exception = e
+                should_break = True
+            except* ProcessLookupError as eg:
+                # this raised when a stdio process is exited
+                # and the initialize call is timeout
+                logger.warning(
+                    "ProcessLookupError for %s: %s",
+                    self.name,
+                    eg.exceptions,
+                )
+                self._exception = InvalidMcpServerError(self.name, str(eg.exceptions))
                 should_break = True
             except* (
                 FileNotFoundError,

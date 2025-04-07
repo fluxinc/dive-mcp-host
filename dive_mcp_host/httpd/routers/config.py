@@ -96,11 +96,7 @@ async def post_mcp_server(
         raise ValueError("Failed to update MCP server configurations")
 
     # Reload host
-    # TODO: mcp server reloader
-    # await app.dive_host["default"].reload(
-    #     new_config=app.load_host_config(),
-    #     reloader=lambda: asyncio.sleep(0),
-    # )
+    await app.dive_host["default"].reload(new_config=app.load_host_config())
 
     # Get failed MCP servers
     failed_servers: list[McpServerError] = []
@@ -159,11 +155,7 @@ async def post_model(
         raise ValueError("Failed to reload model configuration")
 
     # Reload host
-    # TODO: model reloader
-    # await app.dive_host["default"].reload(
-    #     new_config=app.load_host_config(),
-    #     reloader=lambda: asyncio.sleep(0),
-    # )
+    await app.dive_host["default"].reload(new_config=app.load_host_config())
 
     return ResultResponse(success=True)
 
