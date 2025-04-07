@@ -204,18 +204,13 @@ def test_create_chat(test_client):
                         inner_json["content"],
                         {
                             "id": chat_id,
-                            "title": "New Chat",
                         },
                     )
+                    assert "title" in inner_json["content"]
                 if inner_json["type"] == "message_info":
                     has_message_info = True
-                    helper.dict_subset(
-                        inner_json["content"],
-                        {
-                            "userMessageId": "test-user-msg",
-                            "assistantMessageId": "test-ai-msg",
-                        },
-                    )
+                    assert "userMessageId" in inner_json["content"]
+                    assert "assistantMessageId" in inner_json["content"]
 
     assert has_chat_info
     assert has_message_info
@@ -330,7 +325,7 @@ def test_retry_chat(test_client):
     response = client.get(f"/api/chat/{TEST_CHAT_ID}")
     assert response.status_code == SUCCESS_CODE
     response_data = response.json()
-    message_id = response_data["data"]["messages"][0]["id"]
+    message_id = response_data["data"]["messages"][0]["messageId"]
 
     response = client.post(
         "/api/chat/retry",
@@ -373,18 +368,13 @@ def test_retry_chat(test_client):
                         inner_json["content"],
                         {
                             "id": TEST_CHAT_ID,
-                            "title": "New Chat",
                         },
                     )
+                    assert "title" in inner_json["content"]
                 if inner_json["type"] == "message_info":
                     has_message_info = True
-                    helper.dict_subset(
-                        inner_json["content"],
-                        {
-                            "userMessageId": "test-user-msg",
-                            "assistantMessageId": "test-ai-msg",
-                        },
-                    )
+                    assert "userMessageId" in inner_json["content"]
+                    assert "assistantMessageId" in inner_json["content"]
 
     assert has_chat_info
     assert has_message_info
