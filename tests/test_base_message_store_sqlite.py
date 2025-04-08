@@ -287,7 +287,7 @@ async def test_create_message(
         chatId=sample_chat.id,
         role=Role.USER,
         content="This is a new test message",
-        files="",
+        files=[],
     )
 
     # Create message
@@ -327,7 +327,7 @@ async def test_create_message_with_resource_usage(
         chatId=sample_chat.id,
         role=Role.ASSISTANT,
         content="This is an assistant message",
-        files="",
+        files=[],
         resource_usage=resource_usage,
     )
 
@@ -600,7 +600,7 @@ async def test_update_message_content(
 
     # Verify files were updated correctly
     expected_files = ["image1.jpg", "image2.jpg", "doc1.pdf", "doc2.pdf"]
-    assert json.loads(updated_message.files) == expected_files
+    assert updated_message.files == expected_files
 
     # Verify the message was actually updated in the database
     query = select(ORMMessage).where(ORMMessage.message_id == user_message.message_id)
@@ -685,7 +685,7 @@ async def test_update_message_content_empty_data(
     assert isinstance(updated_message, Message)
     assert updated_message.message_id == user_message.message_id
     assert updated_message.content == ""
-    assert updated_message.files == ""
+    assert updated_message.files == []
     assert updated_message.role == Role.USER
     assert updated_message.chat_id == sample_chat.id
 

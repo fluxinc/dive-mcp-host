@@ -116,7 +116,7 @@ class BaseMessageStore(AbstractMessageStore):
                     role=Role(msg.role),
                     chatId=msg.chat_id,
                     messageId=msg.message_id,
-                    files=msg.files,
+                    files=json.loads(msg.files),
                     resource_usage=resource_usage,
                 ),
             )
@@ -162,7 +162,7 @@ class BaseMessageStore(AbstractMessageStore):
                     "role": message.role,
                     "chat_id": message.chat_id,
                     "message_id": message.message_id,
-                    "files": message.files,
+                    "files": json.dumps(message.files),
                 },
             )
             .returning(ORMMessage)
@@ -206,7 +206,7 @@ class BaseMessageStore(AbstractMessageStore):
             role=Role(new_msg.role),
             chatId=new_msg.chat_id,
             messageId=new_msg.message_id,
-            files=new_msg.files,
+            files=json.loads(new_msg.files),
             resource_usage=resource_usage,
         )
 
@@ -322,7 +322,7 @@ class BaseMessageStore(AbstractMessageStore):
             role=Role(updated_message.role),
             chatId=updated_message.chat_id,
             messageId=updated_message.message_id,
-            files=updated_message.files,
+            files=json.loads(updated_message.files),
             resource_usage=resource_usage,
         )
 
@@ -381,6 +381,6 @@ class BaseMessageStore(AbstractMessageStore):
             role=Role(message.role),
             chatId=message.chat_id,
             messageId=message.message_id,
-            files=message.files,
+            files=json.loads(message.files),
             resource_usage=resource_usage,
         )

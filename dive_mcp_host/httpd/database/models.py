@@ -48,7 +48,7 @@ class NewMessage(BaseModel):
     chat_id: str = Field(alias="chatId")
     message_id: str = Field(alias="messageId")
     resource_usage: ResourceUsage | None = None
-    files: str = "[]"
+    files: list[str] = []
 
 
 class Message(BaseModel):
@@ -61,7 +61,7 @@ class Message(BaseModel):
     chat_id: str = Field(alias="chatId")
     message_id: str = Field(alias="messageId")
     resource_usage: ResourceUsage | None = None
-    files: str = "[]"
+    files: list[str] = []
 
 
 class ChatMessage(BaseModel):
