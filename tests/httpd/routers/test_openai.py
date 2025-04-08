@@ -1,5 +1,5 @@
 import asyncio
-from typing import cast
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -75,7 +75,7 @@ def test_list_models(test_client):
     assert response.status_code == status.HTTP_200_OK
 
     # Parse JSON response
-    response_data = response.json()
+    response_data = cast(dict[str, Any], response.json())
 
     # Validate response structure
     assert response_data["success"] is True
@@ -84,7 +84,7 @@ def test_list_models(test_client):
     assert len(response_data["models"]) > 0
 
     # Validate model structure
-    model = response_data["models"][0]
+    model = cast(dict[str, str], response_data["models"][0])
     assert model["id"] == "fake"
     assert model["type"] == "model"
     assert model["owned_by"] == "dive"
@@ -115,10 +115,9 @@ def test_chat_completions_with_system_message(mock_chat_processor, test_client):
 
     assert response.status_code == status.HTTP_200_OK
 
-    response_data = response.json()
+    response_data = cast(dict[str, Any], response.json())
     mock_chat_processor.assert_called_once()
 
-    assert "id" in response_data
     assert response_data["id"].startswith("chatcmpl-")
     assert response_data["object"] == "chat.completion"
     assert response_data["model"] == "fake"
@@ -163,9 +162,8 @@ def test_chat_completions_without_system_message(mock_chat_processor, test_clien
     assert response.status_code == status.HTTP_200_OK
 
     mock_chat_processor.assert_called_once()
-    response_data = response.json()
+    response_data = cast(dict[str, Any], response.json())
 
-    assert "id" in response_data
     assert response_data["id"].startswith("chatcmpl-")
     assert response_data["object"] == "chat.completion"
     assert response_data["model"] == "fake"
@@ -213,9 +211,8 @@ def test_chat_completions_with_assistant_message(mock_chat_processor, test_clien
     assert response.status_code == status.HTTP_200_OK
 
     mock_chat_processor.assert_called_once()
-    response_data = response.json()
+    response_data = cast(dict[str, Any], response.json())
 
-    assert "id" in response_data
     assert response_data["id"].startswith("chatcmpl-")
     assert response_data["object"] == "chat.completion"
     assert response_data["model"] == "fake"
@@ -260,9 +257,8 @@ def test_chat_completions_with_tool_choice_none(mock_chat_processor, test_client
     assert response.status_code == status.HTTP_200_OK
 
     mock_chat_processor.assert_called_once()
-    response_data = response.json()
+    response_data = cast(dict[str, Any], response.json())
 
-    assert "id" in response_data
     assert response_data["id"].startswith("chatcmpl-")
     assert response_data["object"] == "chat.completion"
     assert response_data["model"] == "fake"
@@ -329,7 +325,7 @@ def test_chat_completions_streaming(
     response = client.post("/v1/openai/chat/completions", json=test_data)
 
     assert response.status_code == status.HTTP_200_OK
-    assert "text/event-stream" in response.headers["Content-Type"]
+    assert "text/event-stream" in response.headers.get("Content-Type")
 
     mock_event_stream.add_task.assert_called_once()
     content = response.text

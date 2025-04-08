@@ -1,11 +1,13 @@
+from typing import Any, cast
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 from fastapi import status
 
 from dive_mcp_host.host.tools.echo import ECHO_DESCRIPTION, IGNORE_DESCRIPTION
+from dive_mcp_host.httpd.conf.mcpserver.manager import MCPServerConfig
 from dive_mcp_host.httpd.routers.models import SimpleToolInfo
-from dive_mcp_host.httpd.routers.tools import McpTool, ToolsResult
+from dive_mcp_host.httpd.routers.tools import McpTool, ToolsResult, list_tools
 from tests import helper
 
 
@@ -82,13 +84,22 @@ def test_list_tools_mock_cache(
     response = client.get("/api/tools")
     assert response.status_code == status.HTTP_200_OK
 
-    response_data = response.json()
+    response_data = cast(dict[str, Any], response.json())
+    response_data["tools"] = sorted(response_data["tools"], key=lambda x: x["name"])
     helper.dict_subset(
         response_data,
         {
             "success": True,
             "message": None,
             "tools": [
+                {  # echo is still in server list, but it was not in mcp_server_info
+                    "name": "echo",
+                    "description": "",
+                    "enabled": False,
+                    "icon": "",
+                    "tools": [],
+                    "error": None,
+                },
                 {
                     "name": "test_tool",
                     "tools": [
@@ -98,7 +109,7 @@ def test_list_tools_mock_cache(
                     "enabled": True,
                     "icon": "",
                     "error": None,
-                }
+                },
             ],
         },
     )
@@ -145,137 +156,6 @@ def test_tools_result_serialization():
             ],
         },
     )
-
-
-@pytest.mark.asyncio
-@patch("dive_mcp_host.httpd.routers.tools.list_tools")
-async def test_list_tools_with_servers(mock_list_tools, test_client):
-    """Test list_tools function with servers in configuration."""
-    # Create Mock configuration
-    mock_config = MagicMock()
-    mock_config.mcp_servers = {"server1": {}, "server2": {}}
-
-    _, app = test_client
-
-    # Mock return value
-    mock_list_tools.return_value = ToolsResult(
-        success=True,
-        message=None,
-        tools=[
-            McpTool(
-                name="server1",
-                tools=[
-                    SimpleToolInfo(name="tool1", description="Tool 1 description"),
-                    SimpleToolInfo(name="tool2", description="Tool 2 description"),
-                ],
-                description="",
-                enabled=True,
-                icon="",
-                error=None,
-            )
-        ],
-    )
-
-    response = await mock_list_tools(app)
-    response_dict = response.model_dump(by_alias=True)
-
-    helper.dict_subset(
-        response_dict,
-        {
-            "success": True,
-            "tools": [
-                {
-                    "name": "server1",
-                    "tools": [
-                        {"name": "tool1", "description": "Tool 1 description"},
-                        {"name": "tool2", "description": "Tool 2 description"},
-                    ],
-                    "description": "",
-                    "enabled": True,
-                    "icon": "",
-                    "error": None,
-                },
-            ],
-        },
-    )
-
-
-@pytest.mark.asyncio
-@patch("dive_mcp_host.httpd.routers.tools.list_tools")
-async def test_list_tools_with_missing_servers(mock_list_tools, test_client):
-    """Test list_tools function with missing servers in configuration."""
-    # Create Mock configuration
-    mock_config = MagicMock()
-    mock_config.mcp_servers = {"server1": {}, "server2": {}}
-
-    _, app = test_client
-
-    # Mock return value
-    mock_list_tools.return_value = ToolsResult(
-        success=True,
-        message=None,
-        tools=[
-            McpTool(
-                name="server1",
-                tools=[SimpleToolInfo(name="tool1", description="Tool 1 description")],
-                description="",
-                enabled=True,
-                icon="",
-                error=None,
-            ),
-            McpTool(
-                name="server2",
-                tools=[
-                    SimpleToolInfo(
-                        name="cached_tool", description="Cached tool description"
-                    )
-                ],
-                description="Cached server",
-                enabled=True,
-                icon="cache",
-                error=None,
-            ),
-        ],
-    )
-
-    response = await mock_list_tools(app)
-    response_dict = response.model_dump(by_alias=True)
-
-    helper.dict_subset(
-        response_dict,
-        {
-            "success": True,
-            "tools": [
-                {
-                    "name": "server1",
-                    "tools": [
-                        {
-                            "name": "tool1",
-                            "description": "Tool 1 description",
-                        }
-                    ],
-                    "description": "",
-                    "enabled": True,
-                    "icon": "",
-                    "error": None,
-                },
-                {
-                    "name": "server2",
-                    "tools": [
-                        {
-                            "name": "cached_tool",
-                            "description": "Cached tool description",
-                        }
-                    ],
-                    "description": "Cached server",
-                    "enabled": True,
-                    "icon": "cache",
-                    "error": None,
-                },
-            ],
-        },
-    )
-    mock_list_tools.assert_called_once_with(app)
 
 
 @pytest.mark.asyncio
@@ -344,57 +224,48 @@ async def test_list_tools_with_no_config(mock_list_tools, test_client):
 
 
 @pytest.mark.asyncio
-@patch("dive_mcp_host.httpd.routers.tools.list_tools")
+@patch(
+    "dive_mcp_host.httpd.conf.mcpserver.manager.MCPServerManager.current_config",
+    new_callable=PropertyMock,
+)
 async def test_list_tools_with_missing_server_not_in_cache(
-    mock_list_tools,
+    mock_current_config,
     test_client,
 ):
     """Test list_tools function with missing server not in cache."""
     _, app = test_client
 
     # Create Mock configuration
-    mock_config = MagicMock()
-    mock_config.mcp_servers = {"server1": {}, "missing_server": {}}
+    config_mock = MagicMock()
+    config_mock.mcp_servers = {
+        "missing_server": MCPServerConfig(),
+    }
+    mock_current_config.return_value = config_mock
 
-    # Mock return value
-    mock_list_tools.return_value = ToolsResult(
-        success=True,
-        message=None,
-        tools=[
-            McpTool(
-                name="server1",
-                tools=[SimpleToolInfo(name="tool1", description="Tool 1 description")],
-                description="",
-                enabled=True,
-                icon="",
-                error=None,
-            ),
-            McpTool(
-                name="missing_server",
-                tools=[],
-                description="",
-                enabled=False,
-                icon="",
-                error=None,
-            ),
-        ],
-    )
-
-    response = await mock_list_tools(app)
+    response = await list_tools(app)
     response_dict = response.model_dump(by_alias=True)
-
+    response_dict["tools"] = sorted(response_dict["tools"], key=lambda x: x["name"])
     helper.dict_subset(
         response_dict,
         {
             "success": True,
             "tools": [
                 {
-                    "name": "server1",
-                    "tools": [{"name": "tool1", "description": "Tool 1 description"}],
+                    "name": "echo",
                     "description": "",
                     "enabled": True,
                     "icon": "",
                     "error": None,
+                    "tools": [
+                        {
+                            "name": "echo",
+                            "description": ECHO_DESCRIPTION,
+                        },
+                        {
+                            "name": "ignore",
+                            "description": IGNORE_DESCRIPTION,
+                        },
+                    ],
                 },
                 {
                     "name": "missing_server",
@@ -407,7 +278,6 @@ async def test_list_tools_with_missing_server_not_in_cache(
             ],
         },
     )
-    mock_list_tools.assert_called_once_with(app)
 
 
 def test_empty_tools_result():
@@ -423,3 +293,56 @@ def test_empty_tools_result():
 
     assert "message" in response_dict
     assert response_dict["message"] is None
+
+
+def test_tools_cache_after_update(test_client):
+    """Test that tools cache is updated after various config updates."""
+    client, _ = test_client
+    conf = {
+        "mcpServers": {
+            "echo": {
+                "transport": "stdio",
+                "enabled": True,
+                "command": "python",
+                "args": ["-m", "dive_mcp_host.host.tools.echo", "--transport=stdio"],
+            },
+            "missing_server": {
+                "transport": "stdio",
+                "enabled": True,
+                "command": "no-such-command",
+            },
+        }
+    }
+    assert (
+        client.post("/api/config/mcpserver", json=conf).status_code
+        == status.HTTP_200_OK
+    )
+    response = client.get("/api/tools")
+    assert response.status_code == status.HTTP_200_OK
+    first_time = cast(dict[str, Any], response.json())
+    # we can have 2 tools even missing_server is failed to load
+    assert len(first_time["tools"]) == 2
+
+    conf = {
+        "mcpServers": {
+            "echo": {
+                "transport": "stdio",
+                "enabled": False,
+                "command": "python",
+                "args": ["-m", "dive_mcp_host.host.tools.echo", "--transport=stdio"],
+            },
+            "missing_server": {
+                "transport": "stdio",
+                "enabled": False,
+                "command": "no-such-command",
+            },
+        }
+    }
+    assert (
+        client.post("/api/config/mcpserver", json=conf).status_code
+        == status.HTTP_200_OK
+    )
+    response = client.get("/api/tools")
+    assert response.status_code == status.HTTP_200_OK
+    # Even when all servers are disabled, we can still see them from the cache
+    assert first_time == response.json()

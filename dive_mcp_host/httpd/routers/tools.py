@@ -1,6 +1,7 @@
 from logging import getLogger
 
 from fastapi import APIRouter, Depends
+from pydantic import ValidationError
 
 from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.routers.models import (
@@ -61,14 +62,22 @@ async def list_tools(
     logger.debug("disabled mcp servers: %s", missing_servers)
 
     # get missing from local cache
-    raw_cached_tools = app.local_file_cache.get(CacheKeys.LIST_TOOLS)
-    if raw_cached_tools is not None and missing_servers:
-        cached_tools = ToolsCache.model_validate_json(raw_cached_tools)
+    if missing_servers:
+        raw_cached_tools = app.local_file_cache.get(CacheKeys.LIST_TOOLS)
+        cached_tools = ToolsCache(root={})
+        if raw_cached_tools is not None:
+            try:
+                cached_tools = ToolsCache.model_validate_json(raw_cached_tools)
+            except ValidationError as e:
+                logger.warning(
+                    "Failed to validate cached tools: %s %s", e, raw_cached_tools
+                )
         for server_name in missing_servers:
             if server_info := cached_tools.root.get(server_name, None):
                 server_info.enabled = False
                 result[server_name] = server_info
             else:
+                logger.warning("Server %s not found in cached tools", server_name)
                 result[server_name] = McpTool(
                     name=server_name,
                     tools=[],
@@ -81,6 +90,6 @@ async def list_tools(
     # update local cache
     app.local_file_cache.set(
         CacheKeys.LIST_TOOLS,
-        ToolsCache(root=result).model_dump_json(exclude_none=True),
+        ToolsCache(root=result).model_dump_json(),
     )
     return ToolsResult(success=True, message=None, tools=list(result.values()))
