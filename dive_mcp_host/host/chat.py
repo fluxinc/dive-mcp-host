@@ -25,8 +25,8 @@ from dive_mcp_host.host.prompt import default_system_prompt
 logger = logging.getLogger(__name__)
 
 
-class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
-    """A conversation with a language model."""
+class Chat[STATE_TYPE: MessagesState](ContextProtocol):
+    """A chat with a language model."""
 
     def __init__(  # noqa: PLR0913, too many arguments
         self,
@@ -34,24 +34,24 @@ class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
         agent_factory: AgentFactory[STATE_TYPE],
         *,
         system_prompt: str | Callable[[STATE_TYPE], list[BaseMessage]] | None = None,
-        thread_id: str | None = None,
+        chat_id: str | None = None,
         user_id: str = "default",
         store: BaseStore | None = None,
         checkpointer: BaseCheckpointSaver[V] | None = None,
     ) -> None:
-        """Initialize the conversation.
+        """Initialize the chat.
 
         Args:
-            model: The language model to use for the conversation.
-            agent_factory: The agent factory to use for the conversation.
-            system_prompt: The system prompt to use for the conversation.
-            thread_id: The ID of the thread.
-            user_id: The user ID to use for the conversation.
-            store: The store to use for the conversation.
-            checkpointer: The langgraph checkpointer to use for the conversation.
+            model: The language model to use for the chat.
+            agent_factory: The agent factory to use for the chat.
+            system_prompt: The system prompt to use for the chat.
+            chat_id: The ID of the chat. (langgraph thread id)
+            user_id: The user ID to use for the chat.
+            store: The store to use for the chat.
+            checkpointer: The langgraph checkpointer to use for the chat.
         The agent_factory is called only once to compile the agent.
         """
-        self._thread_id: str = thread_id if thread_id else uuid.uuid4().hex
+        self._chat_id: str = chat_id if chat_id else uuid.uuid4().hex
         self._user_id: str = user_id
         self._store = store
         self._checkpointer = checkpointer
@@ -63,18 +63,18 @@ class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
 
     @property
     def active_agent(self) -> CompiledGraph:
-        """The active agent of the conversation."""
+        """The active agent of the chat."""
         if self._agent is None:
-            raise GraphNotCompiledError(self._thread_id)
+            raise GraphNotCompiledError(self._chat_id)
         return self._agent
 
     @property
-    def thread_id(self) -> str:
-        """The thread ID of the conversation."""
-        return self._thread_id
+    def chat_id(self) -> str:
+        """The chat ID of the chat."""
+        return self._chat_id
 
     def abort(self) -> None:
-        """Abort the conversation."""
+        """Abort the running query."""
         if self._abort_signal is None:
             return
         self._abort_signal.set()
@@ -111,7 +111,7 @@ class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
         if state := await self.active_agent.aget_state(
             RunnableConfig(
                 configurable={
-                    "thread_id": self._thread_id,
+                    "thread_id": self._chat_id,
                     "user_id": self._user_id,
                 },
             )
@@ -124,7 +124,7 @@ class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
                 elif drop_after:
                     to_update.append(RemoveMessage(msg.id))
             return to_update
-        raise ThreadNotFoundError(self._thread_id)
+        raise ThreadNotFoundError(self._chat_id)
 
     def query(
         self,
@@ -134,14 +134,14 @@ class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
         modify: list[BaseMessage] | None = None,
         is_resend: bool = False,
     ) -> AsyncIterator[dict[str, Any] | Any]:
-        """Query the conversation.
+        """Query the chat.
 
         Args:
-            query: The query to ask the conversation. Can be a string, HumanMessage, or
+            query: The query to ask the chat. Can be a string, HumanMessage, or
                 list of messages.
                 For resending messages, pass the messages to resend here.
             stream_mode: The mode to stream the response.
-            modify: Messages to modify in the conversation state. Used for modifying
+            modify: Messages to modify in the chat state. Used for modifying
                 messages without resending, e.g. when confirming tool call parameters.
             is_resend: If True, indicates that query contains messages to resend. The
                 messages in query and all subsequent messages in the state will be
@@ -175,7 +175,7 @@ class Conversation[STATE_TYPE: MessagesState](ContextProtocol):
             logger.debug("init_state: %s", query_msgs)
             config = self._agent_factory.create_config(
                 user_id=self._user_id,
-                thread_id=self._thread_id,
+                thread_id=self._chat_id,
             )
             async for response in self.active_agent.astream(
                 input=init_state,

@@ -339,8 +339,8 @@ class ChatProcessor:
         if any(isinstance(m, SystemMessage) for m in messages):
             prompt = _prompt_cb
 
-        conversation = self.dive_host.conversation(
-            thread_id=chat_id,
+        chat = self.dive_host.chat(
+            chat_id=chat_id,
             user_id=dive_user.get("user_id") or "default",
             tools=tools,
             system_prompt=prompt,
@@ -348,10 +348,10 @@ class ChatProcessor:
         async with AsyncExitStack() as stack:
             if chat_id:
                 await stack.enter_async_context(
-                    self.app.abort_controller.abort_signal(chat_id, conversation.abort)
+                    self.app.abort_controller.abort_signal(chat_id, chat.abort)
                 )
-            await stack.enter_async_context(conversation)
-            response_generator = conversation.query(
+            await stack.enter_async_context(chat)
+            response_generator = chat.query(
                 messages, stream_mode=["messages", "values"], is_resend=is_resend
             )
             return await self._handle_response(response_generator)
@@ -416,15 +416,14 @@ class ChatProcessor:
 
     async def _generate_title(self, query: str) -> str:
         """Generate title."""
-        conversation = self.dive_host.conversation(
+        chat = self.dive_host.chat(
             tools=[],  # do not use tools
             system_prompt=title_prompt,
             volatile=True,
         )
-        async with conversation:
+        async with chat:
             responses = [
-                response
-                async for response in conversation.query(query, stream_mode="updates")
+                response async for response in chat.query(query, stream_mode="updates")
             ]
             return responses[0]["agent"]["messages"][0].content
         return "New Chat"

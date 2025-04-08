@@ -53,22 +53,22 @@ async def test_host_context() -> None:
     #     [("system", "You are a helpful assistant."), ("placeholder", "{messages}")],
     # )
     async with DiveMcpHost(config) as mcp_host:
-        conversation = mcp_host.conversation()
-        async with conversation:
+        chat = mcp_host.chat()
+        async with chat:
             responses = [
                 response["agent"]["messages"][0]
-                async for response in conversation.query(
+                async for response in chat.query(
                     "Hello, world!",
                     stream_mode=None,
                 )
             ]
             for res, expect in zip(responses, espect_responses, strict=True):
                 assert res.content == expect.content  # type: ignore[attr-defined]
-        conversation = mcp_host.conversation()
-        async with conversation:
+        chat = mcp_host.chat()
+        async with chat:
             responses = [
                 response["agent"]["messages"][0]
-                async for response in conversation.query(
+                async for response in chat.query(
                     HumanMessage(content="Hello, world!"),
                     stream_mode=None,
                 )
@@ -87,10 +87,10 @@ async def test_query_two_messages() -> None:
         ),
         mcp_servers={},
     )
-    async with DiveMcpHost(config) as mcp_host, mcp_host.conversation() as conversation:
+    async with DiveMcpHost(config) as mcp_host, mcp_host.chat() as chat:
         responses = [
             response
-            async for response in conversation.query(
+            async for response in chat.query(
                 [
                     HumanMessage(content="Attachment"),
                     HumanMessage(content="Hello, world!"),
@@ -139,16 +139,16 @@ async def test_get_messages(
             ),
         ]
         cast("FakeMessageToolModel", mcp_host.model).responses = fake_responses
-        conversation = mcp_host.conversation()
-        async with conversation:
-            async for _ in conversation.query(
+        chat = mcp_host.chat()
+        async with chat:
+            async for _ in chat.query(
                 HumanMessage(content="Hello, world! 許個願望吧"),
                 stream_mode=["messages"],
             ):
                 pass
 
-            thread_id = conversation.thread_id
-            messages = await mcp_host.get_messages(thread_id, user_id)
+            chat_id = chat.chat_id
+            messages = await mcp_host.get_messages(chat_id, user_id)
             assert len(messages) > 0
 
             human_messages = [msg for msg in messages if isinstance(msg, HumanMessage)]
@@ -169,7 +169,7 @@ async def test_get_messages(
             with pytest.raises(ThreadNotFoundError):
                 _ = await mcp_host.get_messages("non-existent-thread-id", user_id)
 
-            messages = await mcp_host.get_messages(thread_id, user_id)
+            messages = await mcp_host.get_messages(chat_id, user_id)
             assert len(messages) > 0
             for i, msg in enumerate(
                 [msg for msg in messages if isinstance(msg, HumanMessage)]
@@ -202,15 +202,11 @@ async def test_callable_system_prompt() -> None:
 
     async with (
         DiveMcpHost(config) as mcp_host,
-        mcp_host.conversation(
-            system_prompt=mock_system_prompt, volatile=True
-        ) as conversation,
+        mcp_host.chat(system_prompt=mock_system_prompt, volatile=True) as chat,
     ):
         assert mcp_host.model is not None
         model = cast("FakeMessageToolModel", mcp_host.model)
-        async for _ in conversation.query(
-            msgs,
-        ):
+        async for _ in chat.query(msgs):
             ...
         assert len(model.query_history) == 2
         assert model.query_history[0].content == "You are a helpful assistant."
@@ -225,9 +221,7 @@ async def test_callable_system_prompt() -> None:
         mock_system_prompt.reset_mock()
         mock_system_prompt.return_value = msgs
 
-        async for _ in conversation.query(
-            msgs,
-        ):
+        async for _ in chat.query(msgs):
             ...
         assert len(model.query_history) == 2
         assert model.query_history[0].content == "You are a helpful assistant."
@@ -236,8 +230,8 @@ async def test_callable_system_prompt() -> None:
 
 
 @pytest.mark.asyncio
-async def test_abort_conversation() -> None:
-    """Test that the conversation can be aborted during a long-running query."""
+async def test_abort_chat() -> None:
+    """Test that the chat can be aborted during a long-running query."""
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
@@ -256,13 +250,13 @@ async def test_abort_conversation() -> None:
         model.responses = fake_responses
         model.sleep = 2.0  # 2 seconds sleep to simulate long running query
 
-        conversation = mcp_host.conversation()
-        async with conversation:
+        chat = mcp_host.chat()
+        async with chat:
             # Start the query in a separate task
             async def _query() -> list[dict[str, Any]]:
                 return [
                     i
-                    async for i in conversation.query(
+                    async for i in chat.query(
                         "This is a long running query", stream_mode=["messages"]
                     )
                 ]
@@ -271,7 +265,7 @@ async def test_abort_conversation() -> None:
 
             # Wait a bit and then abort
             await asyncio.sleep(0.5)
-            conversation.abort()
+            chat.abort()
 
             # Wait for the query task to complete
             async with asyncio.timeout(5):
@@ -295,7 +289,7 @@ async def test_abort_conversation() -> None:
             model.i = 0
             responses = [
                 i
-                async for i in conversation.query(
+                async for i in chat.query(
                     "This is a long running query", stream_mode=["messages"]
                 )
             ]
@@ -307,11 +301,11 @@ async def test_abort_conversation() -> None:
                 == "This is a long running response that should be aborted"
             )
 
-            # abort a non-running conversation
-            conversation.abort()
+            # abort a non-running chat
+            chat.abort()
             responses = [
                 i
-                async for i in conversation.query(
+                async for i in chat.query(
                     "This is a long running query", stream_mode=["messages"]
                 )
             ]
@@ -331,14 +325,14 @@ async def test_resend_message(sqlite_uri: str) -> None:
     )
 
     async with DiveMcpHost(config) as mcp_host:
-        conversation = mcp_host.conversation()
+        chat = mcp_host.chat()
         model = cast("FakeMessageToolModel", mcp_host.model)
-        async with conversation:
+        async with chat:
             resps = cast(
                 list[tuple[str, dict[str, list[BaseMessage]]]],
                 [
                     i
-                    async for i in conversation.query(
+                    async for i in chat.query(
                         HumanMessage(content="Hello, world!"),
                         stream_mode=["values"],
                     )
@@ -359,7 +353,7 @@ async def test_resend_message(sqlite_uri: str) -> None:
                 list[tuple[str, dict[str, list[BaseMessage]]]],
                 [
                     i
-                    async for i in conversation.query(
+                    async for i in chat.query(
                         resend,  # type: ignore
                         stream_mode=["values"],
                         is_resend=True,
@@ -440,10 +434,10 @@ async def test_host_reload(echo_tool_stdio_config: dict[str, ServerConfig]) -> N
         assert "echo" in tool_names
         assert "fetch" in tool_names
 
-        # Test conversation still works after reload
-        async with host.conversation() as conversation:
+        # Test chat still works after reload
+        async with host.chat() as chat:
             responses = []
-            async for response in conversation.query("Hello"):
+            async for response in chat.query("Hello"):
                 responses.append(response)
 
             assert len(responses) > 0

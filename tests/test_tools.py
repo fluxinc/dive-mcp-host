@@ -349,10 +349,10 @@ async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) 
             ),
         ]
         cast("FakeMessageToolModel", mcp_host._model).responses = fake_responses
-        async with mcp_host.conversation() as conversation:
+        async with mcp_host.chat() as chat:
             responses = [
                 response
-                async for response in conversation.query(
+                async for response in chat.query(
                     HumanMessage(content="Hello, world!"),
                     stream_mode=["messages"],
                 )
