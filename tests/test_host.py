@@ -423,8 +423,7 @@ async def test_host_reload(echo_tool_stdio_config: dict[str, ServerConfig]) -> N
         # Verify initial state
         assert len(host.tools) == 2  # echo and ignore tools
         assert isinstance(host.config.llm, LLMConfig)
-        assert host.config.llm.configuration is not None
-        assert host.config.llm.configuration.temperature == 0
+        assert host.config.llm.configuration is None
 
         # Perform reload
         await host.reload(new_config, mock_reloader)
