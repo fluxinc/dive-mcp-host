@@ -287,7 +287,7 @@ async def test_create_message(
         chatId=sample_chat.id,
         role=Role.USER,
         content="This is a new test message",
-        files="",
+        files=[],
     )
 
     # Create message
@@ -327,7 +327,7 @@ async def test_create_message_with_resource_usage(
         chatId=sample_chat.id,
         role=Role.ASSISTANT,
         content="This is an assistant message",
-        files="",
+        files=[],
         resource_usage=resource_usage,
     )
 

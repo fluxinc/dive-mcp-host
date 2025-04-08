@@ -224,7 +224,7 @@ class ChatProcessor:
                         role=Role.USER,
                         messageId=user_message.id,
                         content=query_input.text or "",
-                        files=json.dumps(files),
+                        files=files,
                     ),
                 )
 
@@ -433,7 +433,7 @@ class ChatProcessor:
     ) -> list[BaseMessage]:
         """Process history messages."""
         for message in history_messages:
-            files: list[str] = json.loads(message.files)
+            files: list[str] = message.files
             if not files:
                 message_content = message.content.strip()
                 if message.role == Role.USER:

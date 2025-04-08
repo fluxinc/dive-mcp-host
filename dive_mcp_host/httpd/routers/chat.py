@@ -2,7 +2,7 @@ import datetime
 import json
 from typing import TYPE_CHECKING, Annotated, TypeVar
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 from dive_mcp_host.httpd.database.models import (
@@ -142,8 +142,8 @@ async def edit_chat(  # noqa: PLR0913
 async def retry_chat(
     request: Request,
     app: DiveHostAPI = Depends(get_app),
-    chat_id: Annotated[str | None, Form(alias="chatId")] = None,
-    message_id: Annotated[str | None, Form(alias="messageId")] = None,
+    chat_id: Annotated[str | None, Body(alias="chatId")] = None,
+    message_id: Annotated[str | None, Body(alias="messageId")] = None,
 ) -> StreamingResponse:
     """Retry a chat.
 
@@ -221,7 +221,7 @@ async def get_chat(
                         role=Role("assistant"),
                         chatId=chat_id,
                         messageId=checkpointer_msg.id or "",
-                        files="[]",
+                        files=[],
                         resource_usage=None,
                     )
                 )
@@ -247,7 +247,7 @@ async def get_chat(
                             role=Role("tool_call"),
                             chatId=chat_id,
                             messageId=checkpointer_msg.id or "",
-                            files="[]",
+                            files=[],
                             resource_usage=None,
                         )
                     )
@@ -262,7 +262,7 @@ async def get_chat(
                     role=Role("tool_result"),
                     chatId=chat_id,
                     messageId=checkpointer_msg.id or "",
-                    files="[]",
+                    files=[],
                     resource_usage=None,
                 )
             )
