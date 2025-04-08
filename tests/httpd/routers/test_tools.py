@@ -84,13 +84,22 @@ def test_list_tools_mock_cache(
     response = client.get("/api/tools")
     assert response.status_code == status.HTTP_200_OK
 
-    response_data = response.json()
+    response_data = cast(dict[str, Any], response.json())
+    response_data["tools"] = sorted(response_data["tools"], key=lambda x: x["name"])
     helper.dict_subset(
         response_data,
         {
             "success": True,
             "message": None,
             "tools": [
+                {  # echo is still in server list, but it was not in mcp_server_info
+                    "name": "echo",
+                    "description": "",
+                    "enabled": False,
+                    "icon": "",
+                    "tools": [],
+                    "error": None,
+                },
                 {
                     "name": "test_tool",
                     "tools": [
@@ -100,7 +109,7 @@ def test_list_tools_mock_cache(
                     "enabled": True,
                     "icon": "",
                     "error": None,
-                }
+                },
             ],
         },
     )
@@ -236,19 +245,28 @@ async def test_list_tools_with_missing_server_not_in_cache(
     response = await list_tools(app)
     response_dict = response.model_dump(by_alias=True)
     response_dict["tools"] = sorted(response_dict["tools"], key=lambda x: x["name"])
-    for i in response_dict["tools"]:
-        if i["name"] == "echo":
-            echo = i
-            break
-    else:
-        raise Exception("echo not found")
-
     helper.dict_subset(
         response_dict,
         {
             "success": True,
             "tools": [
-                echo,
+                {
+                    "name": "echo",
+                    "description": "",
+                    "enabled": True,
+                    "icon": "",
+                    "error": None,
+                    "tools": [
+                        {
+                            "name": "echo",
+                            "description": ECHO_DESCRIPTION,
+                        },
+                        {
+                            "name": "ignore",
+                            "description": IGNORE_DESCRIPTION,
+                        },
+                    ],
+                },
                 {
                     "name": "missing_server",
                     "tools": [],
