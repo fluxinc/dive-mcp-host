@@ -86,7 +86,7 @@ def test_get_chat(test_client):
                         "content": "Hello, world!",
                         "chatId": TEST_CHAT_ID,
                         "id": 1,
-                        "files": "[]",
+                        "files": [],
                     },
                     {
                         "role": "assistant",
@@ -329,7 +329,7 @@ def test_retry_chat(test_client):
 
     response = client.post(
         "/api/chat/retry",
-        data={
+        json={
             "chatId": TEST_CHAT_ID,
             "messageId": message_id,
         },

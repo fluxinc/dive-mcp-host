@@ -116,7 +116,7 @@ class BaseMessageStore(AbstractMessageStore):
                     role=Role(msg.role),
                     chatId=msg.chat_id,
                     messageId=msg.message_id,
-                    files=json.loads(msg.files),
+                    files=json.loads(msg.files) if msg.files else [],
                     resource_usage=resource_usage,
                 ),
             )
@@ -322,7 +322,7 @@ class BaseMessageStore(AbstractMessageStore):
             role=Role(updated_message.role),
             chatId=updated_message.chat_id,
             messageId=updated_message.message_id,
-            files=json.loads(updated_message.files),
+            files=json.loads(updated_message.files) if updated_message.files else [],
             resource_usage=resource_usage,
         )
 
@@ -381,6 +381,6 @@ class BaseMessageStore(AbstractMessageStore):
             role=Role(message.role),
             chatId=message.chat_id,
             messageId=message.message_id,
-            files=json.loads(message.files),
+            files=json.loads(message.files) if message.files else [],
             resource_usage=resource_usage,
         )
