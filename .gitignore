@@ -42,4 +42,4 @@ status_report.json
 db.sqlite-shm
 db.sqlite-wal
 cache/
-uploads/
+upload/
