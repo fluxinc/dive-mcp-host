@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from dive_mcp_host.host.conf import HostConfig, ServerConfig
+from dive_mcp_host.host.conf.llm import LLMConfig
 from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.httpd.abort_controller import AbortController
 from dive_mcp_host.httpd.conf.command_alias.manager import CommandAliasManager
@@ -158,8 +159,12 @@ class DiveHostAPI(FastAPI):
 
     def load_host_config(self) -> HostConfig:
         """Generate all host configs."""
-        if self._model_config_manager.current_setting is None:
-            raise ValueError("Model config manager is not initialized")
+        model_setting = self._model_config_manager.current_setting
+        if model_setting is None:
+            model_setting = LLMConfig(
+                model_provider="dive",
+                model="fake",
+            )
 
         if self._service_config_manager.current_setting is None:
             raise ValueError("MCPServer config manager is not initialized")
@@ -194,7 +199,7 @@ class DiveHostAPI(FastAPI):
             )
 
         return HostConfig(
-            llm=self._model_config_manager.current_setting,
+            llm=model_setting,
             checkpointer=self._service_config_manager.current_setting.checkpointer,
             mcp_servers=mcp_servers,
         )
