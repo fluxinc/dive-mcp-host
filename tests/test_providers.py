@@ -22,13 +22,13 @@ async def _run_the_test(
     """Run the test."""
     async with (
         DiveMcpHost(config) as mcp_host,
-        mcp_host.conversation(
+        mcp_host.chat(
             # system_prompt=system_prompt(""),
             # tools=[TestTool()],
-        ) as conversation,
+        ) as chat,
     ):
-        # r = await conversation.invoke("test mcp tool echo with 'hello'")
-        async for response in conversation.query(
+        # r = await chat.invoke("test mcp tool echo with 'hello'")
+        async for response in chat.query(
             HumanMessage(content="echo helloXXX with 10ms delay"),
             stream_mode=["updates"],
         ):

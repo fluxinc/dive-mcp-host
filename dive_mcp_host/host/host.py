@@ -11,8 +11,8 @@ from langgraph.graph.message import MessagesState
 from langgraph.prebuilt.tool_node import ToolNode
 
 from dive_mcp_host.host.agents import AgentFactory, get_chat_agent_factory
+from dive_mcp_host.host.chat import Chat
 from dive_mcp_host.host.conf import HostConfig
-from dive_mcp_host.host.conversation import Conversation
 from dive_mcp_host.host.errors import ThreadNotFoundError
 from dive_mcp_host.host.helpers.checkpointer import get_checkpointer
 from dive_mcp_host.host.helpers.context import ContextProtocol
@@ -32,7 +32,7 @@ class DiveMcpHost(ContextProtocol):
     The DiveMcpHost class provides an async context manager interface for managing
     and interacting with language models through the Model Context Protocol (MCP).
     It handles initialization and cleanup of model instances, manages server
-    connections, and provides a unified interface for agent conversations.
+    connections, and provides a unified interface for agent chats.
 
     The MCP enables tools and models to communicate in a standardized way, allowing for
     consistent interaction patterns regardless of the underlying model implementation.
@@ -40,23 +40,23 @@ class DiveMcpHost(ContextProtocol):
     Example:
         # Initialize host with configuration
         config = HostConfig(...)
-        thread_id = ""
+        chat_id = ""
         async with DiveMcpHost(config) as host:
             # Send a message and get response
-            async with host.conversation() as conversation:
+            async with host.chat() as chat:
                 while query := input("Enter a message: "):
                     if query == "exit":
                         nonlocal thread_id
                         # save the thread_id for resume
-                        thread_id = conversation.thread_id
+                        chat_id = chat.chat_id
                         break
-                    async for response in await conversation.query(query):
+                    async for response in await chat.query(query):
                         print(response)
         ...
-        # Resume conversation
+        # Resume chat
         async with DiveMcpHost(config) as host:
-            # pass the thread_id to resume the conversation
-            async with host.conversation(thread_id=thread_id) as conversation:
+            # pass the chat_id to resume the chat
+            async with host.chat(chat_id=chat_id) as chat:
                 ...
 
     The host must be used as an async context manager to ensure proper resource
@@ -104,10 +104,10 @@ class DiveMcpHost(ContextProtocol):
         )
         self._model = model
 
-    def conversation[T: MessagesState](  # noqa: PLR0913 Is there a better way to do this?
+    def chat[T: MessagesState](  # noqa: PLR0913 Is there a better way to do this?
         self,
         *,
-        thread_id: str | None = None,
+        chat_id: str | None = None,
         user_id: str = "default",
         tools: Sequence[BaseTool] | None = None,
         get_agent_factory_method: Callable[
@@ -116,18 +116,18 @@ class DiveMcpHost(ContextProtocol):
         ] = get_chat_agent_factory,
         system_prompt: str | Callable[[T], list[BaseMessage]] | None = None,
         volatile: bool = False,
-    ) -> Conversation[T]:
-        """Start or resume a conversation.
+    ) -> Chat[T]:
+        """Start or resume a chat.
 
         Args:
-            thread_id: The thread ID to use for the conversation.
-            user_id: The user ID to use for the conversation.
-            tools: The tools to use for the conversation.
-            system_prompt: Use a custom system prompt for the conversation.
+            chat_id: The chat ID to use for the chat.
+            user_id: The user ID to use for the chat.
+            tools: The tools to use for the chat.
+            system_prompt: Use a custom system prompt for the chat.
             get_agent_factory_method: The method to get the agent factory.
-            volatile: if True, the conversation will not be saved.
+            volatile: if True, the chat will not be saved.
 
-        If the thread ID is not provided, a new thread will be created.
+        If the chat ID is not provided, a new chat will be created.
         Customize the agent factory to use a different model or tools.
         If the tools are not provided, the host will use the tools initialized in the
         host.
@@ -140,11 +140,11 @@ class DiveMcpHost(ContextProtocol):
             self._model,
             tools,
         )
-        return Conversation(
+        return Chat(
             model=self._model,
             agent_factory=agent_factory,
             system_prompt=system_prompt,
-            thread_id=thread_id,
+            chat_id=chat_id,
             user_id=user_id,
             checkpointer=None if volatile else self._checkpointer,
         )
@@ -161,9 +161,9 @@ class DiveMcpHost(ContextProtocol):
             reloader: The reloader function.
 
         The reloader function is called when the host is ready to reload. This means
-        all ongoing conversations have completed and no new queries are being processed.
+        all ongoing chats have completed and no new queries are being processed.
         The reloader should handle stopping and restarting services as needed.
-        Conversations can be resumed after reload by using the same thread_id.
+        Chats can be resumed after reload by using the same chat_id.
         """
         # NOTE: Do Not restart MCP Servers when there is on-going query.
         if self._exit_stack is None:

@@ -13,6 +13,6 @@ class CLIArgs:
         config_path: The path to the configuration file.
     """
 
-    thread_id: str | None
+    chat_id: str | None
     query: list
     config_path: str

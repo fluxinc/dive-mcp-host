@@ -29,7 +29,7 @@ pip install -e .
 # Or using uv pip
 uv pip install -e .
 
-# Or using uv sync (recommended, will respect uv.lock file) 
+# Or using uv sync (recommended, will respect uv.lock file)
 uv sync
 ```
 
@@ -48,11 +48,11 @@ This will start a FastAPI server, providing REST API and WebSocket endpoints.
 You can use the command line tool for quick testing:
 
 ```bash
-# General conversation
+# General chat
 dive_cli "Hello"
 
-# Resume a conversation with a specific thread
-dive_cli -c THREADID "How are you?"
+# Resume a chat with a specific thread
+dive_cli -c CHATID "How are you?"
 ```
 
 ### Using in Code
@@ -67,9 +67,9 @@ config = HostConfig(...)
 # Use async context manager
 async with DiveMcpHost(config) as host:
     # Start or resume a conversation
-    async with host.conversation(thread_id="123") as conversation:
+    async with host.chat(thread_id="123") as chat:
         # Send a query and get a response
-        async for response in conversation.query("Hello, how can you help me today?"):
+        async for response in chat.query("Hello, how can you help me today?"):
             print(response)
 ```
 
@@ -95,7 +95,7 @@ Run tests:
 ```bash
 pytest
 ```
-or with uv, (no need to activate enviroment) 
+or with uv, (no need to activate enviroment)
 ```bash
 uv run --extra dev pytest
 ```

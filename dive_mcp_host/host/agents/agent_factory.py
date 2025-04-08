@@ -16,7 +16,7 @@ class AgentFactory[T: MessagesState](Protocol):
     """A factory for creating agents.
 
     Implementing this protocol to create your own custom agent.
-    Pass the factory to the host to create an agent for the conversation.
+    Pass the factory to the host to create an agent for the chat.
     """
 
     def create_agent(

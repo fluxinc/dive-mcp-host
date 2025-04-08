@@ -36,8 +36,8 @@ def setup_argument_parser() -> type[CLIArgs]:
         "-c",
         type=str,
         default=None,
-        help="Continue from given THREAD_ID.",
-        dest="thread_id",
+        help="Continue from given CHAT_ID.",
+        dest="chat_id",
     )
     return parser.parse_args(namespace=CLIArgs)
 
@@ -54,14 +54,14 @@ async def run() -> None:
     query = parse_query(args)
     config = load_config(args.config_path)
 
-    current_thread_id: str | None = args.thread_id
+    current_chat_id: str | None = args.chat_id
 
     async with DiveMcpHost(config) as mcp_host:
-        conversation = mcp_host.conversation(thread_id=current_thread_id)
-        current_thread_id = conversation.thread_id
-        async with conversation:
-            async for response in conversation.query(query, stream_mode="messages"):
+        chat = mcp_host.chat(chat_id=current_chat_id)
+        current_chat_id = chat.chat_id
+        async with chat:
+            async for response in chat.query(query, stream_mode="messages"):
                 print(response[0].content, end="")  # type: ignore
 
     print()
-    print(f"Thread ID: {current_thread_id}")
+    print(f"Chat ID: {current_chat_id}")

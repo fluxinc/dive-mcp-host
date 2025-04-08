@@ -237,7 +237,7 @@ def test_edit_chat(test_client):
     ai_message_id = ""
     fist_ai_reply = ""
     for json_obj in helper.extract_stream(response.text):
-        message = json.loads(json_obj["message"])
+        message = json.loads(json_obj["message"])  # type: ignore
         content = message["content"]
         match message["type"]:
             case "chat_info":
@@ -273,7 +273,7 @@ def test_edit_chat(test_client):
     new_user_message_id = ""
     new_ai_message_id = ""
     for json_obj in helper.extract_stream(response.text):
-        message = json.loads(json_obj["message"])
+        message = json.loads(json_obj["message"])  # type: ignore
         content = message["content"]
         match message["type"]:
             case "chat_info":

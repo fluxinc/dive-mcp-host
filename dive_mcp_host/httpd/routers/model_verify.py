@@ -145,13 +145,13 @@ class ModelVerifyService:
 
     async def _check_connection(self, host: DiveMcpHost) -> bool:
         """Check if the model is connected."""
-        conversation = host.conversation(volatile=True)
+        chat = host.chat(volatile=True)
         async with AsyncExitStack() as stack:
-            await stack.enter_async_context(conversation)
-            stack.enter_context(self._handle_abort(conversation.abort))
+            await stack.enter_async_context(chat)
+            stack.enter_context(self._handle_abort(chat.abort))
             _responses = [
                 response
-                async for response in conversation.query(
+                async for response in chat.query(
                     "Only return 'Hi' strictly", stream_mode=["updates"]
                 )
             ]
@@ -161,13 +161,13 @@ class ModelVerifyService:
     async def _check_tools(self, host: DiveMcpHost) -> bool:
         """Check if the model supports tools."""
         test_tool = TestTool()
-        conversation = host.conversation(volatile=True, tools=[test_tool])
+        chat = host.chat(volatile=True, tools=[test_tool])
         async with AsyncExitStack() as stack:
-            await stack.enter_async_context(conversation)
-            stack.enter_context(self._handle_abort(conversation.abort))
+            await stack.enter_async_context(chat)
+            stack.enter_context(self._handle_abort(chat.abort))
             _responses = [
                 response
-                async for response in conversation.query(
+                async for response in chat.query(
                     "run test_tool", stream_mode=["updates"]
                 )
             ]
