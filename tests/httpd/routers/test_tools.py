@@ -345,4 +345,6 @@ def test_tools_cache_after_update(test_client):
     response = client.get("/api/tools")
     assert response.status_code == status.HTTP_200_OK
     # Even when all servers are disabled, we can still see them from the cache
+    for tool in first_time["tools"]:
+        tool["enabled"] = False  # all servers are disabled
     assert first_time == response.json()
