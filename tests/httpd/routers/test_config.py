@@ -430,3 +430,116 @@ def test_post_mcp_server_with_alias(setup_command_alias, test_client):
             },
         },
     )
+
+
+def test_tools_and_mcpserver_enable_status(test_client):
+    """Check if tool enable status is currect in both apis."""
+    client, _ = test_client
+
+    # check tools api default status
+    response = client.get("/api/tools")
+    assert response.status_code == SUCCESS_CODE
+    response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "message": None,
+            "tools": [
+                {
+                    "name": "echo",
+                    "tools": [
+                        {
+                            "name": "echo",
+                            "description": "A simple echo tool to verify if the MCP server is working properly.\nIt returns a characteristic response containing the input message.",  # noqa: E501
+                        },
+                        {"name": "ignore", "description": "Do nothing."},
+                    ],
+                    "description": "",
+                    "enabled": True,
+                    "icon": "",
+                    "error": None,
+                }
+            ],
+        },
+    )
+
+    # Disable tool
+    payload = {
+        "mcpServers": {
+            "echo": McpServerConfig(
+                transport="stdio",
+                command="python3",
+                enabled=False,
+                args=[
+                    "-m",
+                    "dive_mcp_host.host.tools.echo",
+                    "--transport=stdio",
+                ],
+                env={"NODE_ENV": "production"},
+                url=None,
+            ).model_dump(),
+        }
+    }
+
+    response = client.post(
+        "/api/config/mcpserver",
+        json=payload,
+    )
+    assert response.status_code == SUCCESS_CODE
+
+    # check mcpserver api
+    response = client.get("/api/config/mcpserver")
+    assert response.status_code == SUCCESS_CODE
+    response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "message": None,
+            "config": {
+                "mcpServers": {
+                    "echo": {
+                        "transport": "stdio",
+                        "enabled": False,
+                        "command": "python3",
+                        "args": [
+                            "-m",
+                            "dive_mcp_host.host.tools.echo",
+                            "--transport=stdio",
+                        ],
+                        "env": {"NODE_ENV": "production"},
+                        "url": None,
+                    },
+                },
+            },
+        },
+    )
+
+    # check tools api
+    response = client.get("/api/tools")
+    assert response.status_code == SUCCESS_CODE
+    response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "message": None,
+            "tools": [
+                {
+                    "name": "echo",
+                    "tools": [
+                        {
+                            "name": "echo",
+                            "description": "A simple echo tool to verify if the MCP server is working properly.\nIt returns a characteristic response containing the input message.",  # noqa: E501
+                        },
+                        {"name": "ignore", "description": "Do nothing."},
+                    ],
+                    "description": "",
+                    "enabled": False,
+                    "icon": "",
+                    "error": None,
+                }
+            ],
+        },
+    )

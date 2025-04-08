@@ -54,9 +54,11 @@ async def list_tools(
             icon="",
             error=str(server_info.error) if server_info.error is not None else None,
         )
+    logger.debug("active mcp servers: %s", result.keys())
 
     # find missing servers
     missing_servers = all_servers - set(result.keys())
+    logger.debug("disabled mcp servers: %s", missing_servers)
 
     # get missing from local cache
     raw_cached_tools = app.local_file_cache.get(CacheKeys.LIST_TOOLS)
@@ -64,6 +66,7 @@ async def list_tools(
         cached_tools = ToolsCache.model_validate_json(raw_cached_tools)
         for server_name in missing_servers:
             if server_info := cached_tools.root.get(server_name, None):
+                server_info.enabled = False
                 result[server_name] = server_info
             else:
                 result[server_name] = McpTool(
