@@ -254,7 +254,7 @@ class DiveHostAPI(FastAPI):
             logger.info("Report status to fd: %s", self._report_status_fd)
             os.write(
                 self._report_status_fd,
-                msg.model_dump_json().encode(),
+                f"{msg.model_dump_json()}\r\n".encode(),
             )
         else:
             logger.info("No fd or file to report status")
