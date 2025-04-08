@@ -114,7 +114,7 @@ class McpTool(BaseModel):
     description: str
     enabled: bool
     icon: str
-    error: str | None
+    error: str | None = None
 
 
 class ToolsCache(RootModel[dict[str, McpTool]]):
