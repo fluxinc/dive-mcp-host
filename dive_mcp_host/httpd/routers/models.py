@@ -1,9 +1,21 @@
 from enum import StrEnum
-from typing import Annotated, Any, Literal, TypeVar
+from typing import Annotated, Any, Literal, Self, TypeVar
 
-from pydantic import BaseModel, BeforeValidator, Field, RootModel
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    RootModel,
+    model_validator,
+)
+from pydantic.alias_generators import to_camel
 
-from dive_mcp_host.host.conf.llm import LLMConfigTypes
+from dive_mcp_host.host.conf.llm import (
+    LLMConfigTypes,
+    LLMConfiguration,
+    get_llm_config_type,
+)
 
 T = TypeVar("T")
 
@@ -174,12 +186,45 @@ class TokenUsage(BaseModel):
     total_tokens: int = Field(default=0, alias="totalTokens")
 
 
+class ModelSingleConfig(BaseModel):
+    """Model single config."""
+
+    model_provider: str
+    model: str
+    max_tokens: int | None = None
+    api_key: str | None = None
+    configuration: LLMConfiguration | None = None
+    active: bool = Field(default=True)
+    checked: bool = Field(default=False)
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        arbitrary_types_allowed=True,
+        validate_by_name=True,
+        validate_by_alias=True,
+        extra="allow",
+    )
+
+    @model_validator(mode="after")
+    def post_validate(self) -> Self:
+        """Validate the model config by converting to LLMConfigTypes."""
+        get_llm_config_type(self.model_provider).model_validate(self.model_dump())
+        return self
+
+
 class ModelFullConfigs(BaseModel):
     """Configuration for the model."""
 
-    active_provider: str = Field(alias="activeProvider")
-    enable_tools: bool = Field(alias="enableTools")
-    configs: dict[str, LLMConfigTypes]
+    active_provider: str
+    enable_tools: bool
+    configs: dict[str, ModelSingleConfig] = Field(default_factory=dict)
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        arbitrary_types_allowed=True,
+        validate_by_name=True,
+        validate_by_alias=True,
+    )
 
 
 class UserInputError(Exception):

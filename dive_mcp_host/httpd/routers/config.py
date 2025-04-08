@@ -1,9 +1,6 @@
-from typing import TypeVar
-
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
-from dive_mcp_host.host.conf.llm import LLMConfigTypes
 from dive_mcp_host.httpd.conf.mcpserver.manager import Config
 from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.server import DiveHostAPI
@@ -14,12 +11,11 @@ from .models import (
     ModelFullConfigs,
     ModelInterfaceDefinition,
     ModelSettingsDefinition,
+    ModelSingleConfig,
     ResultResponse,
 )
 
 config = APIRouter(tags=["config"])
-
-T = TypeVar("T")
 
 
 class ConfigResult[T](ResultResponse):
@@ -50,7 +46,7 @@ class SaveModelSettingsRequest(BaseModel):
     """Request model for saving model settings."""
 
     provider: str
-    model_settings: LLMConfigTypes = Field(alias="modelSettings")
+    model_settings: ModelSingleConfig = Field(alias="modelSettings")
     enable_tools: bool = Field(alias="enableTools")
 
 
