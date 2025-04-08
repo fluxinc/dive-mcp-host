@@ -1,3 +1,4 @@
+from pathlib import Path
 import tempfile
 from collections.abc import AsyncGenerator, Generator
 from dataclasses import dataclass
@@ -47,6 +48,7 @@ def config_files() -> Generator[ConfigFileNames, None, None]:
         ) as model_config_file,
         tempfile.NamedTemporaryFile(suffix=".testCustomrules") as prompt_config_file,
         tempfile.NamedTemporaryFile(suffix=".sqlite") as db_file,
+        tempfile.TemporaryDirectory() as resource_dir,
     ):
         service_config_file.write(
             ServiceConfig(
@@ -62,6 +64,7 @@ def config_files() -> Generator[ConfigFileNames, None, None]:
                     model_config_path=model_config_file.name,
                     prompt_config_path=prompt_config_file.name,
                 ),
+                resource_dir=Path(resource_dir),
             )
             .model_dump_json(by_alias=True)
             .encode("utf-8")
