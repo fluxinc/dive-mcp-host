@@ -118,7 +118,7 @@ def test_delete_chat(test_client):
     response_data = response.json()
 
     # Validate response structure
-    assert "success" in response_data
+    assert isinstance(response_data, dict)
     assert response_data["success"] is True
 
 
@@ -172,7 +172,7 @@ def test_create_chat(test_client):
     )
 
     assert response.status_code == SUCCESS_CODE
-    assert "text/event-stream" in response.headers["Content-Type"]
+    assert "text/event-stream" in response.headers.get("Content-Type")
 
     content = response.text
 
@@ -325,7 +325,7 @@ def test_retry_chat(test_client):
     response = client.get(f"/api/chat/{TEST_CHAT_ID}")
     assert response.status_code == SUCCESS_CODE
     response_data = response.json()
-    message_id = response_data["data"]["messages"][0]["messageId"]
+    message_id = response_data["data"]["messages"][0]["messageId"]  # type: ignore
 
     response = client.post(
         "/api/chat/retry",
@@ -336,7 +336,7 @@ def test_retry_chat(test_client):
     )
 
     assert response.status_code == SUCCESS_CODE
-    assert "text/event-stream" in response.headers["Content-Type"]
+    assert "text/event-stream" in response.headers.get("Content-Type")
 
     content = response.text
 
