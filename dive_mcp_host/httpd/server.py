@@ -172,6 +172,9 @@ class DiveHostAPI(FastAPI):
             server_name,
             server_config,
         ) in self._mcp_server_config_manager.get_enabled_servers().items():
+            if not server_config.enabled:
+                continue
+
             # Apply command alias
             if server_config.command:
                 command = self._command_alias_config_manager.current_config.get(
