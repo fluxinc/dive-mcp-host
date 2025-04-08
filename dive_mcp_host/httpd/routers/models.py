@@ -25,10 +25,18 @@ class McpServerConfig(BaseModel):
         Transport, BeforeValidator(lambda v: "stdio" if v == "command" else v)
     ]
     enabled: bool | None
-    command: str | None
-    args: list[str] | None
-    env: dict[str, str] | None
-    url: str | None
+    command: str | None = None
+    args: list[str] | None = Field(default_factory=list)
+    env: dict[str, str] | None = Field(default_factory=dict)
+    url: str | None = None
+
+    def model_post_init(self, _: Any) -> None:
+        """Post-initialization hook."""
+        if self.transport in ["sse", "websocket"]:
+            if self.url is None:
+                raise ValueError("url is required for sse and websocket transport")
+        elif self.transport == "stdio" and self.command is None:
+            raise ValueError("command is required for stdio transport")
 
 
 class McpServers(BaseModel):

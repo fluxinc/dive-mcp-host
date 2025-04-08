@@ -80,6 +80,63 @@ def test_get_mcp_server(test_client):
     )
 
 
+def test_post_mcp_server_omit_env_url(test_client):
+    """Test the /api/config/mcpserver POST endpoint.
+
+    The url and env can be omitted for stdio transport.
+    """
+    client, _ = test_client
+    # Prepare request data - convert McpServerConfig objects to dict
+    server_data = {
+        "mcpServers": {
+            "default": {
+                "transport": "stdio",  # type: ignore  # Test backward compatibility
+                "enabled": True,
+                "command": "uvx",
+                "args": ["dive_mcp_host.host.tools.echo", "--transport=stdio"],
+            },
+        }
+    }
+
+    response = client.post(
+        "/api/config/mcpserver",
+        json=server_data,
+    )
+    assert response.status_code == SUCCESS_CODE
+    response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+        },
+    )
+    response = client.get("/api/config/mcpserver")
+    assert response.status_code == SUCCESS_CODE
+    response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "message": None,
+            "config": {
+                "mcpServers": {
+                    "default": {
+                        "transport": "stdio",
+                        "enabled": True,
+                        "command": "uvx",
+                        "args": [
+                            "dive_mcp_host.host.tools.echo",
+                            "--transport=stdio",
+                        ],
+                        "env": {},
+                        "url": None,
+                    },
+                },
+            },
+        },
+    )
+
+
 def test_post_mcp_server(test_client):
     """Test the /api/config/mcpserver POST endpoint."""
     client, _ = test_client
