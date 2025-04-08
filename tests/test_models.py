@@ -8,7 +8,7 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 
 from dive_mcp_host.host.agents.chat_agent import AgentState
-from dive_mcp_host.host.conf import LLMConfig
+from dive_mcp_host.host.conf.llm import LLMConfig, LLMConfiguration
 from dive_mcp_host.host.helpers import today_datetime
 from dive_mcp_host.models import load_model
 from dive_mcp_host.models.fake import FakeMessageToolModel
@@ -81,12 +81,14 @@ def test_load_langchain_model() -> None:
     """Test the load langchain model."""
     config = LLMConfig(
         model="gpt-4o",
-        modelProvider="openai",
-        apiKey="API_KEY",
-        temperature=0.5,
+        model_provider="openai",
+        api_key="API_KEY",
+        configuration=LLMConfiguration(
+            temperature=0.5,
+        ),
     )
     model = load_model(
-        config.modelProvider, config.model, **config.to_load_model_kwargs()
+        config.model_provider, config.model, **(config.to_load_model_kwargs())
     )
     assert isinstance(model, BaseChatModel)
 
@@ -95,3 +97,54 @@ def test_load__load__model() -> None:
     """Test the load __load__ model."""
     model = load_model("__load__", "dive_mcp_host.models.fake:FakeMessageToolModel")
     assert isinstance(model, FakeMessageToolModel)
+
+
+def test_llm_config_validate() -> None:
+    """Test the LLMConfig can accept both camelCase and snake_case keys."""
+    config = LLMConfig(
+        model="gpt-4o",
+        model_provider="openai",
+        api_key="fake",
+    )
+    assert config.api_key == "fake"
+    assert config.model_provider == "openai"
+    assert config.model == "gpt-4o"
+
+    config = LLMConfig.model_validate(
+        {
+            "model": "gpt-4o",
+            "modelProvider": "openai",
+            "apiKey": "fake",
+        }
+    )
+    assert config.api_key == "fake"
+    assert config.model_provider == "openai"
+    assert config.model == "gpt-4o"
+
+    config = LLMConfig.model_validate(
+        {
+            "model": "gpt-4o",
+            "modelProvider": "openai",
+            "apiKey": "fake",
+        }
+    )
+    assert config.api_key == "fake"
+    assert config.model_provider == "openai"
+    assert config.model == "gpt-4o"
+
+    config = LLMConfig.model_validate(
+        {
+            "region": "us-east-1",
+            "configuration": {"topP": 0, "temperature": 0},
+            "credentials": {
+                "accessKeyId": "fakekeyid",
+                "secretAccessKey": "fakekey",
+                "sessionToken": "fakesessiontoken",
+            },
+            "name": "bedrock",
+            "checked": False,
+            "active": True,
+            "model": "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            "modelProvider": "bedrock",
+        }
+    )

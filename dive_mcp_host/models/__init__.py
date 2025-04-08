@@ -1,10 +1,13 @@
 """Additional models for the MCP."""
 
+import logging
 from importlib import import_module
 from typing import Any
 
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
+
+logger = logging.getLogger("dive_mcp_host.models")
 
 
 def load_model(
@@ -37,6 +40,12 @@ def load_model(
     """
     # XXX Pass configurations/parameters to the model
 
+    logger.debug(
+        "Loading model %s with provider %s, kwargs: %s",
+        model_name,
+        provider,
+        kwargs,
+    )
     if provider == "dive":
         model_name_lower = model_name.replace("-", "_").replace(".", "_").lower()
         model_module = import_module(

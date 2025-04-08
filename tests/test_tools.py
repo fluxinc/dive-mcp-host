@@ -3,25 +3,21 @@ import json
 import logging
 import random
 import secrets
-import signal
-from collections.abc import AsyncGenerator, Callable
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from os import environ
+from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, cast
 from unittest.mock import patch
 
 import httpx
 import pytest
-import pytest_asyncio
 from langchain_core.messages import (
     AIMessage,
-    BaseMessage,
     HumanMessage,
     ToolCall,
     ToolMessage,
 )
 
-from dive_mcp_host.host.conf import HostConfig, LLMConfig
+from dive_mcp_host.host.conf import HostConfig
+from dive_mcp_host.host.conf.llm import LLMConfig
 from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.host.tools import (
     ClientState,
@@ -33,82 +29,6 @@ from dive_mcp_host.host.tools import (
 
 if TYPE_CHECKING:
     from dive_mcp_host.models.fake import FakeMessageToolModel
-
-
-@pytest.fixture
-def echo_tool_stdio_config() -> dict[str, ServerConfig]:  # noqa: D103
-    return {
-        "echo": ServerConfig(
-            name="echo",
-            command="python3",
-            args=[
-                "-m",
-                "dive_mcp_host.host.tools.echo",
-                "--transport=stdio",
-            ],
-            transport="stdio",
-        ),
-    }
-
-
-@pytest.fixture
-def echo_tool_local_sse_config(
-    unused_tcp_port_factory: Callable[[], int],
-) -> dict[str, ServerConfig]:
-    """Echo Local SSE server configuration."""
-    port = unused_tcp_port_factory()
-    return {
-        "echo": ServerConfig(
-            name="echo",
-            command="python3",
-            args=[
-                "-m",
-                "dive_mcp_host.host.tools.echo",
-                "--transport=sse",
-                "--host=localhost",
-                f"--port={port}",
-            ],
-            transport="sse",
-            url=f"http://localhost:{port}/sse",
-        ),
-    }
-
-
-@pytest_asyncio.fixture
-@asynccontextmanager
-async def echo_tool_sse_server(
-    unused_tcp_port_factory: Callable[[], int],
-) -> AsyncGenerator[tuple[int, dict[str, ServerConfig]], None]:
-    """Start the echo tool SSE server."""
-    port = unused_tcp_port_factory()
-    proc = await asyncio.create_subprocess_exec(
-        "python3",
-        "-m",
-        "dive_mcp_host.host.tools.echo",
-        "--transport=sse",
-        "--host=localhost",
-        f"--port={port}",
-    )
-    while True:
-        try:
-            _ = await httpx.AsyncClient().get(f"http://localhost:{port}/xxxx")
-            break
-        except httpx.HTTPStatusError:
-            break
-        except:  # noqa: E722
-            await asyncio.sleep(0.1)
-    try:
-        yield (
-            port,
-            {
-                "echo": ServerConfig(
-                    name="echo", url=f"http://localhost:{port}/sse", transport="sse"
-                )
-            },
-        )
-    finally:
-        proc.send_signal(signal.SIGKILL)
-        await proc.wait()
 
 
 @pytest.fixture
@@ -407,7 +327,7 @@ async def test_host_with_tools(echo_tool_stdio_config: dict[str, ServerConfig]) 
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            modelProvider="dive",
+            model_provider="dive",
         ),
         mcp_servers=echo_tool_stdio_config,
     )
@@ -451,7 +371,7 @@ async def test_mcp_server_info(echo_tool_stdio_config: dict[str, ServerConfig]) 
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            modelProvider="dive",
+            model_provider="dive",
         ),
         mcp_servers=echo_tool_stdio_config,
     )
@@ -476,7 +396,7 @@ async def test_mcp_server_info_no_such_file(
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            modelProvider="dive",
+            model_provider="dive",
         ),
         mcp_servers=no_such_file_mcp_server,
     )
@@ -515,53 +435,6 @@ async def test_mcp_server_info_sse_connection_refused(
             assert (
                 tool_manager.mcp_server_info["echo"].client_status == ClientState.FAILED
             )
-
-
-@pytest.mark.asyncio
-async def test_host_ollama(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
-    """Test the host context initialization."""
-    if (base_url := environ.get("OLLAMA_URL")) and (
-        olama_model := environ.get("OLLAMA_MODEL")
-    ):
-        # quen2.5:14b
-        config = HostConfig(
-            llm=LLMConfig(
-                model=olama_model,
-                modelProvider="ollama",
-                configuration={"base_url": base_url},
-            ),
-            mcp_servers=echo_tool_stdio_config,
-        )
-    else:
-        pytest.skip(
-            "need environment variable OLLAMA_URL and OLLAMA_MODEL to run this test"
-        )
-
-    async with (
-        DiveMcpHost(config) as mcp_host,
-        mcp_host.conversation(
-            # system_prompt=system_prompt(""),
-        ) as conversation,
-    ):
-        # r = await conversation.invoke("test mcp tool echo with 'hello'")
-        async for response in conversation.query(
-            HumanMessage(content="test mcp tool to echo message 'helloXXX'."),
-            stream_mode=["updates"],
-        ):
-            response = cast("tuple[str, dict[str, dict[str, BaseMessage]]]", response)
-            if msg_dict := response[1].get("tools"):
-                contents = list[str]()
-                for msg in msg_dict.get("messages", []):
-                    if isinstance(msg, ToolMessage):
-                        # XXX the content type is complex.
-                        if isinstance(msg.content, str):
-                            rep = json.loads(msg.content)
-                        else:
-                            rep = msg.content
-                        for r in rep:
-                            assert r["type"] == "text"  # type: ignore[index]
-                            contents.append(r["text"])  # type: ignore[index]
-                assert any("helloXXX" in c for c in contents)
 
 
 @pytest.mark.asyncio

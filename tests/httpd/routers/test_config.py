@@ -4,9 +4,12 @@ import os
 import pytest
 from fastapi import status
 
-from dive_mcp_host.host.conf import LLMConfig
+from dive_mcp_host.host.conf.llm import LLMConfig, LLMConfiguration
 from dive_mcp_host.httpd.routers.config import SaveModelSettingsRequest
-from dive_mcp_host.httpd.routers.models import McpServerConfig, ModelConfig
+from dive_mcp_host.httpd.routers.models import (
+    McpServerConfig,
+    ModelFullConfigs,
+)
 from tests import helper
 
 # Mock data
@@ -21,18 +24,19 @@ MOCK_MCP_CONFIG = {
     ),
 }
 
-MOCK_MODEL_CONFIG = ModelConfig(
+MOCK_MODEL_CONFIG = ModelFullConfigs(
     activeProvider="openai",
     enableTools=True,
     configs={
         "openai": LLMConfig(
             model="gpt-4o",
-            modelProvider="openai",
-            apiKey="sk-mock-key",
-            temperature=0.7,
-            topP=0.9,
-            maxTokens=4000,
-            configuration=None,
+            model_provider="openai",
+            api_key="sk-mock-key",
+            max_tokens=4000,
+            configuration=LLMConfiguration(
+                temperature=0.7,
+                top_p=0.9,
+            ),
         )
     },
 )
@@ -143,12 +147,13 @@ def test_get_model(test_client):
                 "enableTools": True,
                 "configs": {
                     "dive": {
+                        "configuration": {
+                            "temperature": 0.0,
+                            "topP": None,
+                        },
                         "model": "fake",
                         "modelProvider": "dive",
-                        "temperature": 0.0,
-                        "topP": None,
                         "maxTokens": None,
-                        "configuration": {},
                     },
                 },
             },
@@ -164,12 +169,13 @@ def test_post_model(test_client):
         provider=TEST_PROVIDER,
         modelSettings=LLMConfig(
             model="gpt-4o-mini",
-            modelProvider=TEST_PROVIDER,
-            apiKey="openai-api-key",
-            temperature=0.8,
-            topP=0.9,
-            maxTokens=8000,
-            configuration=None,
+            model_provider=TEST_PROVIDER,
+            api_key="openai-api-key",
+            max_tokens=8000,
+            configuration=LLMConfiguration(
+                temperature=0.8,
+                top_p=0.9,
+            ),
         ),
         enableTools=True,
     )
@@ -209,18 +215,20 @@ def test_post_model(test_client):
                         "model": "gpt-4o-mini",
                         "modelProvider": TEST_PROVIDER,
                         "apiKey": "openai-api-key",
-                        "temperature": 0.8,
-                        "topP": 0.9,
                         "maxTokens": 8000,
-                        "configuration": None,
+                        "configuration": {
+                            "temperature": 0.8,
+                            "topP": 0.9,
+                        },
                     },
                     "dive": {
                         "model": "fake",
                         "modelProvider": "dive",
-                        "temperature": 0.0,
-                        "topP": None,
                         "maxTokens": None,
-                        "configuration": {},
+                        "configuration": {
+                            "temperature": 0.0,
+                            "topP": None,
+                        },
                     },
                 },
             },
@@ -264,10 +272,11 @@ def test_post_model_replace_all(test_client):
                         "model": "gpt-4o",
                         "modelProvider": "openai",
                         "apiKey": "sk-mock-key",
-                        "temperature": 0.7,
-                        "topP": 0.9,
                         "maxTokens": 4000,
-                        "configuration": None,
+                        "configuration": {
+                            "temperature": 0.7,
+                            "topP": 0.9,
+                        },
                     },
                 },
             },

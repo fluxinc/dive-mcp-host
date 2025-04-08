@@ -14,7 +14,8 @@ from langchain_core.messages import (
 )
 from pydantic import AnyUrl
 
-from dive_mcp_host.host.conf import CheckpointerConfig, HostConfig, LLMConfig
+from dive_mcp_host.host.conf import CheckpointerConfig, HostConfig
+from dive_mcp_host.host.conf.llm import LLMConfig
 from dive_mcp_host.host.errors import ThreadNotFoundError
 from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.host.tools import ServerConfig
@@ -43,7 +44,7 @@ async def test_host_context() -> None:
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            modelProvider="dive",
+            model_provider="dive",
         ),
         mcp_servers={},
     )
@@ -82,7 +83,7 @@ async def test_query_two_messages() -> None:
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            modelProvider="dive",
+            model_provider="dive",
         ),
         mcp_servers={},
     )
@@ -117,7 +118,7 @@ async def test_get_messages(
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            modelProvider="dive",
+            model_provider="dive",
         ),
         mcp_servers=echo_tool_stdio_config,
         checkpointer=CheckpointerConfig(uri=AnyUrl(sqlite_uri)),
@@ -188,7 +189,7 @@ async def test_callable_system_prompt() -> None:
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            modelProvider="dive",
+            model_provider="dive",
         ),
         mcp_servers={},
     )
@@ -240,7 +241,7 @@ async def test_abort_conversation() -> None:
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            modelProvider="dive",
+            model_provider="dive",
         ),
         mcp_servers={},
     )
@@ -323,7 +324,7 @@ async def test_resend_message(sqlite_uri: str) -> None:
     config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            modelProvider="dive",
+            model_provider="dive",
         ),
         mcp_servers={},
         checkpointer=CheckpointerConfig(uri=AnyUrl(sqlite_uri)),
@@ -381,8 +382,8 @@ async def test_host_reload(echo_tool_stdio_config: dict[str, ServerConfig]) -> N
     initial_config = HostConfig(
         llm=LLMConfig(
             model="gpt-4o",
-            modelProvider="openai",
-            apiKey="fake",
+            model_provider="openai",
+            api_key="fake",
         ),
         mcp_servers=echo_tool_stdio_config,
     )
@@ -391,7 +392,7 @@ async def test_host_reload(echo_tool_stdio_config: dict[str, ServerConfig]) -> N
     new_config = HostConfig(
         llm=LLMConfig(
             model="fake",
-            modelProvider="dive",
+            model_provider="dive",
         ),
         mcp_servers={
             "echo": ServerConfig(
@@ -421,7 +422,8 @@ async def test_host_reload(echo_tool_stdio_config: dict[str, ServerConfig]) -> N
     async with DiveMcpHost(initial_config) as host:
         # Verify initial state
         assert len(host.tools) == 2  # echo and ignore tools
-        assert host.config.llm.temperature == 0
+        assert isinstance(host.config.llm, LLMConfig)
+        assert host.config.llm.configuration is None
 
         # Perform reload
         await host.reload(new_config, mock_reloader)

@@ -15,7 +15,7 @@ dependencies = [
     "langchain-anthropic>=0.3",
     "langchain-core>=0.3.46",
     "langchain-google-genai>=2.1",
-    "langchain-openai>=0.3",
+    "langchain-openai>=0.3.11",
     "langchain-ollama>=0.2",
     "langchain-mistralai>=0.2",
 	"langchain-aws>=0.2",
@@ -26,7 +26,7 @@ dependencies = [
     "langgraph>=0.3.18",
     "fastapi>=0.115.0",
     "mcp==1.6.0",
-    "pydantic>=2.10",
+    "pydantic>=2.11",
     "pywin32>=306; sys_platform == 'win32' or platform_system == 'Windows'",
     "sqlite-vec>=0.1.0",
     "psycopg[binary]>=3.2.5",
@@ -70,6 +70,10 @@ asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
 markers = ["integration: mark test as integration test"]
 timeout = 60
+filterwarnings = [
+    'ignore:Accessing this attribute on the instance',
+    'ignore:fields may not start with an underscore',
+]
 
 [tool.ruff]
 target-version = "py312"

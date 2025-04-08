@@ -4,9 +4,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-from dive_mcp_host.host.conf import LLMConfig
+from dive_mcp_host.host.conf.llm import LLMConfigTypes, get_llm_config_type
 from dive_mcp_host.httpd.conf.envs import DIVE_CONFIG_DIR
-from dive_mcp_host.httpd.routers.models import ModelConfig
+from dive_mcp_host.httpd.routers.models import ModelFullConfigs
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -26,8 +26,7 @@ class ModelManager:
         self._config_path: str = config_path or str(
             DIVE_CONFIG_DIR / "model_config.json"
         )
-        self._current_setting: LLMConfig | None = None
-        self._enable_tools: bool = True
+        self._current_setting: LLMConfigTypes | None = None
         self._config_dict: dict[str, Any] | None = None
 
     def initialize(self) -> bool:
@@ -64,7 +63,7 @@ class ModelManager:
         )
         return False
 
-    def _parse_settings(self, model_config: dict[str, Any]) -> LLMConfig | None:
+    def _parse_settings(self, model_config: dict[str, Any]) -> LLMConfigTypes | None:
         """Parse the model settings.
 
         Args:
@@ -73,58 +72,16 @@ class ModelManager:
         Returns:
             Model settings or None if configuration or active provider is not found.
         """
-        # Create configuration object if base_url exists
         try:
-            base_url = (
-                model_config.get("configuration", {}).get(
-                    "baseURL",
-                    model_config.get("configuration", {}).get("base_url"),
-                )
-                or model_config.get("baseURL", model_config.get("base_url"))
-                or ""
-            )
-            configuration = None
-            if base_url:
-                configuration = {"base_url": base_url}
-
-            # Create model settings with models.py version
-            return LLMConfig(
-                model=model_config.get("model", ""),
-                modelProvider=model_config.get(
-                    "modelProvider",
-                    model_config.get("model_provider", ""),
-                ),
-                configuration=configuration,
-                apiKey=model_config.get("apiKey", model_config.get("api_key")),
-                temperature=model_config.get("temperature"),
-                topP=model_config.get("topP", model_config.get("top_p")),
-                maxTokens=model_config.get("maxTokens", model_config.get("max_tokens")),
-                **{
-                    k: v
-                    for k, v in model_config.items()
-                    if k
-                    not in [
-                        "model",
-                        "modelProvider",
-                        "model_provider",
-                        "base_url",
-                        "apiKey",
-                        "api_key",
-                        "temperature",
-                        "topP",
-                        "top_p",
-                        "maxTokens",
-                        "max_tokens",
-                        "configuration",
-                    ]
-                },
+            return get_llm_config_type(model_config["modelProvider"]).model_validate(
+                model_config
             )
         except (ValueError, TypeError, KeyError) as e:
             logger.error("Error parsing model settings: %s", e)
             return None
 
     @property
-    def current_setting(self) -> LLMConfig | None:
+    def current_setting(self) -> LLMConfigTypes | None:
         """Get the active model settings.
 
         Returns:
@@ -133,7 +90,7 @@ class ModelManager:
         return self._current_setting
 
     @property
-    def full_config(self) -> ModelConfig | None:
+    def full_config(self) -> ModelFullConfigs | None:
         """Get the full model configuration.
 
         Returns:
@@ -142,7 +99,7 @@ class ModelManager:
         if not self._config_dict:
             return None
 
-        return ModelConfig(
+        return ModelFullConfigs(
             activeProvider=self._config_dict.get(
                 "activeProvider", self._config_dict.get("active_provider", "")
             ),
@@ -157,7 +114,7 @@ class ModelManager:
         """Get the configuration path."""
         return self._config_path
 
-    def get_settings_by_provider(self, provider: str) -> LLMConfig | None:
+    def get_settings_by_provider(self, provider: str) -> LLMConfigTypes | None:
         """Get the model settings by provider.
 
         Args:
@@ -183,18 +140,16 @@ class ModelManager:
     def save_single_settings(
         self,
         provider: str,
-        upload_model_settings: LLMConfig,
-        enable_tools_: bool | None = None,
+        upload_model_settings: LLMConfigTypes,
+        enable_tools: bool = True,
     ) -> None:
         """Save single model configuration.
 
         Args:
             provider: Model provider name.
             upload_model_settings: Model settings to upload.
-            enable_tools_: Whether to enable tools.
+            enable_tools: Whether to enable tools.
         """
-        enable_tools = True if enable_tools_ is None else enable_tools_
-
         if not self._config_dict:
             self._config_dict = {
                 "activeProvider": provider,
@@ -214,12 +169,14 @@ class ModelManager:
             )
             self._config_dict["enableTools"] = enable_tools
 
-        with Path(self._config_path).open("w", encoding="utf-8") as f:
+        tmp = Path(f"{self._config_path}.tmp")
+        with tmp.open("w", encoding="utf-8") as f:
             json.dump(self._config_dict, f, indent=2)
+        tmp.rename(self._config_path)
 
     def replace_all_settings(
         self,
-        upload_model_settings: ModelConfig,
+        upload_model_settings: ModelFullConfigs,
     ) -> None:
         """Replace all model configurations.
 
@@ -229,12 +186,14 @@ class ModelManager:
         Returns:
             True if successful.
         """
-        with Path(self._config_path).open("w", encoding="utf-8") as f:
+        tmp = Path(f"{self._config_path}.tmp")
+        with tmp.open("w", encoding="utf-8") as f:
             json.dump(
                 upload_model_settings.model_dump(by_alias=True, exclude_none=True),
                 f,
                 indent=2,
             )
+        tmp.rename(self._config_path)
 
 
 if __name__ == "__main__":

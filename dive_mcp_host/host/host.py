@@ -98,7 +98,7 @@ class DiveMcpHost(ContextProtocol):
         if self._model:
             return
         model = load_model(
-            self._config.llm.modelProvider,
+            self._config.llm.model_provider,
             self._config.llm.model,
             **self._config.llm.to_load_model_kwargs(),
         )

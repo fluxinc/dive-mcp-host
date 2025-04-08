@@ -85,6 +85,7 @@ class FakeMessageToolModel(BaseChatModel):
 def load_model(
     *,
     responses: list[AIMessage] | None = None,
+    **_kwargs: dict,
 ) -> FakeMessageToolModel:
     """Load the fake model."""
     return FakeMessageToolModel(responses=responses or default_responses())
