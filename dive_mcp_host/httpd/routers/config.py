@@ -1,3 +1,5 @@
+from logging import getLogger
+
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
@@ -15,13 +17,15 @@ from .models import (
     ResultResponse,
 )
 
+logger = getLogger(__name__)
+
 config = APIRouter(tags=["config"])
 
 
 class ConfigResult[T](ResultResponse):
     """Generic configuration result that extends ResultResponse with a config field."""
 
-    config: T
+    config: T | None
 
 
 class SaveConfigResult(ResultResponse):
@@ -60,7 +64,11 @@ async def get_mcp_server(
         ConfigResult[McpServers]: Configuration for MCP servers.
     """
     if app.mcp_server_config_manager.current_config is None:
-        raise ValueError("MCP server configuration not found")
+        logger.warning("MCP server configuration not found")
+        return ConfigResult(
+            success=True,
+            config=McpServers(),
+        )
 
     config = McpServers.model_validate(
         app.mcp_server_config_manager.current_config.model_dump(by_alias=True)
@@ -75,13 +83,14 @@ async def get_mcp_server(
 async def post_mcp_server(
     servers: McpServers,
     app: DiveHostAPI = Depends(get_app),
+    force: bool = False,
 ) -> SaveConfigResult:
     """Save MCP server configurations.
 
     Args:
         servers (McpServers): The server configurations to save.
         app (DiveHostAPI): The DiveHostAPI instance.
-
+        force (bool): If True, reload all mcp servers even if they are not changed.
 
     Returns:
         SaveConfigResult: Result of the save operation with any errors.
@@ -92,7 +101,9 @@ async def post_mcp_server(
         raise ValueError("Failed to update MCP server configurations")
 
     # Reload host
-    await app.dive_host["default"].reload(new_config=app.load_host_config())
+    await app.dive_host["default"].reload(
+        new_config=app.load_host_config(), force_mcp=force
+    )
 
     # Get failed MCP servers
     failed_servers: list[McpServerError] = []
@@ -121,7 +132,11 @@ async def get_model(
         ConfigResult[ModelConfig]: Current model configuration.
     """
     if app.model_config_manager.full_config is None:
-        raise ValueError("Model configuration not found")
+        logger.warning("Model configuration not found")
+        return ConfigResult(
+            success=True,
+            config=None,
+        )
 
     return ConfigResult(success=True, config=app.model_config_manager.full_config)
 

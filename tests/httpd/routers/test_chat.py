@@ -7,14 +7,12 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
-import pytest
 from fastapi import status
 from langchain_core.messages import AIMessage
 
 if TYPE_CHECKING:
     from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.httpd.database.models import Chat, Message
-from dive_mcp_host.httpd.routers.models import UserInputError
 from tests import helper
 
 from .conftest import TEST_CHAT_ID
@@ -129,9 +127,10 @@ def test_abort_chat(test_client):
     app.dive_host["default"]._model.sleep = 3  # type: ignore
 
     # abort a non-existent chat
-    with pytest.raises(UserInputError) as excinfo:
-        client.post("/api/chat/00000000-0000-0000-0000-000000000000/abort")
-    assert "Chat not found" in str(excinfo.value)
+    response = client.post("/api/chat/00000000-0000-0000-0000-000000000000/abort")
+    assert response.status_code == BAD_REQUEST_CODE
+    body = response.json()
+    assert "Chat not found" in body["message"]
 
     fake_id = uuid.uuid4()
 
@@ -309,14 +308,15 @@ def test_edit_chat(test_client):
 def test_edit_chat_missing_params(test_client):
     """Test the /api/chat/edit endpoint with missing required parameters."""
     client, app = test_client
-    with pytest.raises(UserInputError) as excinfo:
-        client.post(
-            "/api/chat/edit",
-            data={
-                "content": "edited message",
-            },
-        )
-    assert "Chat ID and Message ID are required" in str(excinfo.value)
+    response = client.post(
+        "/api/chat/edit",
+        data={
+            "content": "edited message",
+        },
+    )
+    assert response.status_code == BAD_REQUEST_CODE
+    body = response.json()
+    assert "Chat ID and Message ID are required" in body["message"]
 
 
 def test_retry_chat(test_client):
@@ -385,11 +385,12 @@ def test_retry_chat(test_client):
 def test_retry_chat_missing_params(test_client):
     """Test the /api/chat/retry endpoint with missing required parameters."""
     client, app = test_client
-    with pytest.raises(UserInputError) as excinfo:
-        client.post("/api/chat/retry", data={})
+    response = client.post("/api/chat/retry", data={})
+    assert response.status_code == BAD_REQUEST_CODE
 
+    body = response.json()
     # Verify the exception message
-    assert "Chat ID and Message ID are required" in str(excinfo.value)
+    assert "Chat ID and Message ID are required" in body["message"]
 
 
 def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
