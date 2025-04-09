@@ -50,14 +50,13 @@ class ModelManager:
                 self._current_setting = get_llm_config_type(
                     model_config.model_provider
                 ).model_validate(model_config.model_dump())
-                return True
-            logger.error(
-                "Model settings not found for active provider: %s",
-                self._full_config.active_provider,
-            )
+            else:
+                self._current_setting = None
         except ValidationError as e:
             logger.error("Error parsing model settings: %s", e)
-        return False
+            return False
+
+        return True
 
     @property
     def current_setting(self) -> LLMConfigTypes | None:

@@ -46,6 +46,27 @@ MOCK_MODEL_CONFIG = ModelFullConfigs.model_validate(
     }
 )
 
+MOCK_MODEL_CONFIG_WITH_NONE_PROVIDER = ModelFullConfigs.model_validate(
+    {
+        "activeProvider": "none",
+        "enableTools": True,
+        "configs": {
+            "openai": {
+                "active": True,
+                "checked": False,
+                "model": "gpt-4o",
+                "modelProvider": "openai",
+                "apiKey": "sk-mock-key",
+                "maxTokens": 4000,
+                "configuration": {
+                    "temperature": 0.7,
+                    "topP": 0.9,
+                },
+            }
+        },
+    }
+)
+
 # Constants
 SUCCESS_CODE = status.HTTP_200_OK
 BAD_REQUEST_CODE = status.HTTP_400_BAD_REQUEST
@@ -304,18 +325,18 @@ def test_post_model(test_client):
     )
 
 
-def test_post_model_replace_all(test_client):
+def test_post_model_replace_all_with_none_provider(test_client):
     """Test the /api/config/model/replaceAll POST endpoint."""
     app: DiveHostAPI
     client, app = test_client
-    model_config_data = MOCK_MODEL_CONFIG.model_dump(by_alias=True)
+    model_config_data = MOCK_MODEL_CONFIG_WITH_NONE_PROVIDER.model_dump(by_alias=True)
 
     response = client.post(
         "/api/config/model/replaceAll",
         json=model_config_data,
     )
 
-    assert app.dive_host["default"].model._llm_type == "openai-chat"
+    assert app.dive_host["default"].model._llm_type == "fake-model"
 
     assert response.status_code == SUCCESS_CODE
 
@@ -336,7 +357,7 @@ def test_post_model_replace_all(test_client):
             "success": True,
             "message": None,
             "config": {
-                "activeProvider": "openai",
+                "activeProvider": "none",
                 "enableTools": True,
                 "configs": {
                     "openai": {
