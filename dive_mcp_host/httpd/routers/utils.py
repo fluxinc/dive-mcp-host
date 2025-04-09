@@ -10,9 +10,11 @@ from uuid import uuid4
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.messages.tool import ToolMessage
+from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel
 from starlette.datastructures import State
 
+from dive_mcp_host.httpd.conf.log import TRACE
 from dive_mcp_host.httpd.database.models import (
     Message,
     NewMessage,
@@ -138,6 +140,7 @@ class ChatProcessor:
         self.stream = stream
         self.store: Store = app.store
         self.dive_host: DiveMcpHost = app.dive_host["default"]
+        self._str_output_parser = StrOutputParser()
 
     async def handle_chat(  # noqa: C901
         self,
@@ -371,6 +374,7 @@ class ChatProcessor:
             if res_type == "messages":
                 message, _ = res_content
                 if isinstance(message, AIMessage):
+                    logger.log(TRACE, "got AI message: %s", message.model_dump_json())
                     event_type = "tool_calls"
                     if calls := message.tool_calls:
                         content = [
@@ -379,8 +383,9 @@ class ChatProcessor:
                         ]
                     else:
                         event_type = "text"
-                        content = str(message.content)
+                        content = self._str_output_parser.invoke(message)
                 elif isinstance(message, ToolMessage):
+                    logger.log(TRACE, "got tool message: %s", message.model_dump_json())
                     event_type = "tool_result"
                     result = message.content
                     with suppress(json.JSONDecodeError):
@@ -396,11 +401,20 @@ class ChatProcessor:
                     # idk what is this
                     logger.warning("Unknown message type: %s", message)
             elif res_type == "values" and len(res_content["messages"]) >= 2:  # type: ignore  # noqa: PLR2004
+                logger.log(TRACE, "got values: %s", len(res_content["messages"]))  # type: ignore
                 latest_messages = res_content["messages"]  # type: ignore
             else:
-                pass
+                logger.warning(
+                    "unknown res_type: %s, res_content: %s", res_type, res_content
+                )
 
             if event_type and content:
+                logger.log(
+                    TRACE,
+                    "write event_type: %s, content: %s",
+                    event_type,
+                    content,
+                )
                 await self.stream.write(StreamMessage(type=event_type, content=content))
 
         # Find the most recent user and AI messages from newest to oldest
