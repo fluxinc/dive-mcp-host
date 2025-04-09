@@ -1,15 +1,16 @@
 import json
 import os
+from typing import TYPE_CHECKING
 
 import pytest
 from fastapi import status
 
-from dive_mcp_host.host.conf.llm import LLMConfig, LLMConfiguration
 from dive_mcp_host.httpd.routers.config import SaveModelSettingsRequest
-from dive_mcp_host.httpd.routers.models import (
-    McpServerConfig,
-    ModelFullConfigs,
-)
+from dive_mcp_host.httpd.routers.models import McpServerConfig, ModelFullConfigs
+
+if TYPE_CHECKING:
+    from dive_mcp_host.httpd.server import DiveHostAPI
+
 from tests import helper
 
 # Mock data
@@ -24,21 +25,25 @@ MOCK_MCP_CONFIG = {
     ),
 }
 
-MOCK_MODEL_CONFIG = ModelFullConfigs(
-    activeProvider="openai",
-    enableTools=True,
-    configs={
-        "openai": LLMConfig(
-            model="gpt-4o",
-            model_provider="openai",
-            api_key="sk-mock-key",
-            max_tokens=4000,
-            configuration=LLMConfiguration(
-                temperature=0.7,
-                top_p=0.9,
-            ),
-        )
-    },
+MOCK_MODEL_CONFIG = ModelFullConfigs.model_validate(
+    {
+        "activeProvider": "openai",
+        "enableTools": True,
+        "configs": {
+            "openai": {
+                "active": True,
+                "checked": False,
+                "model": "gpt-4o",
+                "modelProvider": "openai",
+                "apiKey": "sk-mock-key",
+                "maxTokens": 4000,
+                "configuration": {
+                    "temperature": 0.7,
+                    "topP": 0.9,
+                },
+            }
+        },
+    }
 )
 
 # Constants
@@ -220,21 +225,26 @@ def test_get_model(test_client):
 
 def test_post_model(test_client):
     """Test the /api/config/model POST endpoint."""
-    client, _ = test_client
+    app: DiveHostAPI
+    client, app = test_client
     # Prepare request data
-    model_settings = SaveModelSettingsRequest(
-        provider=TEST_PROVIDER,
-        modelSettings=LLMConfig(
-            model="gpt-4o-mini",
-            model_provider=TEST_PROVIDER,
-            api_key="openai-api-key",
-            max_tokens=8000,
-            configuration=LLMConfiguration(
-                temperature=0.8,
-                top_p=0.9,
-            ),
-        ),
-        enableTools=True,
+    model_settings = SaveModelSettingsRequest.model_validate(
+        {
+            "provider": TEST_PROVIDER,
+            "modelSettings": {
+                "active": True,
+                "checked": False,
+                "model": "gpt-4o-mini",
+                "modelProvider": TEST_PROVIDER,
+                "apiKey": "openai-api-key",
+                "maxTokens": 8000,
+                "configuration": {
+                    "temperature": 0.8,
+                    "topP": 0.9,
+                },
+            },
+            "enableTools": True,
+        }
     )
 
     # Send request
@@ -242,6 +252,7 @@ def test_post_model(test_client):
         "/api/config/model",
         json=model_settings.model_dump(by_alias=True),
     )
+    assert app.dive_host["default"].model._llm_type == "openai-chat"
 
     # Verify response status code
     assert response.status_code == SUCCESS_CODE
@@ -295,13 +306,16 @@ def test_post_model(test_client):
 
 def test_post_model_replace_all(test_client):
     """Test the /api/config/model/replaceAll POST endpoint."""
-    client, _ = test_client
+    app: DiveHostAPI
+    client, app = test_client
     model_config_data = MOCK_MODEL_CONFIG.model_dump(by_alias=True)
 
     response = client.post(
         "/api/config/model/replaceAll",
         json=model_config_data,
     )
+
+    assert app.dive_host["default"].model._llm_type == "openai-chat"
 
     assert response.status_code == SUCCESS_CODE
 
@@ -326,6 +340,8 @@ def test_post_model_replace_all(test_client):
                 "enableTools": True,
                 "configs": {
                     "openai": {
+                        "active": True,
+                        "checked": False,
                         "model": "gpt-4o",
                         "modelProvider": "openai",
                         "apiKey": "sk-mock-key",

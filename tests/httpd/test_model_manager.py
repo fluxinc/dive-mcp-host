@@ -6,9 +6,9 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 
-from dive_mcp_host.host.conf.llm import LLMConfig, LLMConfiguration
+from dive_mcp_host.host.conf.llm import LLMConfiguration
 from dive_mcp_host.httpd.conf.model.manager import ModelManager
-from dive_mcp_host.httpd.routers.models import ModelFullConfigs
+from dive_mcp_host.httpd.routers.models import ModelFullConfigs, ModelSingleConfig
 
 # Register custom mark
 integration = pytest.mark.integration
@@ -66,16 +66,18 @@ class TestModelManager:
         """Test saving model configuration."""
         manager = ModelManager(mock_config_file)
         # Create model settings
-        test_settings = LLMConfig(
-            model="new_model",
-            model_provider="new_provider",
-            api_key=None,
-            configuration=LLMConfiguration(
-                base_url=None,  # type: ignore
-                temperature=None,
-                top_p=None,
-            ),
-            max_tokens=None,
+        test_settings = ModelSingleConfig.model_validate(
+            {
+                "model": "new_model",
+                "model_provider": "new_provider",
+                "api_key": None,
+                "configuration": {
+                    "base_url": None,  # type: ignore
+                    "temperature": None,
+                    "top_p": None,
+                },
+                "max_tokens": None,
+            },
         )
 
         # Set mock return value
@@ -93,10 +95,10 @@ class TestModelManager:
         """Test replacing the entire model configuration."""
         manager = ModelManager(mock_config_file)
         new_config = ModelFullConfigs(
-            activeProvider="replaced_provider",
-            enableTools=True,
+            active_provider="replaced_provider",
+            enable_tools=True,
             configs={
-                "replaced_provider": LLMConfig(
+                "replaced_provider": ModelSingleConfig(
                     model="replaced_model",
                     model_provider="replaced_provider",
                     api_key=None,
@@ -143,16 +145,6 @@ class TestModelManager:
         assert settings.model_provider == "test_provider"
 
     @pytest.mark.asyncio
-    async def test_get_available_providers(self, mock_config_file):
-        """Test getting available providers."""
-        manager = ModelManager(mock_config_file)
-        manager.initialize()
-        providers = manager.get_available_providers()
-
-        assert providers is not None
-        assert "test_provider" in providers
-
-    @pytest.mark.asyncio
     async def test_parse_settings(self, mock_config_file):
         """Test parsing model settings."""
         manager = ModelManager(mock_config_file)
@@ -163,11 +155,11 @@ class TestModelManager:
         settings = manager.get_settings_by_provider("test_provider")
 
         assert settings is not None
-        assert settings.model == "test_model"
-        assert settings.model_provider == "test_provider"
-        assert settings.api_key == "test_key"
-        assert settings.configuration is not None
-        assert settings.configuration.base_url == "http://test.url"
+        assert settings.model == "test_model"  # type: ignore
+        assert settings.model_provider == "test_provider"  # type: ignore
+        assert settings.api_key == "test_key"  # type: ignore
+        assert settings.configuration is not None  # type: ignore
+        assert settings.configuration.base_url == "http://test.url"  # type: ignore
 
     @pytest.mark.asyncio
     async def test_get_settings_by_provider(self, mock_config_file):
@@ -177,11 +169,11 @@ class TestModelManager:
         # Test existing provider
         settings = manager.get_settings_by_provider("test_provider")
         assert settings is not None
-        assert settings.model == "test_model"
-        assert settings.model_provider == "test_provider"
-        assert settings.api_key == "test_key"
-        assert settings.configuration is not None
-        assert settings.configuration.base_url == "http://test.url"
+        assert settings.model == "test_model"  # type: ignore
+        assert settings.model_provider == "test_provider"  # type: ignore
+        assert settings.api_key == "test_key"  # type: ignore
+        assert settings.configuration is not None  # type: ignore
+        assert settings.configuration.base_url == "http://test.url"  # type: ignore
 
         # Test non-existing provider
         non_existing_settings = manager.get_settings_by_provider(

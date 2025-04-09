@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from pydantic import AnyUrl
 
 from dive_mcp_host.host.conf import CheckpointerConfig
-from dive_mcp_host.host.conf.llm import LLMConfig, LLMConfiguration
+from dive_mcp_host.host.conf.llm import LLMConfiguration
 from dive_mcp_host.httpd.app import DiveHostAPI, create_app
 from dive_mcp_host.httpd.conf.mcpserver.manager import Config, MCPServerConfig
 from dive_mcp_host.httpd.conf.service.manager import (
@@ -92,16 +92,18 @@ def config_files() -> Generator[ConfigFileNames, None, None]:
         mcp_server_config_file.flush()
 
         model_config_file.write(
-            ModelFullConfigs(
-                activeProvider="dive",
-                enableTools=True,
-                configs={
-                    "dive": LLMConfig(
-                        model_provider="dive",
-                        model="fake",
-                        configuration=LLMConfiguration(),
-                    ),
-                },
+            ModelFullConfigs.model_validate(
+                {
+                    "activeProvider": "dive",
+                    "enableTools": True,
+                    "configs": {
+                        "dive": {
+                            "modelProvider": "dive",
+                            "model": "fake",
+                            "configuration": LLMConfiguration(),
+                        },
+                    },
+                }
             )
             .model_dump_json(by_alias=True)
             .encode("utf-8")

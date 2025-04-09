@@ -41,7 +41,10 @@ Use the following command to start the HTTP service:
 dive_httpd
 ```
 
-This will start a FastAPI server, providing REST API and WebSocket endpoints.
+The server will start on:
+- Host: 0.0.0.0
+- Port: 8000
+- Log Level: INFO (configurable in the service config)
 
 ### Using the Command Line Tool
 

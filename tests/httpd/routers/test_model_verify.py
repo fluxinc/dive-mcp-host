@@ -18,6 +18,7 @@ MOCK_MODEL_SETTING = {
     "temperature": 0.7,
     "topP": 0.9,
     "maxTokens": 4000,
+    "active": True,
     "configuration": {"base_url": "https://api.openai.com/v1"},
 }
 
