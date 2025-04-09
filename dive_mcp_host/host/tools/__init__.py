@@ -139,16 +139,29 @@ class ToolManager(ContextProtocol):
             for name in servers:
                 tg.create_task(_shutdown_task(name))
 
-    async def reload(self, new_configs: dict[str, ServerConfig]) -> None:
-        """Reload the MCP servers."""
-        to_shutdown = set(self._configs.keys()) - set(new_configs.keys())
-        to_launch = set(new_configs.keys()) - set(self._configs.keys())
+    async def reload(
+        self, new_configs: dict[str, ServerConfig], force: bool = False
+    ) -> None:
+        """Reload the MCP servers.
 
-        # check if the config has changed
-        for key in set(self._configs) - to_shutdown:
-            if self._configs[key] != new_configs[key]:
-                to_shutdown.add(key)
-                to_launch.add(key)
+        Args:
+            new_configs: The new MCP server configurations.
+            force: If True, reload all MCP servers even if they are not changed.
+        """
+        logger.debug("Reloading MCP servers, force: %s", force)
+
+        if not force:
+            to_shutdown = set(self._configs.keys()) - set(new_configs.keys())
+            to_launch = set(new_configs.keys()) - set(self._configs.keys())
+
+            # check if the config has changed
+            for key in set(self._configs) - to_shutdown:
+                if self._configs[key] != new_configs[key]:
+                    to_shutdown.add(key)
+                    to_launch.add(key)
+        else:
+            to_shutdown = set(self._configs.keys())
+            to_launch = set(new_configs.keys())
 
         self._configs = new_configs
 
