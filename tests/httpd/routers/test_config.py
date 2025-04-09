@@ -336,7 +336,7 @@ def test_post_model_replace_all(test_client):
         json=model_config_data,
     )
 
-    assert app.dive_host["default"].model._llm_type == "openai"
+    assert app.dive_host["default"].model._llm_type == "openai-chat"
 
     assert response.status_code == SUCCESS_CODE
 
