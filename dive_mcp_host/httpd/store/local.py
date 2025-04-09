@@ -77,7 +77,7 @@ class LocalStore(Store):
         image = Image.open(path)
 
         image.resize((800, 800))
-        if image.mode == "P":
+        if image.mode in ["P", "RGBA"]:
             image = image.convert("RGB")
 
         buffer = BytesIO()
