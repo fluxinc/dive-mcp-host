@@ -54,7 +54,9 @@ class McpServerConfig(BaseModel):
 class McpServers(BaseModel):
     """Collection of MCP server configurations."""
 
-    mcp_servers: dict[str, McpServerConfig] = Field(alias="mcpServers")
+    mcp_servers: dict[str, McpServerConfig] = Field(
+        alias="mcpServers", default_factory=dict
+    )
 
 
 class McpServerError(BaseModel):

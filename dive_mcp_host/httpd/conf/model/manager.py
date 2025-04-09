@@ -35,9 +35,13 @@ class ModelManager:
         logger.info("Initializing ModelManager from %s", self._config_path)
         if env_config := os.environ.get("DIVE_MODEL_CONFIG_CONTENT"):
             config_content = env_config
-        else:
+        elif Path(self._config_path).exists():
             with Path(self._config_path).open(encoding="utf-8") as f:
                 config_content = f.read()
+        else:
+            logger.warning("Model configuration not found")
+            return False
+
         config_dict = json.loads(config_content)
         if not config_dict:
             logger.error("Model configuration not found")
