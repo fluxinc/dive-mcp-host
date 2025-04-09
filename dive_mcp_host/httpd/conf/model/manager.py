@@ -35,9 +35,13 @@ class ModelManager:
         logger.info("Initializing ModelManager from %s", self._config_path)
         if env_config := os.environ.get("DIVE_MODEL_CONFIG_CONTENT"):
             config_content = env_config
-        else:
+        elif Path(self._config_path).exists():
             with Path(self._config_path).open(encoding="utf-8") as f:
                 config_content = f.read()
+        else:
+            logger.warning("Model configuration not found")
+            return False
+
         config_dict = json.loads(config_content)
         if not config_dict:
             logger.error("Model configuration not found")
@@ -50,14 +54,13 @@ class ModelManager:
                 self._current_setting = get_llm_config_type(
                     model_config.model_provider
                 ).model_validate(model_config.model_dump())
-                return True
-            logger.error(
-                "Model settings not found for active provider: %s",
-                self._full_config.active_provider,
-            )
+            else:
+                self._current_setting = None
         except ValidationError as e:
             logger.error("Error parsing model settings: %s", e)
-        return False
+            return False
+
+        return True
 
     @property
     def current_setting(self) -> LLMConfigTypes | None:

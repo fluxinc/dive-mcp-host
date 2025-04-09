@@ -72,9 +72,12 @@ class MCPServerManager:
 
         if env_config:
             config_content = env_config
-        else:
+        elif Path(self._config_path).exists():
             with Path(self._config_path).open(encoding="utf-8") as f:
                 config_content = f.read()
+        else:
+            logger.warning("MCP server configuration not found")
+            return
 
         config_dict = json.loads(config_content)
         self._current_config = Config(**config_dict)
