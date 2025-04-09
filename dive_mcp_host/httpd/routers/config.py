@@ -1,3 +1,5 @@
+from logging import getLogger
+
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
@@ -15,13 +17,15 @@ from .models import (
     ResultResponse,
 )
 
+logger = getLogger(__name__)
+
 config = APIRouter(tags=["config"])
 
 
 class ConfigResult[T](ResultResponse):
     """Generic configuration result that extends ResultResponse with a config field."""
 
-    config: T
+    config: T | None
 
 
 class SaveConfigResult(ResultResponse):
@@ -60,7 +64,11 @@ async def get_mcp_server(
         ConfigResult[McpServers]: Configuration for MCP servers.
     """
     if app.mcp_server_config_manager.current_config is None:
-        raise ValueError("MCP server configuration not found")
+        logger.warning("MCP server configuration not found")
+        return ConfigResult(
+            success=True,
+            config=McpServers(),
+        )
 
     config = McpServers.model_validate(
         app.mcp_server_config_manager.current_config.model_dump(by_alias=True)
@@ -121,7 +129,11 @@ async def get_model(
         ConfigResult[ModelConfig]: Current model configuration.
     """
     if app.model_config_manager.full_config is None:
-        raise ValueError("Model configuration not found")
+        logger.warning("Model configuration not found")
+        return ConfigResult(
+            success=True,
+            config=None,
+        )
 
     return ConfigResult(success=True, config=app.model_config_manager.full_config)
 
