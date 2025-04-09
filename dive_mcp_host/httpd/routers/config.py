@@ -177,6 +177,10 @@ async def post_model_replace_all(
     app.model_config_manager.replace_all_settings(model_config)
     if not app.model_config_manager.initialize():
         raise ValueError("Failed to reload model configuration")
+
+    # Reload host
+    await app.dive_host["default"].reload(new_config=app.load_host_config())
+
     return ResultResponse(success=True)
 
 
