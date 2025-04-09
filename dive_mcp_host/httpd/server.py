@@ -9,7 +9,12 @@ from typing import Any, Literal
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from dive_mcp_host.host.conf import HostConfig, ServerConfig
 from dive_mcp_host.host.conf.llm import LLMConfig
@@ -77,6 +82,8 @@ class DiveHostAPI(FastAPI):
         self._listen_port: int | None = None
         self._report_status_file: str | None = None
         self._report_status_fd: int | None = None
+
+        self._engine: AsyncEngine | None = None
 
         if self._service_config_manager.current_setting is None:
             raise ValueError("Service manager is not initialized")
@@ -218,7 +225,8 @@ class DiveHostAPI(FastAPI):
     async def cleanup(self) -> None:
         """Cleanup the DiveHostAPI."""
         logger.info("Server Cleanup")
-        await self._engine.dispose()
+        if self._engine:
+            await self._engine.dispose()
         logger.info("Server Cleanup Complete")
 
     def set_status_report_info(
