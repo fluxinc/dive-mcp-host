@@ -83,13 +83,14 @@ async def get_mcp_server(
 async def post_mcp_server(
     servers: McpServers,
     app: DiveHostAPI = Depends(get_app),
+    force: bool = False,
 ) -> SaveConfigResult:
     """Save MCP server configurations.
 
     Args:
         servers (McpServers): The server configurations to save.
         app (DiveHostAPI): The DiveHostAPI instance.
-
+        force (bool): If True, reload all mcp servers even if they are not changed.
 
     Returns:
         SaveConfigResult: Result of the save operation with any errors.
@@ -100,7 +101,9 @@ async def post_mcp_server(
         raise ValueError("Failed to update MCP server configurations")
 
     # Reload host
-    await app.dive_host["default"].reload(new_config=app.load_host_config())
+    await app.dive_host["default"].reload(
+        new_config=app.load_host_config(), force_mcp=force
+    )
 
     # Get failed MCP servers
     failed_servers: list[McpServerError] = []

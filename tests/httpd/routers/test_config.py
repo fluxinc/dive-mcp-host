@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from fastapi import status
+from fastapi.testclient import TestClient
 
 from dive_mcp_host.httpd.routers.config import SaveModelSettingsRequest
 from dive_mcp_host.httpd.routers.models import McpServerConfig, ModelFullConfigs
@@ -176,6 +177,56 @@ def test_post_mcp_server(test_client):
     response = client.post(
         "/api/config/mcpserver",
         json=server_data,
+    )
+    assert response.status_code == SUCCESS_CODE
+    response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+        },
+    )
+
+    response = client.get("/api/config/mcpserver")
+    assert response.status_code == SUCCESS_CODE
+    response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "message": None,
+            "config": {
+                "mcpServers": {
+                    "default": {
+                        "transport": "stdio",
+                        "enabled": True,
+                        "command": "node",
+                        "args": [
+                            "./mcp-server.js",
+                        ],
+                        "env": {"NODE_ENV": "production"},
+                        "url": None,
+                    },
+                },
+            },
+        },
+    )
+
+
+def test_post_mcp_server_with_force(test_client: tuple[TestClient, "DiveHostAPI"]):
+    """Test the /api/config/mcpserver POST endpoint."""
+    client, _ = test_client
+    # Prepare request data - convert McpServerConfig objects to dict
+    mock_server_dict = {}
+    for key, value in MOCK_MCP_CONFIG.items():
+        mock_server_dict[key] = value.model_dump()
+
+    server_data = {"mcpServers": mock_server_dict}
+
+    response = client.post(
+        "/api/config/mcpserver",
+        json=server_data,
+        params={"force": 1},
     )
     assert response.status_code == SUCCESS_CODE
     response_data = response.json()

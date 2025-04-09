@@ -153,12 +153,14 @@ class DiveMcpHost(ContextProtocol):
         self,
         new_config: HostConfig,
         reloader: Callable[[], Awaitable[None]] | None = None,
+        force_mcp: bool = False,
     ) -> None:
         """Reload the host with a new configuration.
 
         Args:
             new_config: The new configuration.
             reloader: The reloader function.
+            force_mcp: If True, reload all MCP servers even if they are not changed.
 
         The reloader function is called when the host is ready to reload. This means
         all ongoing chats have completed and no new queries are being processed.
@@ -179,7 +181,9 @@ class DiveMcpHost(ContextProtocol):
                 self._model = None
                 await self._init_models()
 
-            await self._tool_manager.reload(new_config.mcp_servers)
+            await self._tool_manager.reload(
+                new_configs=new_config.mcp_servers, force=force_mcp
+            )
             self._tools = self._tool_manager.langchain_tools()
 
             # Reload checkpointer if needed
