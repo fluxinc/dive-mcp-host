@@ -287,6 +287,8 @@ def test_edit_chat(test_client):
                 assert new_user_message_id == user_message_id
             case "text":
                 assert fist_ai_reply != content
+    assert new_ai_message_id
+    assert new_user_message_id
     response = client.get(f"/api/chat/{test_chat_id}")
     assert response.status_code == SUCCESS_CODE
     response_data = response.json()

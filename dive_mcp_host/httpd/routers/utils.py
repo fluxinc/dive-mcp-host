@@ -139,22 +139,19 @@ class ChatProcessor:
         self.store: Store = app.store
         self.dive_host: DiveMcpHost = app.dive_host["default"]
 
-    async def handle_chat(  # noqa: C901
+    async def handle_chat(
         self,
         chat_id: str | None,
         query_input: QueryInput | None,
         regenerate_message_id: str | None,
     ) -> tuple[str, TokenUsage]:
         """Handle chat."""
-        if chat_id is None:
-            chat_id = str(uuid4())
-
+        chat_id = chat_id if chat_id else str(uuid4())
         title = "New Chat"
         title_await = None
 
         if isinstance(query_input, QueryInput) and query_input.text:
             title_await = asyncio.create_task(self._generate_title(query_input.text))
-
         await self.stream.write(
             StreamMessage(
                 type="chat_info",
@@ -164,32 +161,30 @@ class ChatProcessor:
 
         start = time.time()
         if regenerate_message_id:
-            if query_input is None:
-                message = await self._get_history_user_input(
-                    chat_id, regenerate_message_id
-                )
-                message.id = regenerate_message_id
-            user_message, ai_message = await self._process_chat(
-                chat_id,
-                await self._query_input_to_message(
+            if query_input:
+                query_message = await self._query_input_to_message(
                     query_input, message_id=regenerate_message_id
                 )
-                if isinstance(query_input, QueryInput)
-                else message,
-                is_resend=True,
+            else:
+                query_message = await self._get_history_user_input(
+                    chat_id, regenerate_message_id
+                )
+        elif query_input:
+            query_message = await self._query_input_to_message(
+                query_input, message_id=str(uuid4())
             )
         else:
-            user_message, ai_message = await self._process_chat(
-                chat_id,
-                query_input,
-                is_resend=False,
-            )
+            query_message = None
+        user_message, ai_message, current_messages = await self._process_chat(
+            chat_id,
+            query_message,
+            is_resend=regenerate_message_id is not None,
+        )
         end = time.time()
         if ai_message is None:
             if title_await:
                 title_await.cancel()
             return "", TokenUsage()
-        duration = ai_message.response_metadata.get("total_duration")
         assert user_message.id
         assert ai_message.id
         result = str(ai_message.content)
@@ -207,52 +202,85 @@ class ChatProcessor:
 
             if regenerate_message_id:
                 await db.delete_messages_after(chat_id, regenerate_message_id)
-                if query_input:
+                if query_input and query_message:
                     await db.update_message_content(
-                        user_message.id,
+                        query_message.id,  # type: ignore
                         QueryInput(
                             text=query_input.text or "",
                             images=query_input.images or [],
                             documents=query_input.documents or [],
                         ),
                     )
-            elif isinstance(query_input, QueryInput):
-                files = (query_input.images or []) + (query_input.documents or [])
-                await db.create_message(
-                    NewMessage(
-                        chatId=chat_id,
-                        role=Role.USER,
-                        messageId=user_message.id,
-                        content=query_input.text or "",
-                        files=files,
-                    ),
-                )
 
-            await db.create_message(
-                NewMessage(
-                    chatId=chat_id,
-                    role=Role.ASSISTANT,
-                    messageId=ai_message.id,
-                    content=result,
-                    resource_usage=ResourceUsage(
-                        model=ai_message.response_metadata.get("model")
-                        or ai_message.response_metadata.get("model_name")
-                        or "",
-                        total_input_tokens=ai_message.usage_metadata["input_tokens"]
-                        if ai_message.usage_metadata
-                        else 0,
-                        total_output_tokens=ai_message.usage_metadata["output_tokens"]
-                        if ai_message.usage_metadata
-                        else 0,
-                        total_run_time=(
-                            duration / (10**9) if duration else int(end - start)
+            for message in current_messages:
+                assert message.id
+                if isinstance(message, HumanMessage):
+                    if not query_input or regenerate_message_id:
+                        continue
+                    await db.create_message(
+                        NewMessage(
+                            chatId=chat_id,
+                            role=Role.USER,
+                            messageId=message.id,
+                            content=query_input.text or "",  # type: ignore
+                            files=(
+                                (query_input.images or [])
+                                + (query_input.documents or [])
+                            ),
                         ),
-                    ),
-                ),
-            )
+                    )
+                elif isinstance(message, AIMessage):
+                    if (
+                        message.usage_metadata is None
+                        or (duration := message.usage_metadata.get("total_duration"))
+                        is None
+                    ):
+                        duration = 0 if message.id == ai_message.id else end - start
+                    resource_usage = ResourceUsage(
+                        model=message.response_metadata.get("model")
+                        or message.response_metadata.get("model_name")
+                        or "",
+                        total_input_tokens=message.usage_metadata["input_tokens"]
+                        if message.usage_metadata
+                        else 0,
+                        total_output_tokens=message.usage_metadata["output_tokens"]
+                        if message.usage_metadata
+                        else 0,
+                        total_run_time=duration,
+                    )
+                    if message.tool_calls:
+                        await db.create_message(
+                            NewMessage(
+                                chatId=chat_id,
+                                role=Role.TOOL_CALL,
+                                messageId=message.id,
+                                content=json.dumps(message.tool_calls),
+                                resource_usage=resource_usage,
+                            ),
+                        )
+                    else:
+                        await db.create_message(
+                            NewMessage(
+                                chatId=chat_id,
+                                role=Role.ASSISTANT,
+                                messageId=message.id,
+                                content=result,
+                                resource_usage=resource_usage,
+                            ),
+                        )
+                elif isinstance(message, ToolMessage):
+                    await db.create_message(
+                        NewMessage(
+                            chatId=chat_id,
+                            role=Role.TOOL_RESULT,
+                            messageId=message.id,
+                            content=json.dumps(message.content),
+                        ),
+                    )
 
             await session.commit()
 
+        logger.error("usermessage.id: %s", user_message.id)
         await self.stream.write(
             StreamMessage(
                 type="message_info",
@@ -302,7 +330,9 @@ class ChatProcessor:
         Returns:
             tuple[str, TokenUsage]: The result and token usage.
         """
-        _, ai_message = await self._process_chat(chat_id, query_input, history, tools)
+        _, ai_message, _ = await self._process_chat(
+            chat_id, query_input, history, tools
+        )
         usage = TokenUsage()
         if ai_message.usage_metadata:
             usage.total_input_tokens = ai_message.usage_metadata["input_tokens"]
@@ -318,7 +348,7 @@ class ChatProcessor:
         history: list[BaseMessage] | None = None,
         tools: list | None = None,
         is_resend: bool = False,
-    ) -> tuple[HumanMessage, AIMessage]:
+    ) -> tuple[HumanMessage, AIMessage, list[BaseMessage]]:
         messages = [*history] if history else []
 
         # if retry input is empty
@@ -360,10 +390,17 @@ class ChatProcessor:
 
     async def _handle_response(
         self, response: AsyncIterator[dict[str, Any] | Any]
-    ) -> tuple[HumanMessage | Any, AIMessage | Any]:
+    ) -> tuple[HumanMessage | Any, AIMessage | Any, list[BaseMessage]]:
+        """Handle response.
+
+        Returns:
+            tuple[HumanMessage | Any, AIMessage | Any, list[BaseMessage]]:
+            The human message, the AI message, and all messages of the current query.
+        """
         user_message = None
         ai_message = None
-        latest_messages = []
+        values_messages: list[BaseMessage] = []
+        current_messages: list[BaseMessage] = []
 
         async for res_type, res_content in response:
             event_type = None
@@ -396,23 +433,24 @@ class ChatProcessor:
                     # idk what is this
                     logger.warning("Unknown message type: %s", message)
             elif res_type == "values" and len(res_content["messages"]) >= 2:  # type: ignore  # noqa: PLR2004
-                latest_messages = res_content["messages"]  # type: ignore
-            else:
-                pass
+                values_messages = res_content["messages"]  # type: ignore
 
             if event_type and content:
                 await self.stream.write(StreamMessage(type=event_type, content=content))
 
         # Find the most recent user and AI messages from newest to oldest
         user_message = next(
-            (msg for msg in reversed(latest_messages) if isinstance(msg, HumanMessage)),
+            (msg for msg in reversed(values_messages) if isinstance(msg, HumanMessage)),
             None,
         )
         ai_message = next(
-            (msg for msg in reversed(latest_messages) if isinstance(msg, AIMessage)),
+            (msg for msg in reversed(values_messages) if isinstance(msg, AIMessage)),
             None,
         )
-        return user_message, ai_message
+        if user_message:
+            current_messages = values_messages[values_messages.index(user_message) :]
+
+        return user_message, ai_message, current_messages
 
     async def _generate_title(self, query: str) -> str:
         """Generate title."""
@@ -437,9 +475,13 @@ class ChatProcessor:
             if not files:
                 message_content = message.content.strip()
                 if message.role == Role.USER:
-                    history.append(HumanMessage(content=message_content))
+                    history.append(
+                        HumanMessage(content=message_content, id=message.message_id)
+                    )
                 else:
-                    history.append(AIMessage(content=message_content))
+                    history.append(
+                        AIMessage(content=message_content, id=message.message_id)
+                    )
             else:
                 content = []
                 if message.content:

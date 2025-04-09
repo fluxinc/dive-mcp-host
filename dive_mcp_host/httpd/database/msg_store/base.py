@@ -144,14 +144,15 @@ class BaseMessageStore(AbstractMessageStore):
             "The implementation of the method varies on different database.",
         )
 
-    async def create_message(self, message: NewMessage) -> Message:
+    async def create_message(self, message: NewMessage) -> Message | None:
         """Create a new message.
 
         Args:
             message: NewMessage object containing message data.
+            ignore_exists: If True, ignore the error when message already exists.
 
         Returns:
-            Created Message object.
+            Created/Existing Message object. None if some error occurred.
         """
         query = (
             insert(ORMMessage)
@@ -206,7 +207,7 @@ class BaseMessageStore(AbstractMessageStore):
             role=Role(new_msg.role),
             chatId=new_msg.chat_id,
             messageId=new_msg.message_id,
-            files=json.loads(new_msg.files),
+            files=json.loads(new_msg.files) if new_msg.files else [],
             resource_usage=resource_usage,
         )
 
