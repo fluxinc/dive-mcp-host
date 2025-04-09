@@ -139,7 +139,7 @@ class ChatProcessor:
         self.store: Store = app.store
         self.dive_host: DiveMcpHost = app.dive_host["default"]
 
-    async def handle_chat(
+    async def handle_chat(  # noqa: C901, PLR0912, PLR0915
         self,
         chat_id: str | None,
         query_input: QueryInput | None,
@@ -147,11 +147,18 @@ class ChatProcessor:
     ) -> tuple[str, TokenUsage]:
         """Handle chat."""
         chat_id = chat_id if chat_id else str(uuid4())
+        dive_user: DiveUser = self.request_state.dive_user
         title = "New Chat"
         title_await = None
 
         if isinstance(query_input, QueryInput) and query_input.text:
-            title_await = asyncio.create_task(self._generate_title(query_input.text))
+            async with self.app.db_sessionmaker() as session:
+                db = self.app.msg_store(session)
+                if not await db.check_chat_exists(chat_id, dive_user["user_id"]):
+                    title_await = asyncio.create_task(
+                        self._generate_title(query_input.text)
+                    )
+
         await self.stream.write(
             StreamMessage(
                 type="chat_info",
@@ -192,7 +199,6 @@ class ChatProcessor:
         if title_await:
             title = await title_await
 
-        dive_user: DiveUser = self.request_state.dive_user
         async with self.app.db_sessionmaker() as session:
             db = self.app.msg_store(session)
             if not await db.check_chat_exists(chat_id, dive_user["user_id"]):
