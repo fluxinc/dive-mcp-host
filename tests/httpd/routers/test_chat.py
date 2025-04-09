@@ -7,7 +7,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
-import pytest
 from fastapi import status
 from langchain_core.messages import AIMessage
 
