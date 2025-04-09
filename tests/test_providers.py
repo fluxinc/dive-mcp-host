@@ -1,4 +1,5 @@
 import json
+import logging
 from os import environ
 from typing import cast
 
@@ -28,6 +29,7 @@ async def _run_the_test(
         ) as chat,
     ):
         # r = await chat.invoke("test mcp tool echo with 'hello'")
+        got = False
         async for response in chat.query(
             HumanMessage(content="echo helloXXX with 10ms delay"),
             stream_mode=["updates"],
@@ -49,6 +51,8 @@ async def _run_the_test(
                             assert r["type"] == "text"  # type: ignore[index]
                             contents.append(r["text"])  # type: ignore[index]
                 assert any("helloXXX" in c for c in contents)
+                got = True
+        assert got, "no tool message found"
 
 
 @pytest.mark.asyncio
@@ -111,7 +115,7 @@ async def test_host_openai(echo_tool_stdio_config: dict[str, ServerConfig]) -> N
     if api_key := environ.get("OPENAI_API_KEY"):
         config = HostConfig(
             llm=LLMConfig(
-                model="o3-mini",
+                model="gpt-4o-mini",
                 model_provider="openai",
                 api_key=api_key,
                 configuration=LLMConfiguration(
