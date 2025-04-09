@@ -1,31 +1,31 @@
 from collections.abc import Callable
 from typing import TypedDict
 
-from starlette.requests import Request
-from starlette.responses import Response
+from fastapi import Request
+from fastapi.responses import JSONResponse, Response
 
 from dive_mcp_host.httpd.routers.models import ResultResponse, UserInputError
 
 
-async def error_handler(request: Request, call_next: Callable) -> Response:
+async def error_handler(_: Request, exc: Exception) -> Response:
     """Error handling middleware.
 
     Args:
         request (Request): The request object.
-        call_next (Callable): The next middleware to call.
+        exc (Exception): The exception to handle.
 
     Returns:
         ResultResponse: The response object.
     """
-    try:
-        return await call_next(request)
-    except UserInputError as e:
-        return Response(
+    if isinstance(exc, UserInputError):
+        return JSONResponse(
             status_code=400,
-            content=ResultResponse(success=False, message=e.message).model_dump_json(
-                by_alias=True
+            content=ResultResponse(success=False, message=exc.message).model_dump(
+                mode="json",
+                by_alias=True,
             ),
         )
+    return JSONResponse(status_code=500, content="unhandled error")
 
 
 class DiveUser(TypedDict):
