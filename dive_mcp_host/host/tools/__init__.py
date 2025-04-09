@@ -292,6 +292,7 @@ class McpServer(ContextProtocol):
                             description=tool.description or "",
                             mcp_server=self,
                             kwargs_arg="kwargs" in tool.inputSchema,
+                            args_schema=tool.inputSchema,
                         )
                         for tool in tool_results.tools
                     ]
