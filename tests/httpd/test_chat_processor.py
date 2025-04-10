@@ -1,6 +1,6 @@
-from typing import Any
 import uuid
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -8,11 +8,11 @@ import pytest_asyncio
 from dive_mcp_host.httpd.conf.service.manager import ServiceManager
 from dive_mcp_host.httpd.routers.utils import ChatProcessor, HumanMessage
 from dive_mcp_host.httpd.server import DiveHostAPI
-from tests.httpd.routers.conftest import config_files
+from tests.httpd.routers.conftest import config_files  # noqa: F401
 
 
 @pytest_asyncio.fixture
-async def server(config_files) -> AsyncGenerator[DiveHostAPI, None]:
+async def server(config_files) -> AsyncGenerator[DiveHostAPI, None]:  # noqa: F811
     """Create a server for testing."""
     service_config_manager = ServiceManager(config_files.service_config_file)
     service_config_manager.initialize()
