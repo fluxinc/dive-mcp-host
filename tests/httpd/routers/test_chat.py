@@ -607,3 +607,41 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
     assert has_tool_call_msg, "Tool call message not found in database"
     assert has_tool_result_msg, "Tool result message not found in database"
     assert has_assistant_msg, "Assistant message not found in database"
+
+
+def test_chat_error(test_client, monkeypatch):
+    """Test the chat endpoint with an error."""
+    client, app = test_client
+
+    def mock_process_chat(*args, **kwargs):
+        raise RuntimeError("an test error")
+
+    monkeypatch.setattr(
+        "dive_mcp_host.httpd.routers.utils.ChatProcessor._process_chat",
+        mock_process_chat,
+    )
+    response = client.post(
+        "/api/chat", data={"chatId": "test_chat_id", "message": "Calculate 2+2"}
+    )
+    assert response.status_code == SUCCESS_CODE
+
+    content = response.content.decode("utf-8")
+
+    data_messages = re.findall(r"data: (.*?)\n\n", content)
+
+    has_chat_info = False
+    has_error = False
+
+    for data in data_messages:
+        if data != "[DONE]":
+            json_obj = json.loads(data)
+            if json_obj["message"]:
+                inner_json = json.loads(json_obj["message"])
+                if inner_json["type"] == "chat_info":
+                    has_chat_info = True
+                if inner_json["type"] == "error":
+                    has_error = True
+                    assert inner_json["content"] == "an test error"
+
+    assert has_chat_info
+    assert has_error
