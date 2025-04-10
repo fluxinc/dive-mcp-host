@@ -8,10 +8,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
 from fastapi import status
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, AIMessageChunk
 
 if TYPE_CHECKING:
     from dive_mcp_host.host.host import DiveMcpHost
+
 from dive_mcp_host.httpd.database.models import Chat, Message
 from tests import helper
 
@@ -399,6 +400,7 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
 
     # Import necessary message types
     from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+    from langchain_core.messages.tool import tool_call, tool_call_chunk
 
     # 模擬 query 方法來產生工具呼叫和工具結果
     def mock_query(*args, **kwargs):
@@ -411,19 +413,90 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
         # 創建模擬的響應生成器
         async def response_generator():
             # 模擬工具呼叫
+            tool_call_str = json.dumps(
+                {
+                    "name": "calculator",
+                    "args": {"expression": "2+2"},
+                    "id": "tool-call-id",
+                    "type": "tool_call",
+                }
+            )
             yield (
                 "messages",
                 (
-                    AIMessage(
+                    AIMessageChunk(
+                        id="tool-call-msg-id",
                         content="",
-                        tool_calls=[
-                            {
-                                "name": "calculator",
-                                "args": {"expression": "2+2"},
-                                "id": "tool-call-id",
-                                "type": "tool_call",
-                            }
+                        response_metadata={},
+                        tool_call_chunks=[
+                            tool_call_chunk(
+                                name="calculator",
+                                args="",
+                                id="tool-call-id",
+                            )
                         ],
+                        tool_calls=[
+                            tool_call(
+                                name="calculator",
+                                args={},
+                                id="tool-call-id",
+                            )
+                        ],
+                    ),
+                    None,
+                ),
+            )
+            yield (
+                "messages",
+                (
+                    AIMessageChunk(
+                        id="tool-call-msg-id",
+                        content="",
+                        response_metadata={
+                            "finish_reason": "tool_calls",
+                        },
+                        tool_call_chunks=[
+                            tool_call_chunk(
+                                args=tool_call_str[: len(tool_call_str) // 2],
+                                id="tool-call-id",
+                            )
+                        ],
+                        tool_calls=[],
+                    ),
+                    None,
+                ),
+            )
+            yield (
+                "messages",
+                (
+                    AIMessageChunk(
+                        id="tool-call-msg-id",
+                        content="",
+                        response_metadata={
+                            "finish_reason": "tool_calls",
+                        },
+                        tool_call_chunks=[
+                            tool_call_chunk(
+                                args=tool_call_str[len(tool_call_str) // 2 :],
+                                id="tool-call-id",
+                            )
+                        ],
+                        tool_calls=[],
+                    ),
+                    None,
+                ),
+            )
+            yield (
+                "messages",
+                (
+                    AIMessageChunk(
+                        id="tool-call-msg-id",
+                        content="",
+                        response_metadata={
+                            "finish_reason": "tool_calls",
+                        },
+                        tool_call_chunks=[],
+                        tool_calls=[],
                     ),
                     None,
                 ),
@@ -593,9 +666,14 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
         if msg["role"] == "tool_call":
             has_tool_call_msg = True
             tool_call_content = json.loads(msg["content"])
-            assert tool_call_content[0]["name"] == "calculator"
-            assert "args" in tool_call_content[0]
-
+            assert tool_call_content == [
+                {
+                    "name": "calculator",
+                    "args": {"expression": "2+2"},
+                    "id": "tool-call-id",
+                    "type": "tool_call",
+                }
+            ]
         if msg["role"] == "tool_result":
             has_tool_result_msg = True
             tool_result_content = json.loads(msg["content"])

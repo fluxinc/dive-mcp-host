@@ -4,7 +4,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine
 from contextlib import AsyncExitStack, suppress
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Self, cast
 from uuid import uuid4
 
 from fastapi.responses import StreamingResponse
@@ -14,6 +14,7 @@ from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel
 from starlette.datastructures import State
 
+from dive_mcp_host.host.chat import MessageChunkHolder
 from dive_mcp_host.httpd.conf.log import TRACE
 from dive_mcp_host.httpd.database.models import (
     Message,
@@ -421,7 +422,7 @@ class ChatProcessor:
         ai_message = None
         values_messages: list[BaseMessage] = []
         current_messages: list[BaseMessage] = []
-
+        message_chunk_holder = MessageChunkHolder()
         async for res_type, res_content in response:
             event_type = None
             content = None
@@ -429,11 +430,14 @@ class ChatProcessor:
                 message, _ = res_content
                 if isinstance(message, AIMessage):
                     logger.log(TRACE, "got AI message: %s", message.model_dump_json())
-                    event_type = "tool_calls"
-                    if calls := message.tool_calls:
+                    if message.tool_calls and (
+                        combined_message := message_chunk_holder.one_msg(message)
+                    ):
+                        combined_message = cast(AIMessage, combined_message)
+                        event_type = "tool_calls"
                         content = [
                             ToolCallsContent(name=c["name"], arguments=c["args"])
-                            for c in calls
+                            for c in combined_message.tool_calls
                         ]
                     else:
                         event_type = "text"
