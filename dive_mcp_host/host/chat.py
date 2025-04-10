@@ -215,24 +215,26 @@ class MessageChunkHolder:
 
     def __init__(self) -> None:
         """Initialize message chunk holder."""
-        self._msg_id: str | None = None
-        self._chunks: defaultdict[str, list[BaseMessageChunk]] = defaultdict(list)
+        self._merged: dict[str, BaseMessage] = {}
 
     def feed[T: BaseMessage | BaseMessageChunk](self, chunk: T) -> T | None:
         """Feed a chunk, return a combined message if done."""
         if isinstance(chunk, BaseMessageChunk) and chunk.id:
-            chunks = self._chunks[chunk.id]
-            chunks.append(chunk)
-            if chunk.response_metadata.get(
-                "finish_reason"
-            ) or chunk.response_metadata.get("done"):
-                return cast(
-                    T,
-                    reduce(
-                        lambda acc, x: acc + x,
-                        chunks[1:],
-                        chunks[0],
-                    ),
-                )
+            m = cast(T, s + chunk) if (s := self._merged.get(chunk.id)) else chunk
+            self._merged[chunk.id] = m
+            if m.response_metadata.keys() & {
+                "finish_reason",
+                "stop_reason",
+                "done",
+            }:
+                return m
             return None
+        return chunk
+
+    def partial_merged[T: BaseMessage](self, chunk: T) -> T:
+        """Return partial merged message."""
+        if isinstance(chunk, BaseMessageChunk) and chunk.id:
+            m = cast(T, s + chunk) if (s := self._merged.get(chunk.id)) else chunk
+            self._merged[chunk.id] = m
+            return m
         return chunk
