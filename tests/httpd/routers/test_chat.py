@@ -1,6 +1,5 @@
 import io
 import json
-import re
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -131,7 +130,7 @@ def test_abort_chat(test_client):
     response = client.post("/api/chat/00000000-0000-0000-0000-000000000000/abort")
     assert response.status_code == BAD_REQUEST_CODE
     body = response.json()
-    assert "Chat not found" in body["message"]
+    assert "Chat not found" in body["message"]  # type: ignore
 
     fake_id = uuid.uuid4()
 
@@ -174,43 +173,31 @@ def test_create_chat(test_client):
     assert response.status_code == SUCCESS_CODE
     assert "text/event-stream" in response.headers.get("Content-Type")
 
-    content = response.text
-
-    # assert the basic format
-    assert "data: " in content
-    assert "data: [DONE]\n\n" in content
-
     has_chat_info = False
     has_message_info = False
 
     # extract and parse the JSON data
-    data_messages = re.findall(r"data: (.*?)\n\n", content)
-    for data in data_messages:
-        if data != "[DONE]":
-            # parse the outer JSON
-            json_obj = json.loads(data)
-            assert "message" in json_obj
+    for json_obj in helper.extract_stream(response.text):
+        assert "message" in json_obj
+        if json_obj["message"]:
+            inner_json = json.loads(json_obj["message"])
+            assert "type" in inner_json
+            assert "content" in inner_json
 
-            # parse the inner JSON string
-            if json_obj["message"]:
-                inner_json = json.loads(json_obj["message"])
-                assert "type" in inner_json
-                assert "content" in inner_json
-
-                # assert the specific type of message
-                if inner_json["type"] == "chat_info":
-                    has_chat_info = True
-                    helper.dict_subset(
-                        inner_json["content"],
-                        {
-                            "id": chat_id,
-                        },
-                    )
-                    assert "title" in inner_json["content"]
-                if inner_json["type"] == "message_info":
-                    has_message_info = True
-                    assert "userMessageId" in inner_json["content"]
-                    assert "assistantMessageId" in inner_json["content"]
+            # assert the specific type of message
+            if inner_json["type"] == "chat_info":
+                has_chat_info = True
+                helper.dict_subset(
+                    inner_json["content"],
+                    {
+                        "id": chat_id,
+                    },
+                )
+                assert "title" in inner_json["content"]
+            if inner_json["type"] == "message_info":
+                has_message_info = True
+                assert "userMessageId" in inner_json["content"]
+                assert "assistantMessageId" in inner_json["content"]
 
     assert has_chat_info
     assert has_message_info
@@ -317,7 +304,7 @@ def test_edit_chat_missing_params(test_client):
     )
     assert response.status_code == BAD_REQUEST_CODE
     body = response.json()
-    assert "Chat ID and Message ID are required" in body["message"]
+    assert "Chat ID and Message ID are required" in body["message"]  # type: ignore
 
 
 def test_retry_chat(test_client):
@@ -341,43 +328,31 @@ def test_retry_chat(test_client):
     assert response.status_code == SUCCESS_CODE
     assert "text/event-stream" in response.headers.get("Content-Type")
 
-    content = response.text
-
-    # assert the basic format
-    assert "data: " in content
-    assert "data: [DONE]\n\n" in content
-
     has_chat_info = False
     has_message_info = False
 
     # extract and parse the JSON data
-    data_messages = re.findall(r"data: (.*?)\n\n", content)
-    for data in data_messages:
-        if data != "[DONE]":
-            # parse the outer JSON
-            json_obj = json.loads(data)
-            assert "message" in json_obj
+    for json_obj in helper.extract_stream(response.text):
+        assert "message" in json_obj
+        if json_obj["message"]:
+            inner_json = json.loads(json_obj["message"])
+            assert "type" in inner_json
+            assert "content" in inner_json
 
-            # parse the inner JSON string
-            if json_obj["message"]:
-                inner_json = json.loads(json_obj["message"])
-                assert "type" in inner_json
-                assert "content" in inner_json
-
-                # assert the specific type of message
-                if inner_json["type"] == "chat_info":
-                    has_chat_info = True
-                    helper.dict_subset(
-                        inner_json["content"],
-                        {
-                            "id": TEST_CHAT_ID,
-                        },
-                    )
-                    assert "title" in inner_json["content"]
-                if inner_json["type"] == "message_info":
-                    has_message_info = True
-                    assert "userMessageId" in inner_json["content"]
-                    assert "assistantMessageId" in inner_json["content"]
+            # assert the specific type of message
+            if inner_json["type"] == "chat_info":
+                has_chat_info = True
+                helper.dict_subset(
+                    inner_json["content"],
+                    {
+                        "id": TEST_CHAT_ID,
+                    },
+                )
+                assert "title" in inner_json["content"]
+            if inner_json["type"] == "message_info":
+                has_message_info = True
+                assert "userMessageId" in inner_json["content"]
+                assert "assistantMessageId" in inner_json["content"]
 
     assert has_chat_info
     assert has_message_info
@@ -391,7 +366,7 @@ def test_retry_chat_missing_params(test_client):
 
     body = response.json()
     # Verify the exception message
-    assert "Chat ID and Message ID are required" in body["message"]
+    assert "Chat ID and Message ID are required" in body.get("message")
 
 
 def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
@@ -402,7 +377,7 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
     from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
     from langchain_core.messages.tool import tool_call, tool_call_chunk
 
-    # 模擬 query 方法來產生工具呼叫和工具結果
+    # mock the query method
     def mock_query(*args, **kwargs):
         async def title_generator():
             yield {"agent": {"messages": [AIMessage(content="Calculate 2+2")]}}
@@ -410,17 +385,9 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
         if kwargs.get("stream_mode") == "updates":
             return title_generator()
 
-        # 創建模擬的響應生成器
+        # mock the response generator
         async def response_generator():
-            # 模擬工具呼叫
-            tool_call_str = json.dumps(
-                {
-                    "name": "calculator",
-                    "args": {"expression": "2+2"},
-                    "id": "tool-call-id",
-                    "type": "tool_call",
-                }
-            )
+            # mock the tool call
             yield (
                 "messages",
                 (
@@ -432,6 +399,7 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
                             tool_call_chunk(
                                 name="calculator",
                                 args="",
+                                index=0,
                                 id="tool-call-id",
                             )
                         ],
@@ -452,33 +420,10 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
                     AIMessageChunk(
                         id="tool-call-msg-id",
                         content="",
-                        response_metadata={
-                            "finish_reason": "tool_calls",
-                        },
                         tool_call_chunks=[
                             tool_call_chunk(
-                                args=tool_call_str[: len(tool_call_str) // 2],
-                                id="tool-call-id",
-                            )
-                        ],
-                        tool_calls=[],
-                    ),
-                    None,
-                ),
-            )
-            yield (
-                "messages",
-                (
-                    AIMessageChunk(
-                        id="tool-call-msg-id",
-                        content="",
-                        response_metadata={
-                            "finish_reason": "tool_calls",
-                        },
-                        tool_call_chunks=[
-                            tool_call_chunk(
-                                args=tool_call_str[len(tool_call_str) // 2 :],
-                                id="tool-call-id",
+                                args=json.dumps({"expression": "2+2"}),
+                                index=0,
                             )
                         ],
                         tool_calls=[],
@@ -502,7 +447,7 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
                 ),
             )
 
-            # 模擬工具結果
+            # mock the tool result
             yield (
                 "messages",
                 (
@@ -515,7 +460,7 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
                 ),
             )
 
-            # 模擬最終回應
+            # mock the final ai response
             yield (
                 "messages",
                 (
@@ -526,7 +471,7 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
                 ),
             )
 
-            # 模擬 values 響應
+            # mock the values response
             user_message = HumanMessage(content="Calculate 2+2", id="user-msg-id")
             ai_message = AIMessage(
                 content="The result of 2+2 is 4.",
@@ -565,7 +510,7 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
 
         return response_generator()
 
-    # 應用 monkeypatch
+    # mock the query method
     monkeypatch.setattr("dive_mcp_host.host.chat.Chat.query", mock_query)
 
     chat_id = str(uuid.uuid4())
@@ -575,18 +520,7 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
         "/api/chat", data={"chatId": chat_id, "message": "Calculate 2+2"}
     )
 
-    # Verify response status code
-    assert response.status_code == SUCCESS_CODE
-
-    # Get the content
-    content = response.content.decode("utf-8")
-
-    # Assert the basic format
-    assert "data: " in content
-    assert "data: [DONE]\n\n" in content
-
     # Extract and parse the JSON data
-    data_messages = re.findall(r"data: (.*?)\n\n", content)
 
     has_tool_calls = False
     has_tool_result = False
@@ -594,48 +528,38 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
     has_chat_info = False
     has_message_info = False
 
-    for data in data_messages:
-        if data != "[DONE]":
-            # Parse the outer JSON
-            json_obj = json.loads(data)
-            assert "message" in json_obj
+    for json_obj in helper.extract_stream(response.text):
+        assert "message" in json_obj
 
-            # Parse the inner JSON string
-            if json_obj["message"]:
-                inner_json = json.loads(json_obj["message"])
-                assert "type" in inner_json
-                assert "content" in inner_json
+        if json_obj["message"]:
+            inner_json = json.loads(json_obj["message"])
+            assert "type" in inner_json
+            assert "content" in inner_json
 
-                # Check for tool calls
-                if inner_json["type"] == "tool_calls":
-                    has_tool_calls = True
-                    tool_call = inner_json["content"][0]
-                    assert tool_call["name"] == "calculator"
-                    assert "arguments" in tool_call
+            if inner_json["type"] == "tool_calls":
+                has_tool_calls = True
+                assert inner_json["content"] == [
+                    {"name": "calculator", "arguments": {"expression": "2+2"}}
+                ]
 
-                # Check for tool result
-                if inner_json["type"] == "tool_result":
-                    has_tool_result = True
-                    tool_result = inner_json["content"]
-                    assert tool_result["name"] == "calculator"
-                    assert "result" in tool_result
+            if inner_json["type"] == "tool_result":
+                has_tool_result = True
+                tool_result = inner_json["content"]
+                assert tool_result == {"name": "calculator", "result": 4}
 
-                # Check for text response
-                if inner_json["type"] == "text":
-                    has_text_response = True
-                    assert "The result of 2+2 is 4." in inner_json["content"]
+            if inner_json["type"] == "text":
+                has_text_response = True
+                assert "The result of 2+2 is 4." in inner_json["content"]
 
-                # Check for chat info
-                if inner_json["type"] == "chat_info":
-                    has_chat_info = True
-                    assert inner_json["content"]["id"] == chat_id
-                    assert "title" in inner_json["content"]
+            if inner_json["type"] == "chat_info":
+                has_chat_info = True
+                assert inner_json["content"]["id"] == chat_id
+                assert "title" in inner_json["content"]
 
-                # Check for message info
-                if inner_json["type"] == "message_info":
-                    has_message_info = True
-                    assert "userMessageId" in inner_json["content"]
-                    assert "assistantMessageId" in inner_json["content"]
+            if inner_json["type"] == "message_info":
+                has_message_info = True
+                assert "userMessageId" in inner_json["content"]
+                assert "assistantMessageId" in inner_json["content"]
 
     # Verify all message types were received
     assert has_tool_calls, "Tool calls message not found"
@@ -654,6 +578,7 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
 
     # Parse the response
     response_data = response.json()
+    assert isinstance(response_data, dict)
     assert response_data["success"] is True
     assert response_data["data"] is not None
 
@@ -662,7 +587,10 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
     has_tool_result_msg = False
     has_assistant_msg = False
 
+    assert isinstance(response_data["data"], dict)
+    assert response_data["data"]["messages"] is not None
     for msg in response_data["data"]["messages"]:
+        assert isinstance(msg, dict)
         if msg["role"] == "tool_call":
             has_tool_call_msg = True
             tool_call_content = json.loads(msg["content"])

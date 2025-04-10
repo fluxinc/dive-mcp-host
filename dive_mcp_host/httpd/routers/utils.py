@@ -4,7 +4,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine
 from contextlib import AsyncExitStack, suppress
-from typing import TYPE_CHECKING, Any, Self, cast
+from typing import TYPE_CHECKING, Any, Self
 from uuid import uuid4
 
 from fastapi.responses import StreamingResponse
@@ -299,7 +299,7 @@ class ChatProcessor:
 
             await session.commit()
 
-        logger.error("usermessage.id: %s", user_message.id)
+        logger.log(TRACE, "usermessage.id: %s", user_message.id)
         await self.stream.write(
             StreamMessage(
                 type="message_info",
@@ -409,6 +409,36 @@ class ChatProcessor:
 
         raise RuntimeError("Unreachable")
 
+    async def _stream_text_msg(self, message: AIMessage) -> None:
+        content = self._str_output_parser.invoke(message)
+        if content:
+            await self.stream.write(StreamMessage(type="text", content=content))
+
+    async def _stream_tool_calls_msg(self, message: AIMessage) -> None:
+        await self.stream.write(
+            StreamMessage(
+                type="tool_calls",
+                content=[
+                    ToolCallsContent(name=c["name"], arguments=c["args"])
+                    for c in message.tool_calls
+                ],
+            )
+        )
+
+    async def _stream_tool_result_msg(self, message: ToolMessage) -> None:
+        result = message.content
+        with suppress(json.JSONDecodeError):
+            if isinstance(result, list):
+                result = [json.loads(r) if isinstance(r, str) else r for r in result]
+            else:
+                result = json.loads(result)
+        await self.stream.write(
+            StreamMessage(
+                type="tool_result",
+                content=ToolResultContent(name=message.name or "", result=result),
+            )
+        )
+
     async def _handle_response(
         self, response: AsyncIterator[dict[str, Any] | Any]
     ) -> tuple[HumanMessage | Any, AIMessage | Any, list[BaseMessage]]:
@@ -424,51 +454,24 @@ class ChatProcessor:
         current_messages: list[BaseMessage] = []
         message_chunk_holder = MessageChunkHolder()
         async for res_type, res_content in response:
-            event_type = None
-            content = None
             if res_type == "messages":
                 message, _ = res_content
                 if isinstance(message, AIMessage):
                     logger.log(TRACE, "got AI message: %s", message.model_dump_json())
-                    if message.tool_calls and (
-                        combined_message := message_chunk_holder.one_msg(message)
-                    ):
-                        combined_message = cast(AIMessage, combined_message)
-                        event_type = "tool_calls"
-                        content = [
-                            ToolCallsContent(name=c["name"], arguments=c["args"])
-                            for c in combined_message.tool_calls
-                        ]
-                    else:
-                        event_type = "text"
-                        content = self._str_output_parser.invoke(message)
+                    if message.content:
+                        await self._stream_text_msg(message)
+                    elif (
+                        combined_message := message_chunk_holder.feed(message)
+                    ) and combined_message.tool_calls:
+                        await self._stream_tool_calls_msg(combined_message)
                 elif isinstance(message, ToolMessage):
                     logger.log(TRACE, "got tool message: %s", message.model_dump_json())
-                    event_type = "tool_result"
-                    result = message.content
-                    with suppress(json.JSONDecodeError):
-                        if isinstance(result, list):
-                            result = [
-                                json.loads(r) if isinstance(r, str) else r
-                                for r in result
-                            ]
-                        else:
-                            result = json.loads(result)
-                    content = ToolResultContent(name=message.name or "", result=result)
+                    await self._stream_tool_result_msg(message)
                 else:
                     # idk what is this
                     logger.warning("Unknown message type: %s", message)
             elif res_type == "values" and len(res_content["messages"]) >= 2:  # type: ignore  # noqa: PLR2004
                 values_messages = res_content["messages"]  # type: ignore
-
-            if event_type and content:
-                logger.log(
-                    TRACE,
-                    "write event_type: %s, content: %s",
-                    event_type,
-                    content,
-                )
-                await self.stream.write(StreamMessage(type=event_type, content=content))
 
         # Find the most recent user and AI messages from newest to oldest
         user_message = next(

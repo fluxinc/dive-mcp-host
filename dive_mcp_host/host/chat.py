@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import uuid
+from collections import defaultdict
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from functools import reduce
 from typing import Any, Self, cast
@@ -215,21 +216,23 @@ class MessageChunkHolder:
     def __init__(self) -> None:
         """Initialize message chunk holder."""
         self._msg_id: str | None = None
-        self._chunks: list[BaseMessageChunk] = []
+        self._chunks: defaultdict[str, list[BaseMessageChunk]] = defaultdict(list)
 
-    def one_msg(self, chunk: BaseMessageChunk | BaseMessage) -> BaseMessage | None:
+    def feed[T: BaseMessage | BaseMessageChunk](self, chunk: T) -> T | None:
         """Feed a chunk, return a combined message if done."""
-        if isinstance(chunk, BaseMessageChunk):
-            if chunk.id != self._msg_id:
-                self._chunks = []
-                self._msg_id = chunk.id
-            self._chunks.append(chunk)
+        if isinstance(chunk, BaseMessageChunk) and chunk.id:
+            chunks = self._chunks[chunk.id]
+            chunks.append(chunk)
             if chunk.response_metadata.get(
                 "finish_reason"
             ) or chunk.response_metadata.get("done"):
                 return cast(
-                    BaseMessage,
-                    reduce(lambda acc, x: acc + x, self._chunks[1:], self._chunks[0]),
+                    T,
+                    reduce(
+                        lambda acc, x: acc + x,
+                        chunks[1:],
+                        chunks[0],
+                    ),
                 )
             return None
         return chunk
