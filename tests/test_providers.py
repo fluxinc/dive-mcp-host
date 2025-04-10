@@ -1,10 +1,14 @@
 import json
 from os import environ
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
-from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+if TYPE_CHECKING:
+    from langgraph.pregel.io import AddableUpdatesDict
+
+from dive_mcp_host.host.chat import MessageChunkHolder
 from dive_mcp_host.host.conf import HostConfig
 from dive_mcp_host.host.conf.llm import (
     Credentials,
@@ -14,44 +18,52 @@ from dive_mcp_host.host.conf.llm import (
 )
 from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.host.tools import ServerConfig
+from tests import helper
 
 
 async def _run_the_test(
     config: HostConfig,
+    model_tool_call: dict | None = None,
 ) -> None:
     """Run the test."""
+    model_tool_call = model_tool_call or {
+        "name": "echo",
+        "args": {"delay_ms": 10, "message": "helloXXX"},
+    }
     async with (
         DiveMcpHost(config) as mcp_host,
-        mcp_host.chat(
-            # system_prompt=system_prompt(""),
-            # tools=[TestTool()],
-        ) as chat,
+        mcp_host.chat() as chat,
     ):
-        # r = await chat.invoke("test mcp tool echo with 'hello'")
         got = False
+        holders = MessageChunkHolder()
+        ai_messages: list[AIMessage] = []
         async for response in chat.query(
             HumanMessage(content="echo helloXXX with 10ms delay"),
-            stream_mode=["updates"],
+            stream_mode=["updates", "messages"],
         ):
-            response = cast("tuple[str, dict[str, dict[str, BaseMessage]]]", response)
-            if msg_dict := response[1].get("tools"):
-                contents = list[str]()
+            event_type, event_data = response
+            if event_type == "messages":
+                msg = event_data[0]
+                if isinstance(msg, AIMessage) and (msg := holders.feed(msg)):
+                    ai_messages.append(msg)
+                continue
+            event_data = cast("AddableUpdatesDict", event_data)
+            if msg_dict := event_data.get("tools"):
+                rep = {}
                 for msg in msg_dict.get("messages", []):
-                    if isinstance(msg, ToolMessage):
-                        # XXX the content type is complex.
-                        if isinstance(msg.content, str):
-                            try:
-                                rep = json.loads(msg.content)
-                            except json.JSONDecodeError:
-                                continue
-                        else:
-                            rep = msg.content
-                        for r in rep:
-                            assert r["type"] == "text"  # type: ignore[index]
-                            contents.append(r["text"])  # type: ignore[index]
-                assert any("helloXXX" in c for c in contents)
+                    if isinstance(msg, ToolMessage) and isinstance(msg.content, str):
+                        rep = json.loads(msg.content)[0]
+                assert helper.dict_subset(
+                    rep, {"type": "text", "text": "helloXXX", "annotations": None}
+                )
                 got = True
         assert got, "no tool message found"
+        assert len(ai_messages) == 2
+        assert len(ai_messages[0].tool_calls) == 1
+        helper.dict_subset(
+            dict(ai_messages[0].tool_calls[0]),
+            model_tool_call,
+        )
 
 
 @pytest.mark.asyncio

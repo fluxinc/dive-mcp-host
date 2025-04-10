@@ -14,6 +14,7 @@ from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel
 from starlette.datastructures import State
 
+from dive_mcp_host.host.chat import MessageChunkHolder
 from dive_mcp_host.httpd.conf.log import TRACE
 from dive_mcp_host.httpd.database.models import (
     Message,
@@ -284,18 +285,27 @@ class ChatProcessor:
                             ),
                         )
                 elif isinstance(message, ToolMessage):
+                    if isinstance(message.content, list):
+                        content = json.dumps(message.content)
+                    elif isinstance(message.content, str):
+                        content = message.content
+                    else:
+                        raise ValueError(
+                            f"got unknown type: {type(message.content)}, "
+                            f"data: {message.content}"
+                        )
                     await db.create_message(
                         NewMessage(
                             chatId=chat_id,
                             role=Role.TOOL_RESULT,
                             messageId=message.id,
-                            content=json.dumps(message.content),
+                            content=content,
                         ),
                     )
 
             await session.commit()
 
-        logger.error("usermessage.id: %s", user_message.id)
+        logger.log(TRACE, "usermessage.id: %s", user_message.id)
         await self.stream.write(
             StreamMessage(
                 type="message_info",
@@ -380,9 +390,11 @@ class ChatProcessor:
         def _prompt_cb(_: Any) -> list[BaseMessage]:
             return messages
 
-        prompt: Callable[..., list[BaseMessage]] | None = None
+        prompt: str | Callable[..., list[BaseMessage]] | None = None
         if any(isinstance(m, SystemMessage) for m in messages):
             prompt = _prompt_cb
+        elif user_prompt := self.app.prompt_config_manager.get_prompt("system"):
+            prompt = user_prompt
 
         chat = self.dive_host.chat(
             chat_id=chat_id,
@@ -403,6 +415,36 @@ class ChatProcessor:
 
         raise RuntimeError("Unreachable")
 
+    async def _stream_text_msg(self, message: AIMessage) -> None:
+        content = self._str_output_parser.invoke(message)
+        if content:
+            await self.stream.write(StreamMessage(type="text", content=content))
+
+    async def _stream_tool_calls_msg(self, message: AIMessage) -> None:
+        await self.stream.write(
+            StreamMessage(
+                type="tool_calls",
+                content=[
+                    ToolCallsContent(name=c["name"], arguments=c["args"])
+                    for c in message.tool_calls
+                ],
+            )
+        )
+
+    async def _stream_tool_result_msg(self, message: ToolMessage) -> None:
+        result = message.content
+        with suppress(json.JSONDecodeError):
+            if isinstance(result, list):
+                result = [json.loads(r) if isinstance(r, str) else r for r in result]
+            else:
+                result = json.loads(result)
+        await self.stream.write(
+            StreamMessage(
+                type="tool_result",
+                content=ToolResultContent(name=message.name or "", result=result),
+            )
+        )
+
     async def _handle_response(
         self, response: AsyncIterator[dict[str, Any] | Any]
     ) -> tuple[HumanMessage | Any, AIMessage | Any, list[BaseMessage]]:
@@ -416,50 +458,26 @@ class ChatProcessor:
         ai_message = None
         values_messages: list[BaseMessage] = []
         current_messages: list[BaseMessage] = []
-
+        message_chunk_holder = MessageChunkHolder()
         async for res_type, res_content in response:
-            event_type = None
-            content = None
             if res_type == "messages":
                 message, _ = res_content
                 if isinstance(message, AIMessage):
                     logger.log(TRACE, "got AI message: %s", message.model_dump_json())
-                    event_type = "tool_calls"
-                    if calls := message.tool_calls:
-                        content = [
-                            ToolCallsContent(name=c["name"], arguments=c["args"])
-                            for c in calls
-                        ]
-                    else:
-                        event_type = "text"
-                        content = self._str_output_parser.invoke(message)
+                    if message.content:
+                        await self._stream_text_msg(message)
+                    elif (
+                        combined_message := message_chunk_holder.feed(message)
+                    ) and combined_message.tool_calls:
+                        await self._stream_tool_calls_msg(combined_message)
                 elif isinstance(message, ToolMessage):
                     logger.log(TRACE, "got tool message: %s", message.model_dump_json())
-                    event_type = "tool_result"
-                    result = message.content
-                    with suppress(json.JSONDecodeError):
-                        if isinstance(result, list):
-                            result = [
-                                json.loads(r) if isinstance(r, str) else r
-                                for r in result
-                            ]
-                        else:
-                            result = json.loads(result)
-                    content = ToolResultContent(name=message.name or "", result=result)
+                    await self._stream_tool_result_msg(message)
                 else:
                     # idk what is this
                     logger.warning("Unknown message type: %s", message)
             elif res_type == "values" and len(res_content["messages"]) >= 2:  # type: ignore  # noqa: PLR2004
                 values_messages = res_content["messages"]  # type: ignore
-
-            if event_type and content:
-                logger.log(
-                    TRACE,
-                    "write event_type: %s, content: %s",
-                    event_type,
-                    content,
-                )
-                await self.stream.write(StreamMessage(type=event_type, content=content))
 
         # Find the most recent user and AI messages from newest to oldest
         user_message = next(

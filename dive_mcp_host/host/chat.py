@@ -1,11 +1,18 @@
 import asyncio
 import logging
 import uuid
+from collections import defaultdict
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from functools import reduce
 from typing import Any, Self, cast
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import BaseMessage, HumanMessage, RemoveMessage
+from langchain_core.messages import (
+    BaseMessage,
+    BaseMessageChunk,
+    HumanMessage,
+    RemoveMessage,
+)
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.graph import CompiledGraph
@@ -201,3 +208,31 @@ def _convert_query_to_messages(
             i if isinstance(i, BaseMessage) else HumanMessage(content=i) for i in query
         ]
     return []
+
+
+class MessageChunkHolder:
+    """Message chunk holder."""
+
+    def __init__(self) -> None:
+        """Initialize message chunk holder."""
+        self._msg_id: str | None = None
+        self._chunks: defaultdict[str, list[BaseMessageChunk]] = defaultdict(list)
+
+    def feed[T: BaseMessage | BaseMessageChunk](self, chunk: T) -> T | None:
+        """Feed a chunk, return a combined message if done."""
+        if isinstance(chunk, BaseMessageChunk) and chunk.id:
+            chunks = self._chunks[chunk.id]
+            chunks.append(chunk)
+            if chunk.response_metadata.get(
+                "finish_reason"
+            ) or chunk.response_metadata.get("done"):
+                return cast(
+                    T,
+                    reduce(
+                        lambda acc, x: acc + x,
+                        chunks[1:],
+                        chunks[0],
+                    ),
+                )
+            return None
+        return chunk
