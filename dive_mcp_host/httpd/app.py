@@ -28,6 +28,7 @@ async def lifespan(app: DiveHostAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.exception("Error in lifespan")
         app.report_status(error=str(e))
+        yield
     finally:
         await app.cleanup()
 
