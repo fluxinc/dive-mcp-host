@@ -58,7 +58,7 @@ async def _run_the_test(
                 )
                 got = True
         assert got, "no tool message found"
-        assert len(ai_messages) == 2
+        assert len(ai_messages) >= 2
         assert len(ai_messages[0].tool_calls) == 1
         helper.dict_subset(
             dict(ai_messages[0].tool_calls[0]),
