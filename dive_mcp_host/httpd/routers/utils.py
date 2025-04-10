@@ -383,9 +383,11 @@ class ChatProcessor:
         def _prompt_cb(_: Any) -> list[BaseMessage]:
             return messages
 
-        prompt: Callable[..., list[BaseMessage]] | None = None
+        prompt: str | Callable[..., list[BaseMessage]] | None = None
         if any(isinstance(m, SystemMessage) for m in messages):
             prompt = _prompt_cb
+        elif user_prompt := self.app.prompt_config_manager.get_prompt("system"):
+            prompt = user_prompt
 
         chat = self.dive_host.chat(
             chat_id=chat_id,
