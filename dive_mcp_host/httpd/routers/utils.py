@@ -278,12 +278,21 @@ class ChatProcessor:
                             ),
                         )
                 elif isinstance(message, ToolMessage):
+                    if isinstance(message.content, list):
+                        content = json.dumps(message.content)
+                    elif isinstance(message.content, str):
+                        content = message.content
+                    else:
+                        raise ValueError(
+                            f"got unknown type: {type(message.content)}, "
+                            f"data: {message.content}"
+                        )
                     await db.create_message(
                         NewMessage(
                             chatId=chat_id,
                             role=Role.TOOL_RESULT,
                             messageId=message.id,
-                            content=json.dumps(message.content),
+                            content=content,
                         ),
                     )
 
