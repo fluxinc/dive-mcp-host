@@ -60,6 +60,7 @@ class EventStreamContextManager:
     task: asyncio.Task | None = None
     done: bool = False
     response: StreamingResponse | None = None
+    _exit_message: str | None = None
 
     def __init__(self) -> None:
         """Initialize the event stream context manager."""
@@ -81,6 +82,9 @@ class EventStreamContextManager:
             import traceback
 
             logger.error(traceback.format_exception(exc_type, exc_val, exc_tb))
+            self._exit_message = StreamMessage(
+                type="error", content=str(exc_val)
+            ).model_dump_json(by_alias=True)
 
         self.done = True
         await self.queue.put(None)  # Signal completion
@@ -102,6 +106,8 @@ class EventStreamContextManager:
             if chunk is None:  # End signal
                 continue
             yield "data: " + chunk + "\n\n"
+        if self._exit_message:
+            yield "data: " + json.dumps({"message": self._exit_message}) + "\n\n"
         yield "data: [DONE]\n\n"
 
     def get_response(self) -> StreamingResponse:
