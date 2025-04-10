@@ -631,23 +631,18 @@ def test_chat_error(test_client, monkeypatch):
     )
     assert response.status_code == SUCCESS_CODE
 
-    content = response.content.decode("utf-8")
-
-    data_messages = re.findall(r"data: (.*?)\n\n", content)
-
     has_chat_info = False
     has_error = False
 
-    for data in data_messages:
-        if data != "[DONE]":
-            json_obj = json.loads(data)
-            if json_obj["message"]:
-                inner_json = json.loads(json_obj["message"])
-                if inner_json["type"] == "chat_info":
-                    has_chat_info = True
-                if inner_json["type"] == "error":
-                    has_error = True
-                    assert inner_json["content"] == "an test error"
+    for json_obj in helper.extract_stream(response.text):
+        assert "message" in json_obj
+        if json_obj["message"]:
+            inner_json = json.loads(json_obj["message"])
+            if inner_json["type"] == "chat_info":
+                has_chat_info = True
+            if inner_json["type"] == "error":
+                has_error = True
+                assert inner_json["content"] == "an test error"
 
     assert has_chat_info
     assert has_error
