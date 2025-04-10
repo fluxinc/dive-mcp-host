@@ -599,7 +599,7 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
         if msg["role"] == "tool_result":
             has_tool_result_msg = True
             tool_result_content = json.loads(msg["content"])
-            assert tool_result_content == "4"
+            assert tool_result_content == 4
 
         if msg["role"] == "assistant" and "The result of 2+2 is 4." in msg["content"]:
             has_assistant_msg = True
