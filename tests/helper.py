@@ -2,6 +2,7 @@ import json
 import re
 from collections.abc import Generator
 from os import getenv
+from typing import Any
 
 POSTGRES_URI = getenv("POSTGRES_URI", "postgresql://mcp:mcp@localhost:5432/mcp")
 SQLITE_URI = getenv("SQLITE_URI", "sqlite:///dummy.db")
@@ -53,7 +54,7 @@ def dict_subset(superset: dict, subset: dict) -> bool:
     return True
 
 
-def extract_stream(content: str) -> Generator[dict[str, dict], None, None]:
+def extract_stream(content: str) -> Generator[dict[str, Any], None, None]:
     """Extract the stream from the content.
 
     Args:

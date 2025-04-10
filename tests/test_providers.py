@@ -36,7 +36,7 @@ async def _run_the_test(
     ):
         got = False
         holders = MessageChunkHolder()
-        ai_messages = []
+        ai_messages: list[AIMessage] = []
         async for response in chat.query(
             HumanMessage(content="echo helloXXX with 10ms delay"),
             stream_mode=["updates", "messages"],
@@ -44,7 +44,7 @@ async def _run_the_test(
             event_type, event_data = response
             if event_type == "messages":
                 msg = event_data[0]
-                if isinstance(msg, AIMessage) and (msg := holders.one_msg(msg)):
+                if isinstance(msg, AIMessage) and (msg := holders.feed(msg)):
                     ai_messages.append(msg)
                 continue
             event_data = cast("AddableUpdatesDict", event_data)
@@ -61,7 +61,7 @@ async def _run_the_test(
         assert len(ai_messages) == 2
         assert len(ai_messages[0].tool_calls) == 1
         helper.dict_subset(
-            ai_messages[0].tool_calls[0],
+            dict(ai_messages[0].tool_calls[0]),
             model_tool_call,
         )
 
