@@ -20,11 +20,11 @@ from dive_mcp_host.host.conf import HostConfig, ServerConfig
 from dive_mcp_host.host.conf.llm import LLMConfig
 from dive_mcp_host.host.host import DiveMcpHost
 from dive_mcp_host.httpd.abort_controller import AbortController
-from dive_mcp_host.httpd.conf.command_alias.manager import CommandAliasManager
-from dive_mcp_host.httpd.conf.mcpserver.manager import MCPServerManager
-from dive_mcp_host.httpd.conf.model.manager import ModelManager
-from dive_mcp_host.httpd.conf.prompts.manager import PromptManager
-from dive_mcp_host.httpd.conf.service.manager import ServiceManager
+from dive_mcp_host.httpd.conf.command_alias import CommandAliasManager
+from dive_mcp_host.httpd.conf.httpd_service import ServiceManager
+from dive_mcp_host.httpd.conf.mcp_servers import MCPServerManager
+from dive_mcp_host.httpd.conf.models import ModelManager
+from dive_mcp_host.httpd.conf.prompt import PromptManager
 from dive_mcp_host.httpd.database.migrate import db_migration
 from dive_mcp_host.httpd.database.msg_store.base import BaseMessageStore
 from dive_mcp_host.httpd.database.msg_store.sqlite import SQLiteMessageStore

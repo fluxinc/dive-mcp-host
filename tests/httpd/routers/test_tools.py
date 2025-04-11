@@ -5,7 +5,7 @@ import pytest
 from fastapi import status
 
 from dive_mcp_host.host.tools.echo import ECHO_DESCRIPTION, IGNORE_DESCRIPTION
-from dive_mcp_host.httpd.conf.mcpserver.manager import MCPServerConfig
+from dive_mcp_host.httpd.conf.mcp_servers import MCPServerConfig
 from dive_mcp_host.httpd.routers.models import SimpleToolInfo
 from dive_mcp_host.httpd.routers.tools import McpTool, ToolsResult, list_tools
 from tests import helper
@@ -225,7 +225,7 @@ async def test_list_tools_with_no_config(mock_list_tools, test_client):
 
 @pytest.mark.asyncio
 @patch(
-    "dive_mcp_host.httpd.conf.mcpserver.manager.MCPServerManager.current_config",
+    "dive_mcp_host.httpd.conf.mcp_servers.MCPServerManager.current_config",
     new_callable=PropertyMock,
 )
 async def test_list_tools_with_missing_server_not_in_cache(

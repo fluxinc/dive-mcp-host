@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 import pytest_asyncio
 
-from dive_mcp_host.httpd.conf.service.manager import ServiceManager
+from dive_mcp_host.httpd.conf.httpd_service import ServiceManager
 from dive_mcp_host.httpd.routers.utils import ChatProcessor, HumanMessage
 from dive_mcp_host.httpd.server import DiveHostAPI
 from tests.httpd.routers.conftest import config_files  # noqa: F401

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic import Field, RootModel
 
-from dive_mcp_host.httpd.conf.envs import DIVE_CONFIG_DIR
+from dive_mcp_host.httpd.conf.misc import DIVE_CONFIG_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +58,3 @@ class CommandAliasManager:
 
         config_dict = CommandAliasConfig.model_validate_json(config_content)
         self._current_config = config_dict.root
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    manager = CommandAliasManager()
-    manager.initialize()
-    logger.info(manager.current_config)

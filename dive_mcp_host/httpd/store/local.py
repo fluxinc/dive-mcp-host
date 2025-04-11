@@ -8,7 +8,7 @@ from random import randint
 from fastapi import UploadFile
 from PIL import Image
 
-from dive_mcp_host.httpd.conf.envs import RESOURCE_DIR
+from dive_mcp_host.httpd.conf.misc import RESOURCE_DIR
 
 from .store import SUPPORTED_DOCUMENT_EXTENSIONS, SUPPORTED_IMAGE_EXTENSIONS, Store
 

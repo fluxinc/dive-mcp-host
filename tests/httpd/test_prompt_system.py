@@ -1,6 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
 
-from dive_mcp_host.httpd.conf.prompts.system import system_prompt
+from dive_mcp_host.httpd.conf.system_prompt import system_prompt
 
 
 def test_system_prompt():

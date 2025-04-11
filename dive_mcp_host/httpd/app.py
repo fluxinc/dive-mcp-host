@@ -5,7 +5,7 @@ from logging import getLogger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
-from dive_mcp_host.httpd.conf.service.manager import ServiceManager
+from dive_mcp_host.httpd.conf.httpd_service import ServiceManager
 from dive_mcp_host.httpd.middlewares import default_state, error_handler
 from dive_mcp_host.httpd.routers.chat import chat
 from dive_mcp_host.httpd.routers.config import config

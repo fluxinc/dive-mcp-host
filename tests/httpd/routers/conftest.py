@@ -11,13 +11,13 @@ from pydantic import AnyUrl
 from dive_mcp_host.host.conf import CheckpointerConfig
 from dive_mcp_host.host.conf.llm import LLMConfiguration
 from dive_mcp_host.httpd.app import DiveHostAPI, create_app
-from dive_mcp_host.httpd.conf.mcpserver.manager import Config, MCPServerConfig
-from dive_mcp_host.httpd.conf.service.manager import (
+from dive_mcp_host.httpd.conf.httpd_service import (
     ConfigLocation,
     DBConfig,
     ServiceConfig,
     ServiceManager,
 )
+from dive_mcp_host.httpd.conf.mcp_servers import Config, MCPServerConfig
 from dive_mcp_host.httpd.routers.models import ModelFullConfigs
 
 TEST_CHAT_ID = "41a81e8c-ed6d-4d93-8988-c8763f7b3e30"

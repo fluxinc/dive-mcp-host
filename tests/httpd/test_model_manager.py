@@ -6,9 +6,7 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 
-from dive_mcp_host.host.conf.llm import LLMConfiguration
-from dive_mcp_host.httpd.conf.model.manager import ModelManager
-from dive_mcp_host.httpd.routers.models import ModelFullConfigs, ModelSingleConfig
+from dive_mcp_host.httpd.conf.models import ModelManager
 
 # Register custom mark
 integration = pytest.mark.integration
@@ -59,68 +57,6 @@ class TestModelManager:
         assert manager1 is not manager2
         assert manager1.config_path == path1
         assert manager2.config_path == path2
-
-    @pytest.mark.asyncio
-    @patch("dive_mcp_host.httpd.conf.model.manager.ModelManager.save_single_settings")
-    async def test_save_single_settings(self, mock_save, mock_config_file):
-        """Test saving model configuration."""
-        manager = ModelManager(mock_config_file)
-        # Create model settings
-        test_settings = ModelSingleConfig.model_validate(
-            {
-                "model": "new_model",
-                "model_provider": "new_provider",
-                "api_key": None,
-                "configuration": {
-                    "base_url": None,  # type: ignore
-                    "temperature": None,
-                    "top_p": None,
-                },
-                "max_tokens": None,
-            },
-        )
-
-        # Set mock return value
-        mock_save.return_value = None
-
-        # Call the method
-        manager.save_single_settings("new_provider", test_settings, True)
-
-        # Verify the method was called
-        mock_save.assert_called_once_with("new_provider", test_settings, True)
-
-    @pytest.mark.asyncio
-    @patch("dive_mcp_host.httpd.conf.model.manager.ModelManager.replace_all_settings")
-    async def test_replace_all_settings(self, mock_replace, mock_config_file):
-        """Test replacing the entire model configuration."""
-        manager = ModelManager(mock_config_file)
-        new_config = ModelFullConfigs(
-            active_provider="replaced_provider",
-            enable_tools=True,
-            configs={
-                "replaced_provider": ModelSingleConfig(
-                    model="replaced_model",
-                    model_provider="replaced_provider",
-                    api_key=None,
-                    configuration=LLMConfiguration(
-                        base_url=None,  # type: ignore
-                        temperature=None,
-                        top_p=None,
-                    ),
-                    max_tokens=None,
-                )
-            },
-        )
-
-        # Set mock return value
-        mock_replace.return_value = True
-
-        # Call the method
-        result = manager.replace_all_settings(new_config)
-
-        # Verify
-        assert result is True
-        mock_replace.assert_called_once_with(new_config)
 
     @pytest.mark.asyncio
     async def test_initialize(self, mock_config_file):
@@ -210,7 +146,7 @@ class TestModelManagerIntegration:
             yield str(config_path)
 
     @pytest.mark.asyncio
-    @patch("dive_mcp_host.httpd.conf.model.manager.json.dump")
+    @patch("dive_mcp_host.httpd.conf.models.json.dump")
     async def test_full_model_workflow(self, mock_json_dump, test_config_path):
         """Test the complete model configuration, initialization, and usage workflow."""
         # Mock json.dump to avoid serialization issues

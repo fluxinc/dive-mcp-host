@@ -6,7 +6,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from dive_mcp_host.host.conf import CheckpointerConfig
-from dive_mcp_host.httpd.conf.envs import DIVE_CONFIG_DIR, RESOURCE_DIR
+from dive_mcp_host.httpd.conf.misc import DIVE_CONFIG_DIR, RESOURCE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -102,10 +102,3 @@ class ServiceManager:
     def config_path(self) -> str:
         """Get the configuration path."""
         return self._config_path
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    service_manager = ServiceManager()
-    service_manager.initialize()
-    logger.info("Service config: %s", service_manager.current_setting)
