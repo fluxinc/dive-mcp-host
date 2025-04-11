@@ -92,6 +92,16 @@ class Arguments(BaseModel):
         description="CORS origin to allow.",
     )
 
+    log_dir: Annotated[StrPath | None, AfterValidator(_convert_path)] = Field(
+        default=None,
+        description="Directory to write log files.",
+    )
+
+    log_level: str = Field(
+        default="INFO",
+        description="Log level to use.",
+    )
+
     @model_validator(mode="after")
     def rewrite_default_path(self) -> Self:
         """Rewrite default config file path according to working directory."""
