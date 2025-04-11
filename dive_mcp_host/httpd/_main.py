@@ -38,6 +38,23 @@ def main() -> None:
     if args.cors_origin:
         service_config_manager.current_setting.cors_origin = args.cors_origin
 
+    service_config_manager.current_setting.logging_config["root"]["level"] = (
+        args.log_level
+    )
+
+    if args.log_dir:
+        log_dir = Path(args.log_dir)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        service_config_manager.current_setting.logging_config["handlers"]["rotate"] = {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": log_dir.joinpath("dive_httpd.log"),
+            "maxBytes": 1048576,
+            "backupCount": 5,
+        }
+        service_config_manager.current_setting.logging_config["root"][
+            "handlers"
+        ].append("rotate")
+
     app = create_app(service_config_manager)
     app.set_status_report_info(
         listen=args.listen,
