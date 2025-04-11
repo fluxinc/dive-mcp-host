@@ -75,6 +75,7 @@ def main() -> None:
 
         try:
             serversocket.bind((args.listen, args.port))
+            serversocket.close()
         except OSError:
             error_msg = f"Failed to bind to {args.listen}:{args.port}"
             app.report_status(error=error_msg)
@@ -82,7 +83,8 @@ def main() -> None:
 
         uvicorn.run(
             app,
-            fd=serversocket.fileno(),
+            host=args.listen,
+            port=args.port,
             log_config=service_config_manager.current_setting.logging_config,
         )
 
@@ -94,6 +96,7 @@ def main() -> None:
             app.set_listen_port(port)
             try:
                 serversocket.bind((args.listen, port))
+                serversocket.close()
                 break
             except OSError:
                 pass
@@ -104,6 +107,7 @@ def main() -> None:
 
         uvicorn.run(
             app,
-            fd=serversocket.fileno(),
+            host=args.listen,
+            port=port,
             log_config=service_config_manager.current_setting.logging_config,
         )
