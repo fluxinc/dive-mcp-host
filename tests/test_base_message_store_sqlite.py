@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 from datetime import UTC, datetime
@@ -29,6 +30,7 @@ from dive_mcp_host.httpd.database.msg_store.sqlite import SQLiteMessageStore
 from dive_mcp_host.httpd.database.orm_models import Chat as ORMChat
 from dive_mcp_host.httpd.database.orm_models import Message as ORMMessage
 from dive_mcp_host.httpd.database.orm_models import Users as ORMUsers
+from dive_mcp_host.httpd.routers.models import SortBy
 from tests.helper import SQLITE_URI, SQLITE_URI_ASYNC
 
 # Fixtures for database setup and teardown
@@ -201,8 +203,39 @@ async def test_get_all_chats(
     # Verify results
     assert len(chats) == 2
     assert all(isinstance(chat, Chat) for chat in chats)
-    assert any(chat.id == sample_chat.id for chat in chats)
-    assert any(chat.id == another_chat.id for chat in chats)
+    assert chats[0].id == another_chat.id
+    assert chats[1].id == sample_chat.id
+
+    # Update create message for sample_chat
+    await asyncio.sleep(0.5)
+    await message_store.create_message(
+        NewMessage(
+            messageId=str(uuid.uuid4()),
+            chatId=sample_chat.id,
+            role=Role.USER,
+            content="Hello, this is a test message",
+            files=[],
+        )
+    )
+    await session.commit()
+
+    # Get all chats again (sort by message)
+    chats = await message_store.get_all_chats(sample_chat.user_id, SortBy.MESSAGE)
+
+    # Verify results
+    assert len(chats) == 2
+    assert all(isinstance(chat, Chat) for chat in chats)
+    assert chats[0].id == sample_chat.id
+    assert chats[1].id == another_chat.id
+
+    # Get all chats again (sort by chat)
+    chats = await message_store.get_all_chats(sample_chat.user_id, SortBy.CHAT)
+
+    # Verify results
+    assert len(chats) == 2
+    assert all(isinstance(chat, Chat) for chat in chats)
+    assert chats[0].id == another_chat.id
+    assert chats[1].id == sample_chat.id
 
 
 @pytest.mark.asyncio

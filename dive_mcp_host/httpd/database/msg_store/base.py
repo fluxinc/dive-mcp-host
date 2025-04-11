@@ -1,7 +1,8 @@
 import json
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, exists, insert, select, update
+from sqlalchemy import delete, desc, exists, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -19,8 +20,12 @@ from dive_mcp_host.httpd.database.orm_models import Message as ORMMessage
 from dive_mcp_host.httpd.database.orm_models import (
     ResourceUsage as ORMResourceUsage,
 )
+from dive_mcp_host.httpd.routers.models import SortBy
 
 from .abstract import AbstractMessageStore
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 class BaseMessageStore(AbstractMessageStore):
@@ -40,21 +45,53 @@ class BaseMessageStore(AbstractMessageStore):
     async def get_all_chats(
         self,
         user_id: str | None = None,
+        sort_by: SortBy = SortBy.CHAT,
     ) -> list[Chat]:
         """Retrieve all chats from the database.
 
         Args:
             user_id: User ID or fingerprint, depending on the prefix.
+            sort_by: Sort by.
+                - 'chat': Sort by chat creation time.
+                - 'msg': Sort by message creation time.
+                default: 'chat'
 
         Returns:
             List of Chat objects.
         """
-        query = (
-            select(ORMChat)
-            .where(ORMChat.user_id == user_id)
-            .order_by(ORMChat.created_at.desc())
-        )
-        chats = await self._session.scalars(query)
+        if sort_by == SortBy.MESSAGE:
+            query = (
+                select(
+                    ORMChat,
+                    func.coalesce(
+                        func.max(ORMMessage.created_at), ORMChat.created_at
+                    ).label("last_message_at"),
+                )
+                .outerjoin(ORMMessage, ORMChat.id == ORMMessage.chat_id)
+                .group_by(
+                    ORMChat.id,
+                    ORMChat.title,
+                    ORMChat.created_at,
+                    ORMChat.user_id,
+                )
+                .where(ORMChat.user_id == user_id)
+                .order_by(desc("last_message_at"))
+            )
+            result = await self._session.execute(query)
+            chats: Sequence[ORMChat] = result.scalars().all()
+
+        elif sort_by == SortBy.CHAT:
+            query = (
+                select(ORMChat)
+                .where(ORMChat.user_id == user_id)
+                .order_by(desc(ORMChat.created_at))
+            )
+            result = await self._session.scalars(query)
+            chats: Sequence[ORMChat] = result.all()
+
+        else:
+            raise ValueError(f"Invalid sort_by value: {sort_by}")
+
         return [
             Chat(
                 id=chat.id,

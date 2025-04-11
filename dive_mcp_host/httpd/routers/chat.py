@@ -11,6 +11,7 @@ from dive_mcp_host.httpd.database.models import (
 from dive_mcp_host.httpd.dependencies import get_app, get_dive_user
 from dive_mcp_host.httpd.routers.models import (
     ResultResponse,
+    SortBy,
     UserInputError,
 )
 from dive_mcp_host.httpd.routers.utils import ChatProcessor, EventStreamContextManager
@@ -34,18 +35,26 @@ class DataResult[T](ResultResponse):
 async def list_chat(
     app: DiveHostAPI = Depends(get_app),
     dive_user: "DiveUser" = Depends(get_dive_user),
+    sort_by: SortBy = SortBy.CHAT,
 ) -> DataResult[list[Chat]]:
     """List all available chats.
 
     Args:
         app (DiveHostAPI): The DiveHostAPI instance.
         dive_user (DiveUser): The DiveUser instance.
+        sort_by (SortBy):
+            - 'chat': Sort by chat creation time.
+            - 'msg': Sort by message creation time.
+            default: 'chat'
 
     Returns:
         DataResult[list[Chat]]: List of available chats.
     """
     async with app.db_sessionmaker() as session:
-        chats = await app.msg_store(session).get_all_chats(dive_user["user_id"])
+        chats = await app.msg_store(session).get_all_chats(
+            dive_user["user_id"],
+            sort_by=sort_by,
+        )
     return DataResult(success=True, message=None, data=chats)
 
 

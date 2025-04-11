@@ -243,3 +243,10 @@ class UserInputError(Exception):
             message (str): The error message.
         """
         self.message = message
+
+
+class SortBy(StrEnum):
+    """Sort by."""
+
+    CHAT = "chat"
+    MESSAGE = "msg"
