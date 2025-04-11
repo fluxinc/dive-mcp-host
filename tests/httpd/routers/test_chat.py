@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
 from fastapi import status
+from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, AIMessageChunk
+
+from dive_mcp_host.httpd.routers.models import SortBy
+from dive_mcp_host.httpd.server import DiveHostAPI
 
 if TYPE_CHECKING:
     from dive_mcp_host.host.host import DiveMcpHost
@@ -28,6 +32,72 @@ class ChatWithMessages:
 
     chat: Chat
     messages: list[Message]
+
+
+def test_list_chat_with_sort_by(test_client: tuple[TestClient, DiveHostAPI]):
+    """Test the /api/chat/list endpoint with sort by."""
+    client, app = test_client
+
+    # create another chat
+    test_chat_id_2 = str(uuid.uuid4())
+    response = client.post(
+        "/api/chat",
+        data={"message": "Hello World 22222", "chatId": test_chat_id_2},
+    )
+    assert response.status_code == SUCCESS_CODE
+
+    # create another message
+    response = client.post(
+        "/api/chat",
+        data={"message": "Hello World in old chat", "chatId": TEST_CHAT_ID},
+    )
+    assert response.status_code == SUCCESS_CODE
+
+    # sort by chat
+    response = client.get("/api/chat/list", params={"sort_by": SortBy.CHAT})
+    assert response.status_code == SUCCESS_CODE
+    response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "data": [
+                {
+                    "id": test_chat_id_2,
+                    "title": "I am a fake model.",
+                    "user_id": None,
+                },
+                {
+                    "id": TEST_CHAT_ID,
+                    "title": "I am a fake model.",
+                    "user_id": None,
+                },
+            ],
+        },
+    )
+
+    # sort by message
+    response = client.get("/api/chat/list", params={"sort_by": SortBy.MESSAGE})
+    assert response.status_code == SUCCESS_CODE
+    response_data = response.json()
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "data": [
+                {
+                    "id": TEST_CHAT_ID,
+                    "title": "I am a fake model.",
+                    "user_id": None,
+                },
+                {
+                    "id": test_chat_id_2,
+                    "title": "I am a fake model.",
+                    "user_id": None,
+                },
+            ],
+        },
+    )
 
 
 def test_list_chat(test_client):
