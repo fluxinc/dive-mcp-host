@@ -6,7 +6,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from dive_mcp_host.host.conf.llm import LLMConfigTypes, get_llm_config_type
-from dive_mcp_host.httpd.conf.envs import DIVE_CONFIG_DIR
+from dive_mcp_host.httpd.conf.misc import DIVE_CONFIG_DIR, write_then_replace
 from dive_mcp_host.httpd.routers.models import ModelFullConfigs, ModelSingleConfig
 
 # Logger setup
@@ -119,10 +119,10 @@ class ModelManager:
             self._full_config.configs[provider] = upload_model_settings
             self._full_config.enable_tools = enable_tools
 
-        tmp = Path(f"{self._config_path}.tmp")
-        with tmp.open("w", encoding="utf-8") as f:
-            f.write(self._full_config.model_dump_json(by_alias=True, exclude_none=True))
-        tmp.rename(self._config_path)
+        write_then_replace(
+            Path(self._config_path),
+            self._full_config.model_dump_json(by_alias=True, exclude_none=True),
+        )
 
     def replace_all_settings(
         self,
@@ -137,9 +137,7 @@ class ModelManager:
             True if successful.
         """
         self._full_config = upload_model_settings
-        tmp = Path(f"{self._config_path}.tmp")
-        with tmp.open("w", encoding="utf-8") as f:
-            f.write(
-                upload_model_settings.model_dump_json(by_alias=True, exclude_none=True)
-            )
-        tmp.rename(self._config_path)
+        write_then_replace(
+            Path(self._config_path),
+            upload_model_settings.model_dump_json(by_alias=True, exclude_none=True),
+        )

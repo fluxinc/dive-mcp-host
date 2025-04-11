@@ -2,8 +2,8 @@ import logging
 import os
 from pathlib import Path
 
-from dive_mcp_host.httpd.conf.envs import DIVE_CONFIG_DIR
-from dive_mcp_host.httpd.conf.prompts.system import system_prompt
+from dive_mcp_host.httpd.conf.misc import DIVE_CONFIG_DIR
+from dive_mcp_host.httpd.conf.system_prompt import system_prompt
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -85,10 +85,3 @@ class PromptManager:
         """Update the system prompt with current custom rules."""
         custom_rules = self.load_custom_rules()
         self.prompts["system"] = system_prompt(custom_rules)
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    prompt_manager = PromptManager()
-    system_prompt_text = prompt_manager.get_prompt("system")
-    logger.info("System prompt length: %d", len(system_prompt_text or ""))

@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, Field
 
-from dive_mcp_host.httpd.conf.envs import DIVE_CONFIG_DIR
+from dive_mcp_host.httpd.conf.misc import DIVE_CONFIG_DIR, write_then_replace
 
 
 # Define necessary types for configuration
@@ -106,23 +106,10 @@ class MCPServerManager:
         Returns:
             True if successful, False otherwise.
         """
-        with Path(self._config_path).open("w", encoding="utf-8") as f:
-            json_dict = new_config.model_dump(by_alias=True)
-            json.dump(json_dict, f, indent=2)
+        write_then_replace(
+            Path(self._config_path),
+            new_config.model_dump_json(by_alias=True),
+        )
 
         self._current_config = new_config
         return True
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    manager = MCPServerManager()
-    manager.initialize()
-    if manager.current_config:
-        logger.info(
-            "Available server configurations: %s",
-            list(manager.current_config.mcp_servers.keys()),
-        )
-
-    enabled_servers = manager.get_enabled_servers()
-    logger.info("Enabled servers: %s", enabled_servers)

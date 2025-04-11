@@ -3,7 +3,7 @@ from logging import getLogger
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
-from dive_mcp_host.httpd.conf.mcpserver.manager import Config
+from dive_mcp_host.httpd.conf.mcp_servers import Config
 from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.server import DiveHostAPI
 

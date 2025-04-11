@@ -15,7 +15,6 @@ from pydantic import BaseModel
 from starlette.datastructures import State
 
 from dive_mcp_host.host.chat import MessageChunkHolder
-from dive_mcp_host.httpd.conf.log import TRACE
 from dive_mcp_host.httpd.database.models import (
     Message,
     NewMessage,
@@ -33,6 +32,7 @@ from dive_mcp_host.httpd.routers.models import (
 )
 from dive_mcp_host.httpd.server import DiveHostAPI
 from dive_mcp_host.httpd.store.store import SUPPORTED_IMAGE_EXTENSIONS, Store
+from dive_mcp_host.log import TRACE
 
 if TYPE_CHECKING:
     from dive_mcp_host.host.host import DiveMcpHost
