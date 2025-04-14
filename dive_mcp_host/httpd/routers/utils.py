@@ -446,7 +446,7 @@ class ChatProcessor:
             )
         )
 
-    async def _handle_response(  # noqa: C901
+    async def _handle_response(  # noqa: C901, PLR0912
         self, response: AsyncIterator[dict[str, Any] | Any]
     ) -> tuple[HumanMessage | Any, AIMessage | Any, list[BaseMessage]]:
         """Handle response.
