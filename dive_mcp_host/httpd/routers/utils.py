@@ -479,15 +479,19 @@ class ChatProcessor:
                 if not isinstance(res_content, dict):
                     continue
 
-                msgs = res_content.get("chat", {}).get("messages", [])
-                for msg in msgs:
-                    if isinstance(msg, AIMessage) and msg.tool_calls:
-                        logger.log(
-                            TRACE,
-                            "got tool call message: %s",
-                            msg.model_dump_json(),
-                        )
-                        await self._stream_tool_calls_msg(msg)
+                for value in res_content.values():
+                    if not isinstance(value, dict):
+                        continue
+
+                    msgs = value.get("messages", [])
+                    for msg in msgs:
+                        if isinstance(msg, AIMessage) and msg.tool_calls:
+                            logger.log(
+                                TRACE,
+                                "got tool call message: %s",
+                                msg.model_dump_json(),
+                            )
+                            await self._stream_tool_calls_msg(msg)
 
         # Find the most recent user and AI messages from newest to oldest
         user_message = next(
