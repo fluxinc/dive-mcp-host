@@ -1,0 +1,175 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dive-mcp-host"
+version = "0.0.1"
+description = "A MCP host for Dive"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Alex Fang", email = "alex@funmula.com" },
+    { name = "Benny Ling", email = "benny@funmula.com" },
+    { name = "Louis Liu", email = "louis@funmula.com" }
+]
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "langchain-anthropic>=0.3",
+    "langchain-core>=0.3.46",
+    "langchain-google-genai>=2.1",
+    "langchain-openai>=0.3.11",
+    "langchain-ollama>=0.2",
+    "langchain-mistralai>=0.2",
+	"langchain-aws>=0.2",
+    "langchain>=0.3",
+    "langgraph-checkpoint-postgres>=0.3",
+    "langgraph-checkpoint-sqlite>=2",
+    "langgraph-prebuilt>=0.1.3",
+    "langgraph>=0.3.18",
+    "fastapi>=0.115.0",
+    "mcp==1.6.0",
+    "anyio>=4.9.0",
+    "pydantic>=2.11",
+    "pywin32>=306; sys_platform == 'win32' or platform_system == 'Windows'",
+    "sqlite-vec>=0.1.0",
+    "psycopg[binary]>=3.2.5",
+    "alembic>=1.15.1,< 1.16",                                                # Alembic doesn't use SemVer https://alembic.sqlalchemy.org/en/latest/front.html#versioning-scheme
+    "sqlalchemy[asyncio]>=2.0.38",
+    "psycopg2-binary>=2.9.10",
+    "asyncpg>=0.30.0",
+    "python-multipart>=0.0.20",
+    "pillow>=11.1.0",
+    "websockets >= 15.0",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+clipboard = []
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-integration",
+    "pytest-timeout",
+    "langchain-community",
+    "ruff",
+]
+
+[project.urls]
+Homepage = "https://github.com/OpenAgentPlatform/dive-mcp-py"
+
+[project.scripts]
+dive_httpd = "dive_mcp_host.httpd._main:main"
+dive_cli = "dive_mcp_host.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["integration: mark test as integration test"]
+timeout = 60
+filterwarnings = [
+    'ignore:Accessing this attribute on the instance',
+    'ignore:fields may not start with an underscore',
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+lint.select = [
+    "E",
+    "F",
+    "B",
+    "I",
+    "W",
+    "C90",
+    "N",
+    "D",
+    "UP",
+    "ANN",
+    "S",
+    "BLE",
+    "A",
+    "COM",
+    "C4",
+    "DTZ",
+    "T10",
+    "EM",
+    "EXE",
+    "ISC",
+    "ICN",
+    "G",
+    "INP",
+    "PIE",
+    "T20",
+    "PYI",
+    "PT",
+    "Q",
+    "RSE",
+    "RET",
+    "SLF",
+    "SLOT",
+    "SIM",
+    "TID",
+    "TCH",
+    "ARG",
+    "PTH",
+    "ERA",
+    "PD",
+    "PGH",
+    "PL",
+    "NPY",
+    "RUF",
+]
+lint.ignore = [
+    "ANN401",
+    "D100",
+    "D104",
+    "D105",
+    "EM",
+    "ERA001",
+    "COM812",
+    "B008",   # For FastAPI 'Depends' usage
+    "S101",   # Need assert statements for unknown values
+    "PGH003",
+]
+# Follow Google Style Guide
+lint.extend-select = ["I"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/test_*.py" = ["S101", "ANN", "D107", "ARG001", "PLR2004", "SLF001"]
+"dive_mcp_host/cli/**/*.py" = ["S101", "ANN", "D107", "T201"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = 88
+
+[tool.ruff.lint.pydocstyle]
+convention = "google" # Use Google-style docstrings
+
+[tool.ruff.lint.isort]
+force-single-line = false
+known-first-party = ["dive_mcp_host"]
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder",
+]
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 88

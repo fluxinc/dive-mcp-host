@@ -1,0 +1,16 @@
+{
+    "db": {
+        "uri": "sqlite:///db.sqlite",
+        "async_uri": "sqlite+aiosqlite:///db.sqlite",
+        "pool_size": 5,
+        "pool_recycle": 60,
+        "max_overflow": 10,
+        "echo": false,
+        "pool_pre_ping": true,
+        "migrate": true
+    },
+    "checkpointer": {
+        "uri": "sqlite:///db.sqlite"
+    },
+    "cors_origin": "http://localhost:5173"
+}

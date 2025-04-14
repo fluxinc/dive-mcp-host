@@ -1,0 +1,66 @@
+name: CI
+
+on: push
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version:
+          - "3.12"
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mcp
+          POSTGRES_PASSWORD: mcp
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv and set the python version
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    # Pip will not respect uv.lock, use uv sync to make sure we have the same dependencies
+    - name: Install dependencies
+      run: |
+        uv sync --extra dev
+
+    - name: Test with pytest
+      if: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/development'}}
+      env:
+        POSTGRES_URI: postgresql://mcp:mcp@postgres:5432/mcp
+        POSTGRES_URI_ASYNC: postgresql+asyncpg://mcp:mcp@postgres:5432/mcp
+        SQLITE_URI: sqlite:///dummy.db
+        SQLITE_URI_ASYNC: sqlite+aiosqlite:///dummy.db
+      run: |
+        uv run --extra dev pytest
+
+    - name: Test with pytest
+      if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development' }}
+      env:
+        POSTGRES_URI: postgresql://mcp:mcp@postgres:5432/mcp
+        POSTGRES_URI_ASYNC: postgresql+asyncpg://mcp:mcp@postgres:5432/mcp
+        SQLITE_URI: sqlite:///dummy.db
+        SQLITE_URI_ASYNC: sqlite+aiosqlite:///dummy.db
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        BEDROCK_ACCESS_KEY_ID: ${{ secrets.BEDROCK_ACCESS_KEY_ID }}
+        BEDROCK_SECRET_ACCESS_KEY: ${{ secrets.BEDROCK_SECRET_ACCESS_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+        SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
+        OLLAMA_URL: ${{ vars.OLLAMA_URL }}
+        OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL }}
+      run: |
+        uv run --extra dev pytest
+
+    - name: Lint with Ruff
+      if: ${{always()}}
+      run: |
+        ruff check --config pyproject.toml .
+        ruff format --config pyproject.toml --check .
