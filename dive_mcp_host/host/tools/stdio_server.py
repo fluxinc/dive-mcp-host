@@ -1,5 +1,5 @@
 """Copy of mcp.client.stdio.stdio_client."""
-import asyncio
+
 import logging
 import sys
 from collections.abc import AsyncGenerator
@@ -43,7 +43,7 @@ DEFAULT_INHERITED_ENV_VARS = (
 
 
 @asynccontextmanager
-async def stdio_client(  # noqa: C901, PLR0915
+async def stdio_client(  # noqa: PLR0915
     server: StdioServerParameters,
     errlog: TextIO = sys.stderr,
 ) -> AsyncGenerator[
