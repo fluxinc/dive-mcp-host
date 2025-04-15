@@ -203,7 +203,7 @@ class ChatProcessor:
             return "", TokenUsage()
         assert user_message.id
         assert ai_message.id
-        result = str(ai_message.content)
+        result = self._str_output_parser.invoke(ai_message)
 
         if title_await:
             title = await title_await
