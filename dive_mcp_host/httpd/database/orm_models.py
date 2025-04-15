@@ -128,7 +128,7 @@ class Message(Base):
     chat_id: Mapped[str] = mapped_column(ForeignKey("chats.id", ondelete="CASCADE"))
     message_id: Mapped[str] = mapped_column(Text(), unique=True)
     files: Mapped[str] = mapped_column(Text())
-    tool_calls: Mapped[list[ToolCall]] = mapped_column(
+    tool_calls: Mapped[list[ToolCall] | None] = mapped_column(
         PGJSONB().with_variant(SQLiteJSON(), "sqlite"), default=[]
     )
 

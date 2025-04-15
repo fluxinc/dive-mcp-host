@@ -154,7 +154,7 @@ class BaseMessageStore(AbstractMessageStore):
                     chatId=msg.chat_id,
                     messageId=msg.message_id,
                     files=json.loads(msg.files) if msg.files else [],
-                    tool_calls=msg.tool_calls,
+                    tool_calls=msg.tool_calls or [],
                     resource_usage=resource_usage,
                 ),
             )
@@ -246,7 +246,7 @@ class BaseMessageStore(AbstractMessageStore):
             chatId=new_msg.chat_id,
             messageId=new_msg.message_id,
             files=json.loads(new_msg.files),
-            tool_calls=new_msg.tool_calls,
+            tool_calls=new_msg.tool_calls or [],
             resource_usage=resource_usage,
         )
 
@@ -367,7 +367,7 @@ class BaseMessageStore(AbstractMessageStore):
             chatId=updated_message.chat_id,
             messageId=updated_message.message_id,
             files=json.loads(updated_message.files) if updated_message.files else [],
-            tool_calls=updated_message.tool_calls,
+            tool_calls=updated_message.tool_calls or [],
             resource_usage=resource_usage,
         )
 
@@ -427,6 +427,6 @@ class BaseMessageStore(AbstractMessageStore):
             chatId=message.chat_id,
             messageId=message.message_id,
             files=json.loads(message.files) if message.files else [],
-            tool_calls=message.tool_calls,
+            tool_calls=message.tool_calls or [],
             resource_usage=resource_usage,
         )

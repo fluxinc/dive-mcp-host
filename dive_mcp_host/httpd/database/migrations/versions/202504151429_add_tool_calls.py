@@ -28,7 +28,7 @@ def upgrade() -> None:
             sa.Column(
                 "tool_calls",
                 PGJSONB().with_variant(SQLiteJSON(), "sqlite"),
-                nullable=False,
+                nullable=True,
             )
         )
     # ### end Alembic commands ###

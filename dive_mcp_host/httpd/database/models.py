@@ -20,7 +20,7 @@ class QueryInput(BaseModel):
     text: str | None
     images: list[str] | None
     documents: list[str] | None
-    tool_calls: list[dict] = Field(default_factory=list)
+    tool_calls: list[ToolCall] = Field(default_factory=list)
 
 
 class Chat(BaseModel):
