@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from langchain_core.messages import ToolCall
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ResourceUsage(BaseModel):
@@ -50,7 +50,9 @@ class NewMessage(BaseModel):
     message_id: str = Field(alias="messageId")
     resource_usage: ResourceUsage | None = None
     files: list[str] = Field(default_factory=list)
-    tool_calls: list[ToolCall] = Field(default_factory=list)
+    tool_calls: list[ToolCall] = Field(default_factory=list, alias="toolCalls")
+
+    model_config = ConfigDict(validate_by_name=True, validate_by_alias=True)
 
 
 class Message(BaseModel):
@@ -64,7 +66,9 @@ class Message(BaseModel):
     message_id: str = Field(alias="messageId")
     resource_usage: ResourceUsage | None = None
     files: list[str] = Field(default_factory=list)
-    tool_calls: list[ToolCall] = Field(default_factory=list)
+    tool_calls: list[ToolCall] = Field(default_factory=list, alias="toolCalls")
+
+    model_config = ConfigDict(validate_by_name=True, validate_by_alias=True)
 
 
 class ChatMessage(BaseModel):
