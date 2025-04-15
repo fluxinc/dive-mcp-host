@@ -264,26 +264,16 @@ class ChatProcessor:
                         else 0,
                         total_run_time=duration,
                     )
-                    if message.tool_calls:
-                        await db.create_message(
-                            NewMessage(
-                                chatId=chat_id,
-                                role=Role.TOOL_CALL,
-                                messageId=message.id,
-                                content=json.dumps(message.tool_calls),
-                                resource_usage=resource_usage,
-                            ),
-                        )
-                    else:
-                        await db.create_message(
-                            NewMessage(
-                                chatId=chat_id,
-                                role=Role.ASSISTANT,
-                                messageId=message.id,
-                                content=result,
-                                resource_usage=resource_usage,
-                            ),
-                        )
+                    await db.create_message(
+                        NewMessage(
+                            chatId=chat_id,
+                            role=Role.ASSISTANT,
+                            messageId=message.id,
+                            content=result,
+                            tool_calls=message.tool_calls,
+                            resource_usage=resource_usage,
+                        ),
+                    )
                 elif isinstance(message, ToolMessage):
                     if isinstance(message.content, list):
                         content = json.dumps(message.content)

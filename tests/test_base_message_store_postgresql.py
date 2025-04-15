@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 import pytest_asyncio
 from alembic import command
+from langchain_core.messages import ToolCall
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -117,7 +118,7 @@ async def sample_messages(session: AsyncSession, sample_chat: ORMChat):
         content="Hello, I am an AI assistant",
         created_at=datetime.now(UTC),
         files="",
-        tool_calls=[{"some": "tool_call"}],
+        tool_calls=[ToolCall(name="test", args={"test": "test"}, id="test")],
     )
     session.add(assistant_msg)
 
@@ -166,7 +167,7 @@ async def sample_messages_no_user(session: AsyncSession, sample_chat_no_user: OR
         content="Hello, I am an AI assistant",
         created_at=datetime.now(UTC),
         files="",
-        tool_calls=[{"some": "tool_call"}],
+        tool_calls=[ToolCall(name="test", args={"test": "test"}, id="test")],
     )
     session.add(assistant_msg)
 
@@ -476,7 +477,9 @@ async def test_get_next_ai_message(
     assert isinstance(next_ai_message, Message)
     assert next_ai_message.role == Role.ASSISTANT
     assert next_ai_message.message_id == sample_messages["assistant_message"].message_id
-    assert next_ai_message.tool_calls == [{"some": "tool_call"}]
+    assert next_ai_message.tool_calls == [
+        ToolCall(name="test", args={"test": "test"}, id="test")
+    ]
 
 
 @pytest.mark.asyncio

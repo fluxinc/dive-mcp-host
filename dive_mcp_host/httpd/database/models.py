@@ -1,6 +1,7 @@
 from datetime import datetime
 from enum import StrEnum
 
+from langchain_core.messages import ToolCall
 from pydantic import BaseModel, Field
 
 
@@ -49,7 +50,7 @@ class NewMessage(BaseModel):
     message_id: str = Field(alias="messageId")
     resource_usage: ResourceUsage | None = None
     files: list[str] = Field(default_factory=list)
-    tool_calls: list[dict] = Field(default_factory=list)
+    tool_calls: list[ToolCall] = Field(default_factory=list)
 
 
 class Message(BaseModel):
@@ -61,9 +62,9 @@ class Message(BaseModel):
     role: Role
     chat_id: str = Field(alias="chatId")
     message_id: str = Field(alias="messageId")
-    tool_calls: list[dict] = Field(default_factory=list)
     resource_usage: ResourceUsage | None = None
     files: list[str] = Field(default_factory=list)
+    tool_calls: list[ToolCall] = Field(default_factory=list)
 
 
 class ChatMessage(BaseModel):
