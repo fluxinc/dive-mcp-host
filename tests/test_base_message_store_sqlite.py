@@ -117,6 +117,7 @@ async def sample_messages(session: AsyncSession, sample_chat: ORMChat):
         content="Hello, I am an AI assistant",
         created_at=datetime.now(UTC),
         files="",
+        tool_calls=[{"some": "tool_call"}],
     )
     session.add(assistant_msg)
 
@@ -165,6 +166,7 @@ async def sample_messages_no_user(session: AsyncSession, sample_chat_no_user: OR
         content="Hello, I am an AI assistant",
         created_at=datetime.now(UTC),
         files="",
+        tool_calls=[],
     )
     session.add(assistant_msg)
 
@@ -215,6 +217,7 @@ async def test_get_all_chats(
             role=Role.USER,
             content="Hello, this is a test message",
             files=[],
+            tool_calls=[],
         )
     )
     await session.commit()
@@ -321,6 +324,7 @@ async def test_create_message(
         role=Role.USER,
         content="This is a new test message",
         files=[],
+        tool_calls=[],
     )
 
     # Create message
@@ -332,6 +336,7 @@ async def test_create_message(
     assert created_message.message_id == message_id
     assert created_message.content == "This is a new test message"
     assert created_message.role == Role.USER
+    assert created_message.tool_calls == []
 
     # Verify message was saved to database
     query = select(ORMMessage).where(ORMMessage.message_id == message_id)
@@ -361,6 +366,7 @@ async def test_create_message_with_resource_usage(
         role=Role.ASSISTANT,
         content="This is an assistant message",
         files=[],
+        tool_calls=[],
         resource_usage=resource_usage,
     )
 
@@ -435,6 +441,7 @@ async def test_delete_messages_after(
         content="This message should be deleted",
         created_at=datetime.now(UTC),
         files="",
+        tool_calls=[],
     )
     session.add(new_msg)
     await session.commit()
@@ -473,6 +480,7 @@ async def test_get_next_ai_message(
     assert isinstance(next_ai_message, Message)
     assert next_ai_message.role == Role.ASSISTANT
     assert next_ai_message.message_id == sample_messages["assistant_message"].message_id
+    assert next_ai_message.tool_calls == [{"some": "tool_call"}]
 
 
 @pytest.mark.asyncio
@@ -508,6 +516,7 @@ async def test_get_next_ai_message_not_found(
         content="Message without response",
         created_at=datetime.now(UTC),
         files="",
+        tool_calls=[],
     )
     session.add(user_msg)
     await session.commit()
@@ -651,7 +660,9 @@ async def test_update_message_content_not_found(
     """Test updating a non-existent message."""
     # Create update data
     update_data = QueryInput(
-        text="Updated message content", images=["image1.jpg"], documents=["doc1.pdf"]
+        text="Updated message content",
+        images=["image1.jpg"],
+        documents=["doc1.pdf"],
     )
 
     # Try to update a non-existent message
@@ -677,7 +688,9 @@ async def test_update_message_content_wrong_user(
 
     # Create update data
     update_data = QueryInput(
-        text="Updated message content", images=["image1.jpg"], documents=["doc1.pdf"]
+        text="Updated message content",
+        images=["image1.jpg"],
+        documents=["doc1.pdf"],
     )
 
     # Try to update the message with wrong user ID
@@ -721,6 +734,7 @@ async def test_update_message_content_empty_data(
     assert updated_message.files == []
     assert updated_message.role == Role.USER
     assert updated_message.chat_id == sample_chat.id
+    assert updated_message.tool_calls == []
 
     # Verify the message was actually updated in the database
     query = select(ORMMessage).where(ORMMessage.message_id == user_message.message_id)
@@ -728,3 +742,4 @@ async def test_update_message_content_empty_data(
     assert db_message is not None
     assert db_message.content == ""
     assert db_message.files == ""
+    assert db_message.tool_calls == []

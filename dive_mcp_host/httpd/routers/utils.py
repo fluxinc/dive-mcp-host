@@ -224,6 +224,7 @@ class ChatProcessor:
                             text=query_input.text or "",
                             images=query_input.images or [],
                             documents=query_input.documents or [],
+                            tool_calls=query_input.tool_calls,
                         ),
                     )
 
