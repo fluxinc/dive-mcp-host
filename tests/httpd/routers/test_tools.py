@@ -321,6 +321,7 @@ def test_tools_cache_after_update(test_client):
     assert response.status_code == status.HTTP_200_OK
     first_time = cast(dict[str, Any], response.json())
     # we can have 2 tools even missing_server is failed to load
+    first_time["tools"] = sorted(first_time["tools"], key=lambda x: x["name"])
     assert len(first_time["tools"]) == 2
 
     conf = {
@@ -347,4 +348,6 @@ def test_tools_cache_after_update(test_client):
     # Even when all servers are disabled, we can still see them from the cache
     for tool in first_time["tools"]:
         tool["enabled"] = False  # all servers are disabled
-    assert first_time == response.json()
+    confirm = response.json()
+    confirm["tools"] = sorted(confirm["tools"], key=lambda x: x["name"])
+    assert first_time == confirm
