@@ -791,7 +791,7 @@ def test_chat_with_tool_calls(test_client, monkeypatch):  # noqa: C901, PLR0915
             has_assistant_msg = True
 
             # NOTE: tool_call might be included in the assistant message
-            tool_call_content = msg["tool_calls"]
+            tool_call_content = msg["toolCalls"]
             if len(tool_call_content) > 0:
                 has_tool_call_msg = True
                 assert tool_call_content == [
