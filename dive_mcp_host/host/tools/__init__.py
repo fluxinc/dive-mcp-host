@@ -100,7 +100,7 @@ class ToolManager(ContextProtocol):
         """Get the langchain tools for the MCP servers."""
         return list(
             chain.from_iterable(
-                [i.get_tools() for i in self._mcp_servers.values() if tool_filter(i)],
+                [i.mcp_tools for i in self._mcp_servers.values() if tool_filter(i)],
             ),
         )
 
@@ -180,11 +180,16 @@ class ToolManager(ContextProtocol):
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
         """Get the langchain tools for the MCP servers."""
         # we can manipulate the stack to add or remove tools
-        await self._launch_tools(self._mcp_servers)
+        self._launch_tools_task = asyncio.create_task(
+            self._launch_tools(self._mcp_servers),
+            name="init-launch-tools",
+        )
         try:
             yield self
         finally:
             await self._shutdown_tools(list(self._mcp_servers.keys()))
+            self._launch_tools_task.cancel()
+            await self._launch_tools_task
 
     @property
     def mcp_server_info(self) -> dict[str, McpServerInfo]:
@@ -487,9 +492,12 @@ class McpServer(ContextProtocol):
             )
         raise InvalidMcpServerError(self.name, "No url or command provided.")
 
-    def get_tools(self) -> list[McpTool]:
+    @property
+    def mcp_tools(self) -> list[McpTool]:
         """Get the tools."""
-        return self._mcp_tools
+        if self._client_status == ClientState.RUNNING:
+            return self._mcp_tools
+        return []
 
     def __change_state(
         self,
