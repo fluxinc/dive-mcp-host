@@ -23,6 +23,15 @@ class ToolsResult(ResultResponse):
     tools: list[McpTool]
 
 
+@tools.get("/init-ready")
+async def init_ready(
+    app: DiveHostAPI = Depends(get_app),
+) -> ResultResponse:
+    """Check if initial setup is complete."""
+    await app.dive_host["default"].tools_init_ready.wait()
+    return ResultResponse(success=True, message=None)
+
+
 @tools.get("/")
 async def list_tools(
     app: DiveHostAPI = Depends(get_app),
