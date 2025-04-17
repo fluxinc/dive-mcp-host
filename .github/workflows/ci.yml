@@ -5,7 +5,7 @@ on: push
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
-    container: ubuntu:latest
+    container: node:22-slim
     strategy:
       matrix:
         python-version:
