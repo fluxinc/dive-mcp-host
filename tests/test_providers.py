@@ -31,38 +31,39 @@ async def _run_the_test(
     }
     async with (
         DiveMcpHost(config) as mcp_host,
-        mcp_host.chat() as chat,
     ):
-        got_tool_msg = False
-        ai_messages: list[AIMessage] = []
-        async for response in chat.query(
-            HumanMessage(content="echo helloXXX with 10ms delay"),
-            stream_mode=["updates", "messages"],
-        ):
-            event_type, event_data = response
-            # if event_type == "messages":
-            #     msg = event_data[0]
-            #     continue
-            if event_type == "updates":
-                event_data = cast("AddableUpdatesDict", event_data)
-                for msg_dict in event_data.values():
-                    rep = {}
-                    for msg in msg_dict.get("messages", []):
-                        if isinstance(msg, ToolMessage) and isinstance(
-                            msg.content, str
-                        ):
-                            rep = json.loads(msg.content)[0]
-                            assert helper.dict_subset(
-                                rep,
-                                {
-                                    "type": "text",
-                                    "text": "helloXXX",
-                                    "annotations": None,
-                                },
-                            )
-                            got_tool_msg = True
-                        if isinstance(msg, AIMessage):
-                            ai_messages.append(msg)
+        await mcp_host.tools_initialized_event.wait()
+        async with mcp_host.chat() as chat:
+            got_tool_msg = False
+            ai_messages: list[AIMessage] = []
+            async for response in chat.query(
+                HumanMessage(content="echo helloXXX with 10ms delay"),
+                stream_mode=["updates", "messages"],
+            ):
+                event_type, event_data = response
+                # if event_type == "messages":
+                #     msg = event_data[0]
+                #     continue
+                if event_type == "updates":
+                    event_data = cast("AddableUpdatesDict", event_data)
+                    for msg_dict in event_data.values():
+                        rep = {}
+                        for msg in msg_dict.get("messages", []):
+                            if isinstance(msg, ToolMessage) and isinstance(
+                                msg.content, str
+                            ):
+                                rep = json.loads(msg.content)[0]
+                                assert helper.dict_subset(
+                                    rep,
+                                    {
+                                        "type": "text",
+                                        "text": "helloXXX",
+                                        "annotations": None,
+                                    },
+                                )
+                                got_tool_msg = True
+                            if isinstance(msg, AIMessage):
+                                ai_messages.append(msg)
         assert got_tool_msg, "no tool message found"
         assert len(ai_messages) >= 2
         for i in ai_messages:

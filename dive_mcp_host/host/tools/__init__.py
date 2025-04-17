@@ -87,6 +87,7 @@ class ToolManager(ContextProtocol):
         self._mcp_servers = dict[str, McpServer]()
         self._mcp_servers_task = dict[str, tuple[asyncio.Task, asyncio.Event]]()
         self._lock = asyncio.Lock()
+        self._initialized_event = asyncio.Event()
 
         self._mcp_servers = {
             name: McpServer(name=name, config=config)
@@ -100,7 +101,7 @@ class ToolManager(ContextProtocol):
         """Get the langchain tools for the MCP servers."""
         return list(
             chain.from_iterable(
-                [i.get_tools() for i in self._mcp_servers.values() if tool_filter(i)],
+                [i.mcp_tools for i in self._mcp_servers.values() if tool_filter(i)],
             ),
         )
 
@@ -123,6 +124,8 @@ class ToolManager(ContextProtocol):
         async with self._lock, asyncio.TaskGroup() as tg:
             for name, server in servers.items():
                 tg.create_task(_launch_task(name, server))
+
+        self._initialized_event.set()
 
     async def _shutdown_tools(self, servers: Iterable[str]) -> None:
         async def _shutdown_task(name: str) -> None:
@@ -180,11 +183,16 @@ class ToolManager(ContextProtocol):
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
         """Get the langchain tools for the MCP servers."""
         # we can manipulate the stack to add or remove tools
-        await self._launch_tools(self._mcp_servers)
+        launch_tools_task = asyncio.create_task(
+            self._launch_tools(self._mcp_servers),
+            name="init-launch-tools",
+        )
         try:
             yield self
         finally:
             await self._shutdown_tools(list(self._mcp_servers.keys()))
+            launch_tools_task.cancel()
+            await launch_tools_task
 
     @property
     def mcp_server_info(self) -> dict[str, McpServerInfo]:
@@ -195,6 +203,14 @@ class ToolManager(ContextProtocol):
             If the mcp server is not initialized, the value will be `None`.
         """
         return {name: i.server_info for name, i in self._mcp_servers.items()}
+
+    @property
+    def initialized_event(self) -> asyncio.Event:
+        """Get the initialization event.
+
+        Only useful on initial startup, not when reloading.
+        """
+        return self._initialized_event
 
 
 class ClientState(Enum):
@@ -487,9 +503,12 @@ class McpServer(ContextProtocol):
             )
         raise InvalidMcpServerError(self.name, "No url or command provided.")
 
-    def get_tools(self) -> list[McpTool]:
+    @property
+    def mcp_tools(self) -> list[McpTool]:
         """Get the tools."""
-        return self._mcp_tools
+        if self._client_status == ClientState.RUNNING:
+            return self._mcp_tools
+        return []
 
     def __change_state(
         self,

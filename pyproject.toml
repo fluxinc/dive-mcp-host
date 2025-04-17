@@ -22,7 +22,7 @@ dependencies = [
     "langchain-openai>=0.3.11",
     "langchain-ollama>=0.2",
     "langchain-mistralai>=0.2",
-	"langchain-aws>=0.2",
+    "langchain-aws>=0.2",
     "langchain>=0.3",
     "langgraph-checkpoint-postgres>=0.3",
     "langgraph-checkpoint-sqlite>=2",
@@ -35,7 +35,7 @@ dependencies = [
     "pywin32>=306; sys_platform == 'win32' or platform_system == 'Windows'",
     "sqlite-vec>=0.1.0",
     "psycopg[binary]>=3.2.5",
-    "alembic>=1.15.1,< 1.16",                                                # Alembic doesn't use SemVer https://alembic.sqlalchemy.org/en/latest/front.html#versioning-scheme
+    "alembic>=1.15.1,< 1.16", # Alembic doesn't use SemVer https://alembic.sqlalchemy.org/en/latest/front.html#versioning-scheme
     "sqlalchemy[asyncio]>=2.0.38",
     "psycopg2-binary>=2.9.10",
     "asyncpg>=0.30.0",
