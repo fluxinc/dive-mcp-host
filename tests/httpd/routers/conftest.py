@@ -142,7 +142,7 @@ async def test_client(
     app.set_listen_port(61990)
     with TestClient(app, raise_server_exceptions=False) as client:
         # create a simple chat
-        client.get("/api/tools/init-ready")
+        client.get("/api/tools/initialized")
         client.post(
             "/api/chat", data={"message": "Hello, world!", "chatId": TEST_CHAT_ID}
         )

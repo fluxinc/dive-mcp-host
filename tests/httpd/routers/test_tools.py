@@ -27,10 +27,10 @@ class MockServerInfo:
         self.error = error
 
 
-def test_init_ready(test_client):
+def test_initialized(test_client):
     """Test the GET endpoint."""
     client, _ = test_client
-    response = client.get("/api/tools/init-ready")
+    response = client.get("/api/tools/initialized")
     assert response.status_code == status.HTTP_200_OK
 
 

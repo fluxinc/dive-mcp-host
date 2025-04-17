@@ -87,7 +87,7 @@ class ToolManager(ContextProtocol):
         self._mcp_servers = dict[str, McpServer]()
         self._mcp_servers_task = dict[str, tuple[asyncio.Task, asyncio.Event]]()
         self._lock = asyncio.Lock()
-        self._init_ready = asyncio.Event()
+        self._initialized_event = asyncio.Event()
 
         self._mcp_servers = {
             name: McpServer(name=name, config=config)
@@ -125,7 +125,7 @@ class ToolManager(ContextProtocol):
             for name, server in servers.items():
                 tg.create_task(_launch_task(name, server))
 
-        self._init_ready.set()
+        self._initialized_event.set()
 
     async def _shutdown_tools(self, servers: Iterable[str]) -> None:
         async def _shutdown_task(name: str) -> None:
@@ -205,9 +205,12 @@ class ToolManager(ContextProtocol):
         return {name: i.server_info for name, i in self._mcp_servers.items()}
 
     @property
-    def init_ready(self) -> asyncio.Event:
-        """Check if the tools init startup has completed."""
-        return self._init_ready
+    def initialized_event(self) -> asyncio.Event:
+        """Get the initialization event.
+
+        Only useful on initial startup, not when reloading.
+        """
+        return self._initialized_event
 
 
 class ClientState(Enum):

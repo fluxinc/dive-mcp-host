@@ -32,7 +32,7 @@ async def _run_the_test(
     async with (
         DiveMcpHost(config) as mcp_host,
     ):
-        await mcp_host.tools_init_ready.wait()
+        await mcp_host.tools_initialized_event.wait()
         async with mcp_host.chat() as chat:
             got_tool_msg = False
             ai_messages: list[AIMessage] = []
