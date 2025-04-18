@@ -7,6 +7,7 @@ from pydantic import (
     ConfigDict,
     Field,
     RootModel,
+    SecretStr,
     model_validator,
 )
 from pydantic.alias_generators import to_camel
@@ -194,7 +195,7 @@ class ModelSingleConfig(BaseModel):
     model_provider: str
     model: str
     max_tokens: int | None = None
-    api_key: str | None = None
+    api_key: SecretStr | None = None
     configuration: LLMConfiguration | None = None
     active: bool = Field(default=True)
     checked: bool = Field(default=False)
