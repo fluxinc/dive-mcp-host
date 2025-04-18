@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from pydantic.alias_generators import to_camel, to_snake
 
 SpecialProvider = Literal["dive", "__load__"]
@@ -29,9 +29,9 @@ pydantic_model_config = ConfigDict(
 class Credentials(BaseModel):
     """Credentials for the LLM model."""
 
-    access_key_id: str = ""
-    secret_access_key: str = ""
-    session_token: str = ""
+    access_key_id: SecretStr = Field(default_factory=lambda: SecretStr(""))
+    secret_access_key: SecretStr = Field(default_factory=lambda: SecretStr(""))
+    session_token: SecretStr = Field(default_factory=lambda: SecretStr(""))
     credentials_profile_name: str = ""
 
     model_config = pydantic_model_config
@@ -72,7 +72,7 @@ class LLMConfiguration(BaseModel):
 class LLMConfig(BaseLLMConfig):
     """Configuration for general LLM models."""
 
-    api_key: str | None = Field(default=None)
+    api_key: SecretStr | None = Field(default=None)
     configuration: LLMConfiguration | None = Field(default=None)
 
     model_config = pydantic_model_config
