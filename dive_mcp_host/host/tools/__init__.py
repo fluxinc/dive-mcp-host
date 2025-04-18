@@ -766,9 +766,7 @@ async def local_mcp_net_server_client(
     env = env or config.env
     assert config.url is not None, "url is required"
     get_client = sse_client if config.transport == "sse" else websocket_client
-    logger.debug(
-        "Starting local MCP server %s with command: %s %s", config.name, command, args
-    )
+    logger.debug("Starting local MCP server %s with command: %s", config.name, command)
     if not (
         subprocess := await asyncio.create_subprocess_exec(
             command,
