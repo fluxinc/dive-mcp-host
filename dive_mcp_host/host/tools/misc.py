@@ -6,8 +6,8 @@ from langchain_core.tools import BaseTool
 class TestTool(BaseTool):
     """Test tool."""
 
-    name: str = "test_tool"
-    description: str = "a simple test tool check tool functionality call it any name with any arguments, returns nothing"  # noqa: E501
+    name: str = "weather_tool"
+    description: str = "get weather information for a specific city"  # noqa: E501
     called: bool = False
 
     def _run(self, *_args: Any, **_kwargs: Any) -> Any:
