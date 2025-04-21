@@ -33,6 +33,12 @@ uv pip install -e .
 uv sync --frozen
 ```
 
+4. Activate the virtual environment
+
+```bash
+source .venv/bin/activate
+```
+
 ### Starting the HTTP Service
 
 Use the following command to start the HTTP service:
