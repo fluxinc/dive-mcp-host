@@ -175,7 +175,8 @@ class ModelVerifyService:
                 _responses = [
                     response
                     async for response in chat.query(
-                        "run test_tool", stream_mode=["updates"]
+                        "run weather_tool to get weather information for Tokyo",
+                        stream_mode=["updates"],
                     )
                 ]
             return test_tool.called, None
