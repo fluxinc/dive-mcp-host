@@ -7,7 +7,7 @@ class TestTool(BaseTool):
     """Test tool."""
 
     name: str = "weather_tool"
-    description: str = "get weather information for a specific city"  # noqa: E501
+    description: str = "get weather information for a specific city"
     called: bool = False
 
     def _run(self, *_args: Any, **_kwargs: Any) -> Any:
