@@ -577,11 +577,12 @@ class ChatProcessor:
                             }
                         )
                     else:
+                        base64_document, _ = await self.store.get_document(local_path)
                         content.append(
                             {
                                 "type": "text",
-                                "text": f"![Document]({local_path})",
-                            }
+                                "text": f"source: {local_path}, content: {base64_document}",  # noqa: E501
+                            },
                         )
 
                 if message.role == Role.ASSISTANT:
@@ -625,12 +626,14 @@ class ChatProcessor:
 
         for document in query_input.documents or []:
             local_path = document
+            base64_document, _ = await self.store.get_document(local_path)
             content.append(
                 {
                     "type": "text",
-                    "text": f"![Document]({local_path})",
-                }
+                    "text": f"source: {local_path}, content: {base64_document}",
+                },
             )
+
         return HumanMessage(content=content, id=message_id)
 
     async def _get_history_user_input(

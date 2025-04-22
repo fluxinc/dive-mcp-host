@@ -283,7 +283,6 @@ def test_edit_chat(test_client):
         data={
             "chatId": test_chat_id,
             "message": "test message",
-            "filepaths": ["test_path.txt"],
         },
         files={"files": ("test.txt", test_file, "text/plain")},
     )
@@ -319,7 +318,6 @@ def test_edit_chat(test_client):
             "chatId": test_chat_id,
             "messageId": user_message_id,
             "content": "edited message",
-            "filepaths": ["test_edit_path.txt"],
         },
         files={"files": ("test_edit.txt", test_file, "text/plain")},
     )
