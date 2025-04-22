@@ -220,9 +220,9 @@ class ChatProcessor:
                     chat_id, title, dive_user["user_id"], dive_user["user_type"]
                 )
 
-            if regenerate_message_id:
-                await db.delete_messages_after(chat_id, regenerate_message_id)
-                if query_input and query_message:
+            if regenerate_message_id and query_message:
+                await db.delete_messages_after(chat_id, query_message.id)  # type: ignore
+                if query_input:
                     await db.update_message_content(
                         query_message.id,  # type: ignore
                         QueryInput(
@@ -586,9 +586,9 @@ class ChatProcessor:
                         )
 
                 if message.role == Role.ASSISTANT:
-                    history.append(AIMessage(content=content))
+                    history.append(AIMessage(content=content, id=message.message_id))
                 else:
-                    history.append(HumanMessage(content=content))
+                    history.append(HumanMessage(content=content, id=message.message_id))
 
         return history
 
