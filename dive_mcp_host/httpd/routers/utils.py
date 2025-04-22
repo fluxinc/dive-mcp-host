@@ -577,11 +577,12 @@ class ChatProcessor:
                             }
                         )
                     else:
+                        base64_document, _ = await self.store.get_document(local_path)
                         content.append(
                             {
                                 "type": "text",
-                                "text": f"![Document]({local_path})",
-                            }
+                                "text": f"source: {local_path}, content: {base64_document}",  # noqa: E501
+                            },
                         )
 
                 if message.role == Role.ASSISTANT:
@@ -625,28 +626,34 @@ class ChatProcessor:
 
         for document in query_input.documents or []:
             local_path = document
+            base64_document, _ = await self.store.get_document(local_path)
             content.append(
                 {
                     "type": "text",
-                    "text": f"![Document]({local_path})",
-                }
+                    "text": f"source: {local_path}, content: {base64_document}",
+                },
             )
+
         return HumanMessage(content=content, id=message_id)
 
     async def _get_history_user_input(
         self, chat_id: str, message_id: str
     ) -> BaseMessage:
-        """Get history user input."""
+        """Get the last user input message from history."""
         dive_user: DiveUser = self.request_state.dive_user
         async with self.app.db_sessionmaker() as session:
             db = self.app.msg_store(session)
             chat = await db.get_chat_with_messages(chat_id, dive_user["user_id"])
             if chat is None:
                 raise ChatError("chat not found")
-            message = next(
-                (msg for msg in chat.messages if msg.message_id == message_id),
-                None,
-            )
+            message = None
+            for i in chat.messages:
+                if i.role == Role.USER:
+                    message = i
+                if i.message_id == message_id:
+                    break
+            else:
+                message = None
             if message is None:
                 raise ChatError("message not found")
 
