@@ -636,17 +636,21 @@ class ChatProcessor:
     async def _get_history_user_input(
         self, chat_id: str, message_id: str
     ) -> BaseMessage:
-        """Get history user input."""
+        """Get the last user input message from history."""
         dive_user: DiveUser = self.request_state.dive_user
         async with self.app.db_sessionmaker() as session:
             db = self.app.msg_store(session)
             chat = await db.get_chat_with_messages(chat_id, dive_user["user_id"])
             if chat is None:
                 raise ChatError("chat not found")
-            message = next(
-                (msg for msg in chat.messages if msg.message_id == message_id),
-                None,
-            )
+            message = None
+            for i in chat.messages:
+                if i.role == Role.USER:
+                    message = i
+                if i.message_id == message_id:
+                    break
+            else:
+                message = None
             if message is None:
                 raise ChatError("message not found")
 
