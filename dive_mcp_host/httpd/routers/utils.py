@@ -33,6 +33,7 @@ from dive_mcp_host.httpd.routers.models import (
 from dive_mcp_host.httpd.server import DiveHostAPI
 from dive_mcp_host.httpd.store.store import SUPPORTED_IMAGE_EXTENSIONS, Store
 from dive_mcp_host.log import TRACE
+from dive_mcp_host.mcpServer import MCPServerTracker
 
 if TYPE_CHECKING:
     from dive_mcp_host.host.host import DiveMcpHost
@@ -161,6 +162,18 @@ class ChatProcessor:
         regenerate_message_id: str | None,
     ) -> tuple[str, TokenUsage]:
         """Handle chat."""
+        # Store chat_id for use in the tracking methods
+        self.chat_id = chat_id
+        
+        # Clear previous chat data if regenerating
+        if regenerate_message_id and chat_id:
+            # Clear previous tool tracking data when regenerating a response
+            MCPServerTracker.getInstance().clear_chat_data(chat_id)
+        
+        # Init variables
+        query_message = None
+        history: list[BaseMessage] = []
+        
         chat_id = chat_id if chat_id else str(uuid4())
         dive_user: DiveUser = self.request_state.dive_user
         title = "New Chat"
@@ -374,6 +387,9 @@ class ChatProcessor:
         tools: list | None = None,
         is_resend: bool = False,
     ) -> tuple[HumanMessage, AIMessage, list[BaseMessage]]:
+        # Store chat_id for use in tracking methods
+        self.chat_id = chat_id
+        
         messages = [*history] if history else []
 
         # if retry input is empty
@@ -429,27 +445,80 @@ class ChatProcessor:
             await self.stream.write(StreamMessage(type="text", content=content))
 
     async def _stream_tool_calls_msg(self, message: AIMessage) -> None:
+        # Get the singleton instance of MCPServerTracker
+        mcp_tracker = MCPServerTracker.getInstance()
+        
+        # Extract chat_id from current context if available
+        chat_id = getattr(self, 'chat_id', None)
+        
+        # Prepare tool calls content for streaming
+        tool_calls_content = [
+            ToolCallsContent(name=c["name"], arguments=c["args"])
+            for c in message.tool_calls
+        ]
+        
+        # Track each tool call if chat_id is available
+        if chat_id:
+            for call in message.tool_calls:
+                tool_call_data = {
+                    "name": call["name"],
+                    "arguments": call["args"],
+                }
+                mcp_tracker.track_tool_call(chat_id, tool_call_data)
+        
+        # Stream the tool calls to the client
         await self.stream.write(
             StreamMessage(
                 type="tool_calls",
-                content=[
-                    ToolCallsContent(name=c["name"], arguments=c["args"])
-                    for c in message.tool_calls
-                ],
+                content=tool_calls_content,
             )
         )
 
     async def _stream_tool_result_msg(self, message: ToolMessage) -> None:
+        # Get the singleton instance of MCPServerTracker
+        mcp_tracker = MCPServerTracker.getInstance()
+        
+        # Extract chat_id from current context if available
+        chat_id = getattr(self, 'chat_id', None)
+        
         result = message.content
         with suppress(json.JSONDecodeError):
             if isinstance(result, list):
                 result = [json.loads(r) if isinstance(r, str) else r for r in result]
             else:
                 result = json.loads(result)
+                
+        # Filter out sources if this is a query tool result
+        processed_result = result
+        if (message.name == 'query' and 
+            isinstance(result, dict) and 
+            isinstance(result.get('content'), list)):
+            # Filter out source info before sending to client
+            processed_result = {
+                **result,
+                'content': [
+                    item for item in result['content'] 
+                    if not (isinstance(item, dict) and
+                            item.get('type') == 'text' and 
+                            item.get('text') and 
+                            isinstance(item.get('text'), str) and
+                            item['text'].startswith("<SOURCES>"))
+                ]
+            }
+        
+        # Track the tool result if chat_id is available
+        if chat_id:
+            tool_result_data = {
+                "name": message.name or "",
+                "result": result  # Track the original result with sources
+            }
+            mcp_tracker.track_tool_result(chat_id, tool_result_data)
+        
+        # Stream the processed result (without sources) to the client
         await self.stream.write(
             StreamMessage(
                 type="tool_result",
-                content=ToolResultContent(name=message.name or "", result=result),
+                content=ToolResultContent(name=message.name or "", result=processed_result),
             )
         )
 

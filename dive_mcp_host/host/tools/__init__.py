@@ -732,16 +732,40 @@ class McpTool(BaseTool):
         )
         async with self.mcp_server.session() as session:
             result = await session.call_tool(self.name, arguments=kwargs)
-        content = to_json(result.content).decode()
+        
+        # Get the raw content as JSON string
+        content_json = to_json(result.content).decode()
+        
+        # Filter out sources if this is a query tool result
+        if self.name == "query":
+            try:
+                content_dict = json_loads(content_json)
+                if isinstance(content_dict, dict) and isinstance(content_dict.get("content"), list):
+                    # Filter out source info before sending to LLM
+                    filtered_content = []
+                    for item in content_dict["content"]:
+                        if (not isinstance(item, dict) or
+                            item.get("type") != "text" or
+                            not item.get("text") or
+                            not isinstance(item.get("text"), str) or
+                            not item["text"].startswith("<SOURCES>")):
+                            filtered_content.append(item)
+                    
+                    content_dict["content"] = filtered_content
+                    content_json = to_json(content_dict).decode()
+            except (JSONDecodeError, Exception) as e:
+                logger.warning(f"Error filtering sources from query result: {e}")
+        
         if result.isError:
             logger.error(
                 "Tool execution failed for %s.%s: %s",
                 self.toolkit_name,
                 self.name,
-                content,
+                content_json,
             )
         logger.debug("Tool %s.%s executed successfully", self.toolkit_name, self.name)
-        return content
+        
+        return content_json
 
 
 @asynccontextmanager

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Annotated, TypeVar
+from typing import TYPE_CHECKING, Annotated, TypeVar, List, Dict, Any
 
 from fastapi import APIRouter, Body, Depends, File, Form, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -16,6 +16,7 @@ from dive_mcp_host.httpd.routers.models import (
 )
 from dive_mcp_host.httpd.routers.utils import ChatProcessor, EventStreamContextManager
 from dive_mcp_host.httpd.server import DiveHostAPI
+from dive_mcp_host.mcpServer import MCPServerTracker
 
 if TYPE_CHECKING:
     from dive_mcp_host.httpd.middlewares.general import DiveUser
@@ -29,6 +30,21 @@ class DataResult[T](ResultResponse):
     """Generic result that extends ResultResponse with a data field."""
 
     data: T | None
+
+
+class SourcesResponse(ResultResponse):
+    """Response model for chat sources."""
+    sources: List[Dict[str, str]]
+    
+    
+class ToolCallsResponse(ResultResponse):
+    """Response model for tool calls."""
+    tool_calls: List[Dict[str, Any]]
+
+
+class ToolResultsResponse(ResultResponse):
+    """Response model for tool results."""
+    tool_results: List[Dict[str, Any]]
 
 
 @chat.get("/list")
@@ -242,3 +258,78 @@ async def abort_chat(
         raise UserInputError("Chat not found")
 
     return ResultResponse(success=True, message="Chat abort signal sent successfully")
+
+
+@chat.get("/{chat_id}/sources")
+async def chat_sources(
+    chat_id: str,
+    app: DiveHostAPI = Depends(get_app),
+    dive_user: Annotated[dict, Depends(get_dive_user)] = None,
+) -> SourcesResponse:
+    """Get the sources used in a chat session.
+    
+    Args:
+        chat_id: The ID of the chat session.
+        
+    Returns:
+        SourcesResponse: The sources used in the chat session.
+    """
+    # Get the sources for the chat
+    tracker = MCPServerTracker.getInstance()
+    sources = tracker.get_last_sources(chat_id) or []
+    
+    return SourcesResponse(
+        success=True,
+        message=None,
+        sources=sources,
+    )
+
+
+@chat.get("/{chat_id}/tool_calls")
+async def chat_tool_calls(
+    chat_id: str,
+    app: DiveHostAPI = Depends(get_app),
+    dive_user: Annotated[dict, Depends(get_dive_user)] = None,
+) -> ToolCallsResponse:
+    """Get the tool calls used in a chat session.
+    
+    Args:
+        chat_id: The ID of the chat session.
+        
+    Returns:
+        ToolCallsResponse: The tool calls used in the chat session.
+    """
+    # Get the tool calls for the chat
+    tracker = MCPServerTracker.getInstance()
+    tool_calls = tracker.get_last_tool_calls(chat_id) or []
+    
+    return ToolCallsResponse(
+        success=True,
+        message=None,
+        tool_calls=tool_calls,
+    )
+
+
+@chat.get("/{chat_id}/tool_results")
+async def chat_tool_results(
+    chat_id: str,
+    app: DiveHostAPI = Depends(get_app),
+    dive_user: Annotated[dict, Depends(get_dive_user)] = None,
+) -> ToolResultsResponse:
+    """Get the tool results used in a chat session.
+    
+    Args:
+        chat_id: The ID of the chat session.
+        
+    Returns:
+        ToolResultsResponse: The tool results used in the chat session.
+    """
+    # Get the tool results for the chat
+    tracker = MCPServerTracker.getInstance()
+    tool_results = tracker.get_last_tool_results(chat_id) or []
+    
+    return ToolResultsResponse(
+        success=True,
+        message=None,
+        tool_results=tool_results,
+    )

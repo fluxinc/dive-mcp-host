@@ -39,6 +39,7 @@ def create_app(
     app = DiveHostAPI(
         lifespan=lifespan,
         service_config_manager=service_config_manager,
+        redirect_slashes=False,
     )
     app.add_exception_handler(Exception, error_handler)
 

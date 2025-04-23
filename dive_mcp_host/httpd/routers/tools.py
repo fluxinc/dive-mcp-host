@@ -44,6 +44,30 @@ async def list_tools(
     Returns:
         ToolsResult: A list of available tools.
     """
+    return await _list_tools_impl(app)
+
+
+@tools.get("")
+async def list_tools_no_slash(
+    app: DiveHostAPI = Depends(get_app),
+) -> ToolsResult:
+    """Lists all available MCP tools (alternate endpoint without trailing slash).
+
+    Returns:
+        ToolsResult: A list of available tools.
+    """
+    return await _list_tools_impl(app)
+
+
+async def _list_tools_impl(app: DiveHostAPI) -> ToolsResult:
+    """Implementation of list_tools functionality.
+    
+    Args:
+        app: The DiveHostAPI instance.
+        
+    Returns:
+        ToolsResult: A list of available tools.
+    """
     result: dict[str, McpTool] = {}
 
     # get full list of servers from config
