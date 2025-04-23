@@ -407,6 +407,7 @@ class ChatProcessor:
             user_id=dive_user.get("user_id") or "default",
             tools=tools,
             system_prompt=prompt,
+            disable_default_system_prompt=self.disable_dive_system_prompt,
         )
         async with AsyncExitStack() as stack:
             if chat_id:
