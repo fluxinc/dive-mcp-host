@@ -490,21 +490,32 @@ class ChatProcessor:
                 
         # Filter out sources if this is a query tool result
         processed_result = result
-        if (message.name == 'query' and 
-            isinstance(result, dict) and 
-            isinstance(result.get('content'), list)):
-            # Filter out source info before sending to client
-            processed_result = {
-                **result,
-                'content': [
-                    item for item in result['content'] 
+        if message.name == 'query':
+            content = None
+            # Handle different result formats
+            if isinstance(result, dict) and 'content' in result and isinstance(result['content'], list):
+                # Standard format: {content: [{type: 'text', text: '...'}]}
+                processed_result = {
+                    **result,
+                    'content': [
+                        item for item in result['content'] 
+                        if not (isinstance(item, dict) and
+                                item.get('type') == 'text' and 
+                                item.get('text') and 
+                                isinstance(item.get('text'), str) and
+                                item['text'].startswith("<SOURCES>"))
+                    ]
+                }
+            elif isinstance(result, list):
+                # Direct list format: [{type: 'text', text: '...'}]
+                processed_result = [
+                    item for item in result 
                     if not (isinstance(item, dict) and
                             item.get('type') == 'text' and 
                             item.get('text') and 
                             isinstance(item.get('text'), str) and
                             item['text'].startswith("<SOURCES>"))
                 ]
-            }
         
         # Track the tool result if chat_id is available
         if chat_id:

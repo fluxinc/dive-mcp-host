@@ -59,39 +59,46 @@ class MCPServerTracker:
         self._chat_tool_results[chat_id].append(tool_result)
         
         # If this is a query tool with sources, extract and track them
-        if (tool_result.get('name') == 'query' and 
-            tool_result.get('result') and 
-            isinstance(tool_result['result'].get('content'), list)):
+        if tool_result.get('name') == 'query' and tool_result.get('result') is not None:
+            result = tool_result['result']
+            content = None
             
-            # Find source content
-            sources_item = None
-            for item in tool_result['result']['content']:
-                if (isinstance(item, dict) and 
-                    item.get('type') == 'text' and 
-                    item.get('text') and 
-                    isinstance(item.get('text'), str) and
-                    item['text'].startswith("<SOURCES>")):
-                    sources_item = item
-                    break
+            # Handle different result formats (dict or list)
+            if isinstance(result, dict) and 'content' in result and isinstance(result['content'], list):
+                content = result['content']
+            elif isinstance(result, list):
+                content = result
             
-            if sources_item:
-                logger.debug(f"[{chat_id}] Found sources in query result")
-                # Source URLs format: <SOURCES><FILENAME>filename1</FILENAME>url1\n<FILENAME>filename2</FILENAME>url2\n...</SOURCES>
-                source_text = sources_item['text'].replace("<SOURCES>", "").replace("</SOURCES>", "").strip()
-                sources_list = source_text.split("\n")
+            if content:
+                # Find source content
+                sources_item = None
+                for item in content:
+                    if (isinstance(item, dict) and 
+                        item.get('type') == 'text' and 
+                        item.get('text') and 
+                        isinstance(item.get('text'), str) and
+                        item['text'].startswith("<SOURCES>")):
+                        sources_item = item
+                        break
                 
-                parsed_sources = []
-                for item in sources_list:
-                    if "</FILENAME>" in item:
-                        split_source = item.split("</FILENAME>")
-                        filename = split_source[0][len("<FILENAME>"):]
-                        url = split_source[1]
-                        parsed_sources.append({"filename": filename, "url": url})
-                    else:
-                        # Fallback for sources without filenames
-                        parsed_sources.append({"filename": "", "url": item})
-                
-                self.track_sources(chat_id, parsed_sources)
+                if sources_item:
+                    logger.debug(f"[{chat_id}] Found sources in query result")
+                    # Source URLs format: <SOURCES><FILENAME>filename1</FILENAME>url1\n<FILENAME>filename2</FILENAME>url2\n...</SOURCES>
+                    source_text = sources_item['text'].replace("<SOURCES>", "").replace("</SOURCES>", "").strip()
+                    sources_list = source_text.split("\n")
+                    
+                    parsed_sources = []
+                    for item in sources_list:
+                        if "</FILENAME>" in item:
+                            split_source = item.split("</FILENAME>")
+                            filename = split_source[0][len("<FILENAME>"):]
+                            url = split_source[1]
+                            parsed_sources.append({"filename": filename, "url": url})
+                        else:
+                            # Fallback for sources without filenames
+                            parsed_sources.append({"filename": "", "url": item})
+                    
+                    self.track_sources(chat_id, parsed_sources)
     
     def track_sources(self, chat_id: str, sources: List[Dict[str, str]]):
         """Track sources for a specific chat, ensuring uniqueness.
