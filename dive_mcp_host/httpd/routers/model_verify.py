@@ -149,7 +149,7 @@ class ModelVerifyService:
     async def _check_connection(self, host: DiveMcpHost) -> tuple[bool, str | None]:
         """Check if the model is connected."""
         try:
-            chat = host.chat(volatile=True, disable_default_system_prompt=True)
+            chat = host.chat(volatile=True)
             async with AsyncExitStack() as stack:
                 await stack.enter_async_context(chat)
                 stack.enter_context(self._handle_abort(chat.abort))
@@ -168,9 +168,7 @@ class ModelVerifyService:
         """Check if the model supports tools."""
         try:
             test_tool = TestTool()
-            chat = host.chat(
-                volatile=True, tools=[test_tool], disable_default_system_prompt=True
-            )
+            chat = host.chat(volatile=True, tools=[test_tool])
             async with AsyncExitStack() as stack:
                 await stack.enter_async_context(chat)
                 stack.enter_context(self._handle_abort(chat.abort))
