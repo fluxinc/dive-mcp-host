@@ -168,7 +168,7 @@ class ModelVerifyService:
         """Check if the model supports tools."""
         try:
             test_tool = TestTool()
-            chat = host.chat(volatile=True, tools=[test_tool])
+            chat = host.chat(volatile=True, tools=[test_tool.weather_tool])
             async with AsyncExitStack() as stack:
                 await stack.enter_async_context(chat)
                 stack.enter_context(self._handle_abort(chat.abort))
