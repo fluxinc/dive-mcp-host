@@ -1,4 +1,5 @@
 from langchain_core.tools import tool
+from langchain_core.tools.base import BaseTool
 
 
 class TestTool:
@@ -13,8 +14,14 @@ class TestTool:
         """Whether the tool has been called."""
         return self._called
 
-    @tool
-    def weather_tool(self, city: str) -> str:
-        """Get current weather information."""
-        self._called = True
-        return f"The weather in {city} is sunny."
+    @property
+    def weather_tool(self) -> BaseTool:
+        """Weather tool."""
+
+        @tool
+        def weather_tool(city: str) -> str:
+            """Get current weather information."""
+            self._called = True
+            return f"The weather in {city} is sunny."
+
+        return weather_tool
