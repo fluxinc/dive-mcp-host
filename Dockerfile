@@ -42,13 +42,16 @@ COPY . .
 # Create README.md file if it doesn't exist
 RUN test -f README.md || echo "# Dive MCP Host\n\nPython server component for the Dive application." > README.md
 
-# Install the package with uv in editable mode as specified in README
-RUN pip install -e ".[dev]"
+# Install the package with pip in editable mode with caching
+# Use BuildKit cache mount to persist pip cache between builds
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -e ".[dev]" && \
+    pip install watchdog[watchmedo]
 
 # Create a startup script
 RUN echo '#!/bin/bash\n\
-# Start the Python service\n\
-cd /app && dive_httpd --listen 0.0.0.0\n' > /app/start.sh && \
+# Start the Python service with hot reloading\n\
+cd /app && watchmedo auto-restart --directory=/app/dive_mcp_host --pattern="*.py" --recursive -- dive_httpd --listen 0.0.0.0\n' > /app/start.sh && \
     chmod +x /app/start.sh
 
 # Expose the port
