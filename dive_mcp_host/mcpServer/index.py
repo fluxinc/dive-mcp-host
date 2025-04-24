@@ -62,6 +62,7 @@ class MCPServerTracker:
         if tool_result.get('name') == 'query' and tool_result.get('result') is not None:
             result = tool_result['result']
             content = None
+            logger.info(f"[{chat_id}] Content: {content}")
             
             # Handle different result formats (dict or list)
             if isinstance(result, dict) and 'content' in result and isinstance(result['content'], list):
@@ -109,7 +110,7 @@ class MCPServerTracker:
         """
         if chat_id not in self._chat_sources:
             self._chat_sources[chat_id] = []
-        
+        logger.info(f"[{chat_id}] Tracking sources: {sources}")
         # Add unique sources only (compare by URL)
         existing_sources = self._chat_sources[chat_id]
         existing_urls = set(source.get('url', '') for source in existing_sources)

@@ -737,35 +737,35 @@ class McpTool(BaseTool):
         content_json = to_json(result.content).decode()
         
         # Filter out sources if this is a query tool result
-        if self.name == "query":
-            try:
-                content_dict = json_loads(content_json)
-                # Handle different result formats
-                if isinstance(content_dict, dict) and isinstance(content_dict.get("content"), list):
-                    # Standard format: {content: [{type: 'text', text: '...'}]}
-                    # Filter out source info before sending to LLM
-                    content_dict["content"] = [
-                        item for item in content_dict["content"]
-                        if not (isinstance(item, dict) and
-                                item.get("type") == "text" and
-                                item.get("text") and
-                                isinstance(item.get("text"), str) and
-                                item["text"].startswith("<SOURCES>"))
-                    ]
-                    content_json = to_json(content_dict).decode()
-                elif isinstance(content_dict, list):
-                    # Direct list format: [{type: 'text', text: '...'}]
-                    filtered_content = [
-                        item for item in content_dict
-                        if not (isinstance(item, dict) and
-                                item.get("type") == "text" and
-                                item.get("text") and
-                                isinstance(item.get("text"), str) and
-                                item["text"].startswith("<SOURCES>"))
-                    ]
-                    content_json = to_json(filtered_content).decode()
-            except (JSONDecodeError, Exception) as e:
-                logger.warning(f"Error filtering sources from query result: {e}")
+        # if self.name == "query":
+        #     try:
+        #         content_dict = json_loads(content_json)
+        #         # Handle different result formats
+        #         if isinstance(content_dict, dict) and isinstance(content_dict.get("content"), list):
+        #             # Standard format: {content: [{type: 'text', text: '...'}]}
+        #             # Filter out source info before sending to LLM
+        #             content_dict["content"] = [
+        #                 item for item in content_dict["content"]
+        #                 if not (isinstance(item, dict) and
+        #                         item.get("type") == "text" and
+        #                         item.get("text") and
+        #                         isinstance(item.get("text"), str) and
+        #                         item["text"].startswith("<SOURCES>"))
+        #             ]
+        #             content_json = to_json(content_dict).decode()
+        #         elif isinstance(content_dict, list):
+        #             # Direct list format: [{type: 'text', text: '...'}]
+        #             filtered_content = [
+        #                 item for item in content_dict
+        #                 if not (isinstance(item, dict) and
+        #                         item.get("type") == "text" and
+        #                         item.get("text") and
+        #                         isinstance(item.get("text"), str) and
+        #                         item["text"].startswith("<SOURCES>"))
+        #             ]
+        #             content_json = to_json(filtered_content).decode()
+        #     except (JSONDecodeError, Exception) as e:
+        #         logger.warning(f"Error filtering sources from query result: {e}")
         
         if result.isError:
             logger.error(

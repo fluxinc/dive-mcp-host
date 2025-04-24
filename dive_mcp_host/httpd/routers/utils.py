@@ -480,7 +480,6 @@ class ChatProcessor:
         
         # Extract chat_id from current context if available
         chat_id = getattr(self, 'chat_id', None)
-        
         result = message.content
         with suppress(json.JSONDecodeError):
             if isinstance(result, list):
@@ -508,6 +507,7 @@ class ChatProcessor:
                 }
             elif isinstance(result, list):
                 # Direct list format: [{type: 'text', text: '...'}]
+                logger.info(f"[{chat_id}] Direct list format: {result}")
                 processed_result = [
                     item for item in result 
                     if not (isinstance(item, dict) and
@@ -546,6 +546,8 @@ class ChatProcessor:
         ai_message = None
         values_messages: list[BaseMessage] = []
         current_messages: list[BaseMessage] = []
+        chat_id = getattr(self, 'chat_id', None)
+
         async for res_type, res_content in response:
             if res_type == "messages":
                 message, _ = res_content
@@ -554,7 +556,7 @@ class ChatProcessor:
                     if message.content:
                         await self._stream_text_msg(message)
                 elif isinstance(message, ToolMessage):
-                    logger.log(TRACE, "got tool message: %s", message.model_dump_json())
+                    logger.info(f"[{chat_id}] got tool message: %s", message.model_dump_json())
                     await self._stream_tool_result_msg(message)
                 else:
                     # idk what is this

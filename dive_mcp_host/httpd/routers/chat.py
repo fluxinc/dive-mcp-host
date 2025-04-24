@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING, Annotated, TypeVar, List, Dict, Any
+import logging
 
 from fastapi import APIRouter, Body, Depends, File, Form, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -25,7 +26,7 @@ chat = APIRouter(tags=["chat"])
 
 T = TypeVar("T")
 
-
+logger = logging.getLogger(__name__)
 class DataResult[T](ResultResponse):
     """Generic result that extends ResultResponse with a data field."""
 
@@ -277,7 +278,7 @@ async def chat_sources(
     # Get the sources for the chat
     tracker = MCPServerTracker.getInstance()
     sources = tracker.get_last_sources(chat_id) or []
-    
+    logger.info(f"Sources: {sources}")
     return SourcesResponse(
         success=True,
         message=None,
