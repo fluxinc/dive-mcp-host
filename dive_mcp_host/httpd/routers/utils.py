@@ -428,6 +428,13 @@ class ChatProcessor:
         content = self._str_output_parser.invoke(message)
         if content:
             await self.stream.write(StreamMessage(type="text", content=content))
+        if message.response_metadata.get("stop_reason") == "max_tokens":
+            await self.stream.write(
+                StreamMessage(
+                    type="error",
+                    content="stop_reason: max_tokens",
+                )
+            )
 
     async def _stream_tool_calls_msg(self, message: AIMessage) -> None:
         await self.stream.write(
