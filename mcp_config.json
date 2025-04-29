@@ -1,11 +1,17 @@
 {
     "mcpServers": {
-        "biggo-mcp-server": {
+        "rag-mcp-server": {
             "transport": "command",
-            "command": "uvx",
+            "command": "node",
+            "enabled": true,
             "args": [
-                "BigGo-MCP-Server@latest"
-            ]
+                "/app/mcp-server/dist/index.js",
+                "--log"
+            ],
+            "env": {
+                "LOG_FILE_PATH": "/app/mcp-server/logs/mcp-server.log",
+                "DATABRIDGE_URL": "http://morphik:8000"
+            }
         }
     }
 }
