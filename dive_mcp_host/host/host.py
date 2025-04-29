@@ -76,7 +76,10 @@ class DiveMcpHost(ContextProtocol):
         self._config = config
         self._model: BaseChatModel | None = None
         self._checkpointer: BaseCheckpointSaver[str] | None = None
-        self._tool_manager: ToolManager = ToolManager(self._config.mcp_servers)
+        self._tool_manager: ToolManager = ToolManager(
+            configs=self._config.mcp_servers,
+            log_config=self.config.log_config,
+        )
         self._exit_stack: AsyncExitStack | None = None
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
