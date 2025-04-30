@@ -267,7 +267,12 @@ class McpServer(ContextProtocol):
     KEEP_ALIVE_INTERVAL: float = 60
     RESTART_INTERVAL: float = 3
 
-    def __init__(self, name: str, config: ServerConfig, log_buffer_length: int) -> None:
+    def __init__(
+        self,
+        name: str,
+        config: ServerConfig,
+        log_buffer_length: int = 1000,
+    ) -> None:
         """Initialize the McpToolKit."""
         self.name = name
         self.config = config
