@@ -81,12 +81,15 @@ class LogBuffer:
     """Log buffer with limited size, supports adding listeners to watch new logs.
 
     Add logs to the buffer:
-        Use `push_logs` or other specific methods (e.g. `push_session_error`, `push_state_change`).
+        Use `push_logs` or other specific methods
+        (e.g. `push_session_error`, `push_state_change`).
 
     Watch log updates:
         Use `add_listener` context manager to add a `listener` to the buffer.
-        Listener is an async function that will be called whenever a new log is added to the buffer.
-        When the the listener is first added, it will be called with all the logs in the buffer (one by one).
+        Listener is an async function that will be called whenever
+        a new log is added to the buffer.
+        When the the listener is first added, it will be called with all the
+        logs in the buffer (one by one).
 
     Example:
         ```python
@@ -102,7 +105,8 @@ class LogBuffer:
             print(log)
 
 
-        # The listener is a context manager, users decide how long it will listen to the buffer.
+        # The listener is a context manager,
+        # users decide how long it will listen to the buffer.
         async with buffer.add_listener(listener):
             await asyncio.sleep(10)
         ```
@@ -179,7 +183,8 @@ class LogBuffer:
         """Add a listener to the buffer.
 
         Reads all the logs in the buffer and listens for new logs.
-        The listener is a context manager, user can decide how long it will listen to the buffer.
+        The listener is a context manager,
+        user can decide how long it will listen to the buffer.
 
         Example:
             ```python
@@ -256,16 +261,22 @@ class _LogFile:
 class LogManager:
     """Log Manger for MCP Servers.
 
-    `LogBuffers` that are registered to the log manager will have their logs written to files.
+    `LogBuffers` that are registered to the log manager will have
+    their logs written to files.
 
-    Users can listen to log updates from specific MCP servers by calling `listen_log`.
-    Which acts like `LogBuffer`'s `add_listener` method, a context manager that listens
-    to log updates until user exit the context.
+    Users can listen to log updates from specific MCP servers by
+    calling `listen_log`.
+    Which acts like `LogBuffer`'s `add_listener` method, a context
+    manager that listens to log updates until user exit the context.
 
     Example:
         ```python
         log_dir = Path("/var/log/dive_mcp_host")
-        dummy_log = LogMsg(event=LogEvent.STDERR, body="hello", mcp_server_name="mcp_server")
+        dummy_log = LogMsg(
+            event=LogEvent.STDERR,
+            body="hello",
+            mcp_server_name="mcp_server",
+        )
 
         # create a log manager
         log_manager = LogManager(log_dir=log_dir)
@@ -326,10 +337,12 @@ class LogManager:
     ) -> AsyncGenerator[None, None]:
         """Listen to log updates from a specific MCP server.
 
-        The listener is a context manager, user can decide how long it will listen to the buffer.
+        The listener is a context manager,
+        user can decide how long it will listen to the buffer.
 
-        Only buffers that are registered to the log manager can be listened to.
-        If the buffer is not registered, a `LogBufferNotFoundError` will be raised.
+        Only buffers that are registered to the log manager
+        can be listened to. If the buffer is not registered,
+        `LogBufferNotFoundError` will be raised.
 
         Example:
             ```python
