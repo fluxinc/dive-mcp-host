@@ -117,6 +117,8 @@ class LogBuffer:
         self._listeners.append(_listener)
         try:
             yield
+        except Exception:
+            logger.exception("listener error")
         finally:
             self._listeners.remove(_listener)
 
@@ -197,6 +199,8 @@ class LogManager:
         async with buffer.add_listener(log_file):
             try:
                 yield
+            except Exception:
+                logger.exception("register buffer error")
             finally:
                 self._buffers.pop(buffer.name)
 
