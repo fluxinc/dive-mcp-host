@@ -1,3 +1,44 @@
+"""Log management for MCP servers.
+
+Each MCP server has a `LogBuffer` that collects important logs,
+which is registered to a `LogManager` that writes logs to files and
+provides a `listen_log` method that users can listen to log updates.
+
+                      ┌────────────────────┐
+                      │ API or other stuff │
+                      └────────▲───────────┘
+                               │
+                           listen_log
+                        ┌──────┼─────┐           ┌─────────────┐
+                        │ LogManager ┼───────────►Write to file│
+                        └──────▲─────┘           └─────────────┘
+                               │
+                               │
+                               │  register_buffer
+                               └──────────────────┐
+                                                  │
+┌─────────────────────────────────────────────────┼─────┐
+│                          McpServer              │     │
+│                                                 │     │
+│                                                 │     │
+│                                                 │     │
+│┌─────────────────┐      ┌────────┐              │     │
+││MCP Server stderr├──────►LogProxy┼─────┐        │     │
+│└─────────────────┘      └────────┘     │        │     │
+│                                        │        │     │
+│┌────────────────────────┐              │  ┌─────┼───┐ │
+││MCP client session error┼──────────────┼──►LogBuffer│ │
+│└────────────────────────┘              │  └─────────┘ │
+│                                        │              │
+│┌────────────────────────┐              │              │
+││MCP client state change ┼──────────────┘              │
+│└────────────────────────┘                             │
+│                                                       │
+└───────────────────────────────────────────────────────┘
+
+# Drawn with https://asciiflow.com/
+"""
+
 import asyncio
 import sys
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine
@@ -37,7 +78,35 @@ class LogMsg(BaseModel):
 
 
 class LogBuffer:
-    """Log buffer with limited size, supports adding listeners to watch new logs."""
+    """Log buffer with limited size, supports adding listeners to watch new logs.
+
+    Add logs to the buffer:
+        Use `push_logs` or other specific methods (e.g. `push_session_error`, `push_state_change`).
+
+    Watch log updates:
+        Use `add_listener` context manager to add a `listener` to the buffer.
+        Listener is an async function that will be called whenever a new log is added to the buffer.
+        When the the listener is first added, it will be called with all the logs in the buffer (one by one).
+
+    Example:
+        ```python
+        # create a log buffer
+        buffer = LogBuffer(size=1000, name="mcp_server")
+
+        # push a log to the buffer
+        msg = LogMsg(event=LogEvent.STDERR, body="hello", mcp_server_name="mcp_server")
+        await buffer.push_log(msg)
+
+
+        async def listener(log: LogMsg) -> None:
+            print(log)
+
+
+        # The listener is a context manager, users decide how long it will listen to the buffer.
+        async with buffer.add_listener(listener):
+            await asyncio.sleep(10)
+        ```
+    """
 
     def __init__(self, size: int = 1000, name: str = "") -> None:
         """Initialize the log buffer."""
@@ -90,7 +159,7 @@ class LogBuffer:
         await self.push_log(msg)
 
     async def push_log(self, log: LogMsg) -> None:
-        """Add a log to the buffer."""
+        """Add a log to the buffer, all listener functions will be called."""
         self._logs.append(log)
         if len(self._logs) > self._size:
             self._logs.pop(0)
@@ -100,7 +169,7 @@ class LogBuffer:
                 group.create_task(listener(log))
 
     def get_logs(self) -> list[LogMsg]:
-        """Get the logs."""
+        """Retrieve all logs."""
         return self._logs
 
     @asynccontextmanager
@@ -110,6 +179,17 @@ class LogBuffer:
         """Add a listener to the buffer.
 
         Reads all the logs in the buffer and listens for new logs.
+        The listener is a context manager, user can decide how long it will listen to the buffer.
+
+        Example:
+            ```python
+            async def listener(log: LogMsg) -> None:
+                print(log)
+
+
+            async with buffer.add_listener(listener):
+                await asyncio.sleep(10)
+            ```
         """
         for i in self._logs:
             await listener(i)
@@ -174,7 +254,41 @@ class _LogFile:
 
 
 class LogManager:
-    """Log Manger for MCP Servers."""
+    """Log Manger for MCP Servers.
+
+    `LogBuffers` that are registered to the log manager will have their logs written to files.
+
+    Users can listen to log updates from specific MCP servers by calling `listen_log`.
+    Which acts like `LogBuffer`'s `add_listener` method, a context manager that listens
+    to log updates until user exit the context.
+
+    Example:
+        ```python
+        log_dir = Path("/var/log/dive_mcp_host")
+        dummy_log = LogMsg(event=LogEvent.STDERR, body="hello", mcp_server_name="mcp_server")
+
+        # create a log manager
+        log_manager = LogManager(log_dir=log_dir)
+
+        # create a log buffer
+        buffer = LogBuffer(name="mcp_server")
+
+
+        async def listener(log: LogMsg) -> None:
+            print(log)
+
+
+        # register the buffer and listen to log updates
+        async with (
+            log_manager.register_buffer(buffer),
+            log_manager.listen_log(buffer.name, listener),
+        ):
+            await buffer.push_log(dummy_log)
+            await buffer.push_log(dummy_log)
+
+            await asyncio.sleep(10)
+        ```
+    """
 
     def __init__(self, log_dir: Path, rotation_files: int = 5) -> None:
         """Initialize the log manager.
@@ -210,7 +324,23 @@ class LogManager:
         name: str,
         listener: Callable[[LogMsg], Coroutine[None, None, None]],
     ) -> AsyncGenerator[None, None]:
-        """Listen to logs from a specific MCP server."""
+        """Listen to log updates from a specific MCP server.
+
+        The listener is a context manager, user can decide how long it will listen to the buffer.
+
+        Only buffers that are registered to the log manager can be listened to.
+        If the buffer is not registered, a `LogBufferNotFoundError` will be raised.
+
+        Example:
+            ```python
+            async def listener(log: LogMsg) -> None:
+                print(log)
+
+
+            async with log_manager.listen_log(buffer.name, listener):
+                await asyncio.sleep(10)
+            ```
+        """
         buffer = self._buffers.get(name)
         if buffer is None:
             raise LogBufferNotFoundError(name)
