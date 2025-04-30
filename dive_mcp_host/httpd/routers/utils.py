@@ -14,6 +14,7 @@ from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel
 from starlette.datastructures import State
 
+from dive_mcp_host.host.tools.log import LogEvent, LogManager, LogMsg
 from dive_mcp_host.httpd.conf.prompt import PromptKey
 from dive_mcp_host.httpd.database.models import (
     Message,
@@ -671,3 +672,41 @@ class ChatProcessor:
                     [],
                 )
             )[0]
+
+
+class LogStreamHandler:
+    """Handles streaming of logs."""
+
+    def __init__(
+        self,
+        stream: EventStreamContextManager,
+        log_manager: LogManager,
+    ) -> None:
+        """Initialize the log processor."""
+        self._stream = stream
+        self._log_manager = log_manager
+
+    async def _log_listener(self, msg: LogMsg) -> None:
+        await self._stream.write(msg.model_dump_json())
+
+    async def stream_logs(self, server_name: str) -> None:
+        """Stream logs from specific MCP server.
+
+        Keep the connection open until client disconnects.
+        """
+        try:
+            async with self._log_manager.listen_log(
+                name=server_name,
+                listener=self._log_listener,
+            ):
+                with suppress(asyncio.CancelledError):
+                    await asyncio.Future()
+
+        except Exception as e:
+            logger.exception("Error in log streaming for server %s", server_name)
+            msg = LogMsg(
+                event=LogEvent.STREAMING_ERROR,
+                body=f"Error streaming logs: {e}",
+                mcp_server_name=server_name,
+            )
+            await self._stream.write(msg.model_dump_json())
