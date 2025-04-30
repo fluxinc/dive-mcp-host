@@ -11,7 +11,10 @@ from dive_mcp_host.httpd.routers.models import (
     SimpleToolInfo,
     ToolsCache,
 )
-from dive_mcp_host.httpd.routers.utils import EventStreamContextManager, LogProcessor
+from dive_mcp_host.httpd.routers.utils import (
+    EventStreamContextManager,
+    LogStreamHandler,
+)
 from dive_mcp_host.httpd.server import DiveHostAPI
 from dive_mcp_host.httpd.store.cache import CacheKeys
 
@@ -130,8 +133,8 @@ async def stream_server_logs(
 
     async def process() -> None:
         async with stream:
-            processor = LogProcessor(stream, log_manager)
-            await processor.handle_logs(server_name)
+            processor = LogStreamHandler(stream, log_manager)
+            await processor.stream_logs(server_name)
 
     stream.add_task(process)
     return response

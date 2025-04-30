@@ -674,8 +674,8 @@ class ChatProcessor:
             )[0]
 
 
-class LogProcessor:
-    """Log processor that handles streaming of logs."""
+class LogStreamHandler:
+    """Handles streaming of logs."""
 
     def __init__(
         self,
@@ -689,8 +689,8 @@ class LogProcessor:
     async def _log_listener(self, msg: LogMsg) -> None:
         await self._stream.write(msg.model_dump_json())
 
-    async def handle_logs(self, server_name: str) -> None:
-        """Handle streaming of logs.
+    async def stream_logs(self, server_name: str) -> None:
+        """Stream logs from specific MCP server.
 
         Keep the connection open until client disconnects.
         """
