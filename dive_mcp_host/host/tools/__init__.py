@@ -24,7 +24,7 @@ from mcp.client.websocket import websocket_client
 from pydantic import BaseModel, ConfigDict
 from pydantic_core import to_json
 
-from dive_mcp_host.host.conf import (  # noqa: TC001 Pydantic Need this
+from dive_mcp_host.host.conf import (
     LogConfig,
     ServerConfig,
 )
@@ -92,7 +92,7 @@ class ToolManager(ContextProtocol):
     def __init__(
         self,
         configs: dict[str, ServerConfig],
-        log_config: LogConfig,
+        log_config: LogConfig = LogConfig(),
     ) -> None:
         """Initialize the ToolManager."""
         self._configs = configs
