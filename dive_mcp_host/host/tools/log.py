@@ -118,7 +118,7 @@ class LogBuffer:
         try:
             yield
         except Exception:
-            logger.exception("listener error")
+            logger.exception("add listener error")
         finally:
             self._listeners.remove(_listener)
 
