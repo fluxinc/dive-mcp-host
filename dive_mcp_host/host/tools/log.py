@@ -23,6 +23,9 @@ class LogEvent(StrEnum):
     STDERR = "stderr"
     SESSION_ERROR = "session_error"
 
+    # extra events for api
+    STREAMING_ERROR = "streaming_error"
+
 
 class LogMsg(BaseModel):
     """Structure of logs."""

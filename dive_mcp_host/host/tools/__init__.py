@@ -236,6 +236,11 @@ class ToolManager(ContextProtocol):
         """
         return self._initialized_event
 
+    @property
+    def log_manager(self) -> LogManager:
+        """Get the log manager."""
+        return self._log_manager
+
 
 class ClientState(Enum):
     """The state of the client.
@@ -567,7 +572,7 @@ class McpServer(ContextProtocol):
             if e is not False:
                 self._exception = e
             self._client_status = new_state
-            log_msg = f"client status changed, {self.name} {new_state} {e}"
+            log_msg = f"client status changed, {self.name} {new_state}, error: {e}"
             logger.debug(log_msg)
             await self._log_buffer.push_state_change(log_msg)
             self._cond.notify_all()
