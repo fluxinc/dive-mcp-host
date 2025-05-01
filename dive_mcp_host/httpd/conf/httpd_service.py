@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class DBConfig(BaseModel):
     """DB Config."""
 
-    uri: str = Field(default="sqlite:///db.sqlite")
+    uri: str = Field(default=os.environ.get("DIVE_DB_URI", "sqlite:////app/db.sqlite"))
     pool_size: int = 5
     pool_recycle: int = 60
     max_overflow: int = 10

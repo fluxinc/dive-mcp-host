@@ -6,7 +6,7 @@
       "model": "gpt-4o-mini",
       "apiKey": "openai_api_key",
       "base_url": "",
-      "temperature": 0.5, 
+      "temperature": 0.2, 
       "top_p": 0.5
     }
   },

@@ -43,3 +43,5 @@ db.sqlite-shm
 db.sqlite-wal
 cache/
 upload/
+mcp_config.json
+model_config.json

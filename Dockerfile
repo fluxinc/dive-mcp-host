@@ -48,10 +48,26 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -e ".[dev]" && \
     pip install watchdog[watchmedo]
 
-# Create a startup script
+# Create a startup script that ensures the SQLite database exists
 RUN echo '#!/bin/bash\n\
+# Ensure the database directory exists with correct permissions\n\
+mkdir -p /app\n\
+\n\
+# Ensure SQLite database file exists and is not a directory\n\
+if [ -d "/app/db.sqlite" ]; then\n\
+    echo "Error: /app/db.sqlite is a directory, not a file. Removing it."\n\
+    rm -rf /app/db.sqlite\n\
+fi\n\
+\n\
+if [ ! -f "/app/db.sqlite" ]; then\n\
+    echo "Creating empty SQLite database file"\n\
+    touch /app/db.sqlite\n\
+    chmod 666 /app/db.sqlite\n\
+fi\n\
+\n\
 # Start the Python service with hot reloading\n\
-cd /app && watchmedo auto-restart --directory=/app/dive_mcp_host --pattern="*.py" --recursive -- dive_httpd --listen 0.0.0.0\n' > /app/start.sh && \
+cd /app && watchmedo auto-restart --directory=/app/dive_mcp_host --pattern="*.py" --recursive -- dive_httpd --listen 0.0.0.0\n\
+' > /app/start.sh && \
     chmod +x /app/start.sh
 
 # Expose the port
