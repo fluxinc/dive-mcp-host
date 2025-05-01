@@ -1,5 +1,5 @@
 {
-  "activeProvider": "ollama",
+  "activeProvider": "openai",
   "configs": {
     "openai": {
       "modelProvider": "openai",
@@ -8,16 +8,6 @@
       "base_url": "",
       "temperature": 0.5, 
       "top_p": 0.5
-    },
-    "ollama": {
-      "modelProvider": "ollama",
-      "model": "qwen2.5:14b",
-      "apiKey": "",
-      "configuration": {
-        "baseURL": "https://ollama.biggo.dev"
-      },
-      "temperature": 0.7,
-      "top_p": 1
     }
   },
 
