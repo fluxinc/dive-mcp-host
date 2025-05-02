@@ -24,7 +24,7 @@ class MockServerInfo:
 
     def __init__(self, tools=None, error=None):
         self.tools = tools or []
-        self.error = error
+        self.error_str = error
 
 
 def test_initialized(test_client):

@@ -53,6 +53,7 @@ from traceback import format_exception
 from pydantic import BaseModel, Field
 
 from dive_mcp_host.host.errors import LogBufferNotFoundError
+from dive_mcp_host.host.tools.model_types import ClientState
 
 logger = getLogger(__name__)
 
@@ -74,6 +75,7 @@ class LogMsg(BaseModel):
     event: LogEvent
     body: str
     mcp_server_name: str
+    client_state: ClientState | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -118,6 +120,7 @@ class LogBuffer:
         self._logs: list[LogMsg] = []
         self._listeners: list[Callable[[LogMsg], Coroutine[None, None, None]]] = []
         self._name = name
+        self._client_state: ClientState = ClientState.INIT
 
     @property
     def name(self) -> str:
@@ -147,18 +150,35 @@ class LogBuffer:
             event=LogEvent.SESSION_ERROR,
             body="".join(format_exception(inpt)),
             mcp_server_name=self.name,
+            client_state=self._client_state,
         )
         await self.push_log(msg)
 
     async def push_state_change(
         self,
         inpt: str,
+        state: ClientState,
     ) -> None:
         """Push the client status change to the log buffer."""
+        self._client_state = state
         msg = LogMsg(
             event=LogEvent.STATUS_CHANGE,
             body=inpt,
             mcp_server_name=self.name,
+            client_state=self._client_state,
+        )
+        await self.push_log(msg)
+
+    async def push_stderr(
+        self,
+        inpt: str,
+    ) -> None:
+        """Push the client status change to the log buffer."""
+        msg = LogMsg(
+            event=LogEvent.STDERR,
+            body=inpt,
+            mcp_server_name=self.name,
+            client_state=self._client_state,
         )
         await self.push_log(msg)
 
@@ -213,7 +233,7 @@ class LogProxy:
 
     def __init__(
         self,
-        callback: Callable[[LogMsg], Coroutine[None, None, None]],
+        callback: Callable[[str], Coroutine[None, None, None]],
         mcp_server_name: str,
     ) -> None:
         """Initialize the proxy."""
@@ -223,12 +243,7 @@ class LogProxy:
 
     async def write(self, s: str) -> None:
         """Write logs."""
-        msg = LogMsg(
-            event=LogEvent.STDERR,
-            body=s,
-            mcp_server_name=self._mcp_server_name,
-        )
-        await self._callback(msg)
+        await self._callback(s)
         self._stderr.write(s)
 
     async def flush(self) -> None:
