@@ -686,19 +686,25 @@ class LogStreamHandler:
         """Initialize the log processor."""
         self._stream = stream
         self._log_manager = log_manager
-        self._stream_until = stream_until
         self._end_event = asyncio.Event()
+
+        self._stream_until: set[ClientStateStr] = {
+            ClientStateStr.CLOSED,
+            ClientStateStr.FAILED,
+        }
+        if stream_until:
+            self._stream_until.add(stream_until)
 
     async def _log_listener(self, msg: LogMsg) -> None:
         await self._stream.write(msg.model_dump_json())
-        if self._stream_until and msg.client_state == self._stream_until:
+        if msg.client_state in self._stream_until:
             self._end_event.set()
 
     async def stream_logs(self, server_name: str) -> None:
         """Stream logs from specific MCP server.
 
         Keep the connection open until client disconnects or
-        the client state is reached.
+        client state is reached.
         """
         try:
             async with self._log_manager.listen_log(
