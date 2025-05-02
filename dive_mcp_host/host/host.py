@@ -18,6 +18,7 @@ from dive_mcp_host.host.errors import ThreadNotFoundError
 from dive_mcp_host.host.helpers.checkpointer import get_checkpointer
 from dive_mcp_host.host.helpers.context import ContextProtocol
 from dive_mcp_host.host.tools import McpServerInfo, ToolManager
+from dive_mcp_host.host.tools.log import LogManager
 from dive_mcp_host.models import load_model
 
 if TYPE_CHECKING:
@@ -76,7 +77,10 @@ class DiveMcpHost(ContextProtocol):
         self._config = config
         self._model: BaseChatModel | None = None
         self._checkpointer: BaseCheckpointSaver[str] | None = None
-        self._tool_manager: ToolManager = ToolManager(self._config.mcp_servers)
+        self._tool_manager: ToolManager = ToolManager(
+            configs=self._config.mcp_servers,
+            log_config=self.config.log_config,
+        )
         self._exit_stack: AsyncExitStack | None = None
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
@@ -277,3 +281,8 @@ class DiveMcpHost(ContextProtocol):
         ):
             return ckp["channel_values"].get("messages", [])
         raise ThreadNotFoundError(thread_id)
+
+    @property
+    def log_manager(self) -> LogManager:
+        """Get the log manager."""
+        return self._tool_manager.log_manager

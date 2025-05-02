@@ -209,6 +209,7 @@ class DiveHostAPI(FastAPI):
             llm=model_setting,
             checkpointer=self._service_config_manager.current_setting.checkpointer,
             mcp_servers=mcp_servers,
+            log_config=self._service_config_manager.current_setting.mcp_server_log,
         )
 
     async def ready(self) -> bool:
