@@ -14,7 +14,7 @@ from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel
 from starlette.datastructures import State
 
-from dive_mcp_host.host.tools.log import LogEvent, LogManager, LogMsg
+from dive_mcp_host.host.tools.log import ClientStateStr, LogEvent, LogManager, LogMsg
 from dive_mcp_host.httpd.conf.prompt import PromptKey
 from dive_mcp_host.httpd.database.models import (
     Message,
@@ -681,18 +681,24 @@ class LogStreamHandler:
         self,
         stream: EventStreamContextManager,
         log_manager: LogManager,
+        stream_until: ClientStateStr | None = None,
     ) -> None:
         """Initialize the log processor."""
         self._stream = stream
         self._log_manager = log_manager
+        self._stream_until = stream_until
+        self._end_event = asyncio.Event()
 
     async def _log_listener(self, msg: LogMsg) -> None:
         await self._stream.write(msg.model_dump_json())
+        if self._stream_until and msg.client_state == self._stream_until:
+            self._end_event.set()
 
     async def stream_logs(self, server_name: str) -> None:
         """Stream logs from specific MCP server.
 
-        Keep the connection open until client disconnects.
+        Keep the connection open until client disconnects or
+        the client state is reached.
         """
         try:
             async with self._log_manager.listen_log(
@@ -700,7 +706,7 @@ class LogStreamHandler:
                 listener=self._log_listener,
             ):
                 with suppress(asyncio.CancelledError):
-                    await asyncio.Future()
+                    await self._end_event.wait()
 
         except Exception as e:
             logger.exception("Error in log streaming for server %s", server_name)
