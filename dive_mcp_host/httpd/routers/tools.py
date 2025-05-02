@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from dive_mcp_host.host.tools.log import ClientStateStr
+from dive_mcp_host.host.tools.model_types import ClientState
 from dive_mcp_host.httpd.dependencies import get_app
 from dive_mcp_host.httpd.routers.models import (
     McpTool,
@@ -116,14 +116,14 @@ async def list_tools(
 @tools.get("/{server_name}/logs/stream")
 async def stream_server_logs(
     server_name: str,
-    stream_until: ClientStateStr | None = None,
+    stream_until: ClientState | None = None,
     app: DiveHostAPI = Depends(get_app),
 ) -> StreamingResponse:
     """Stream logs from a specific MCP server.
 
     Args:
         server_name (str): The name of the MCP server to stream logs from.
-        stream_until (ClientStateStr | None): stream until client state is reached.
+        stream_until (ClientState | None): stream until client state is reached.
         app (DiveHostAPI): The DiveHostAPI instance.
 
     Returns:

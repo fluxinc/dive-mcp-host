@@ -14,7 +14,8 @@ from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel
 from starlette.datastructures import State
 
-from dive_mcp_host.host.tools.log import ClientStateStr, LogEvent, LogManager, LogMsg
+from dive_mcp_host.host.tools.log import LogEvent, LogManager, LogMsg
+from dive_mcp_host.host.tools.model_types import ClientState
 from dive_mcp_host.httpd.conf.prompt import PromptKey
 from dive_mcp_host.httpd.database.models import (
     Message,
@@ -681,16 +682,16 @@ class LogStreamHandler:
         self,
         stream: EventStreamContextManager,
         log_manager: LogManager,
-        stream_until: ClientStateStr | None = None,
+        stream_until: ClientState | None = None,
     ) -> None:
         """Initialize the log processor."""
         self._stream = stream
         self._log_manager = log_manager
         self._end_event = asyncio.Event()
 
-        self._stream_until: set[ClientStateStr] = {
-            ClientStateStr.CLOSED,
-            ClientStateStr.FAILED,
+        self._stream_until: set[ClientState] = {
+            ClientState.CLOSED,
+            ClientState.FAILED,
         }
         if stream_until:
             self._stream_until.add(stream_until)

@@ -53,6 +53,7 @@ from traceback import format_exception
 from pydantic import BaseModel, Field
 
 from dive_mcp_host.host.errors import LogBufferNotFoundError
+from dive_mcp_host.host.tools.model_types import ClientState
 
 logger = getLogger(__name__)
 
@@ -68,26 +69,13 @@ class LogEvent(StrEnum):
     STREAMING_ERROR = "streaming_error"
 
 
-class ClientStateStr(StrEnum):
-    """The state of the client.
-
-    States and transitions:
-    """
-
-    INIT = "init"
-    RUNNING = "running"
-    CLOSED = "closed"
-    RESTARTING = "restarting"
-    FAILED = "failed"
-
-
 class LogMsg(BaseModel):
     """Structure of logs."""
 
     event: LogEvent
     body: str
     mcp_server_name: str
-    client_state: ClientStateStr | None = None
+    client_state: ClientState | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -132,7 +120,7 @@ class LogBuffer:
         self._logs: list[LogMsg] = []
         self._listeners: list[Callable[[LogMsg], Coroutine[None, None, None]]] = []
         self._name = name
-        self._client_state: ClientStateStr = ClientStateStr.INIT
+        self._client_state: ClientState = ClientState.INIT
 
     @property
     def name(self) -> str:
@@ -169,7 +157,7 @@ class LogBuffer:
     async def push_state_change(
         self,
         inpt: str,
-        state: ClientStateStr,
+        state: ClientState,
     ) -> None:
         """Push the client status change to the log buffer."""
         self._client_state = state
@@ -177,7 +165,7 @@ class LogBuffer:
             event=LogEvent.STATUS_CHANGE,
             body=inpt,
             mcp_server_name=self.name,
-            client_state=state,
+            client_state=self._client_state,
         )
         await self.push_log(msg)
 
