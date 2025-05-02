@@ -35,6 +35,7 @@ from dive_mcp_host.host.errors import (
 )
 from dive_mcp_host.host.helpers.context import ContextProtocol
 from dive_mcp_host.host.tools.log import (
+    ClientStateStr,
     LogBuffer,
     LogManager,
     LogProxy,
@@ -254,6 +255,21 @@ class ClientState(Enum):
     RESTARTING = auto()
     FAILED = auto()
 
+    @classmethod
+    def to_str(cls, inpt: ClientState) -> ClientStateStr:
+        """Transform Enum to StrEnum."""
+        if inpt == cls.INIT:
+            return ClientStateStr.INIT
+        if inpt == cls.RUNNING:
+            return ClientStateStr.RUNNING
+        if inpt == cls.CLOSED:
+            return ClientStateStr.CLOSED
+        if inpt == cls.RESTARTING:
+            return ClientStateStr.RESTARTING
+        if inpt == cls.FAILED:
+            return ClientStateStr.FAILED
+        raise ValueError("Unknown client state: {inpt}")
+
 
 class McpServer(ContextProtocol):
     """McpServer Toolkit.
@@ -278,7 +294,7 @@ class McpServer(ContextProtocol):
         self.config = config
         self._log_buffer = LogBuffer(name=name, size=log_buffer_length)
         self._log_proxy = LogProxy(
-            callback=self._log_buffer.push_log,
+            callback=self._log_buffer.push_stderr,
             mcp_server_name=self.name,
         )
         self._cond = asyncio.Condition()
@@ -579,7 +595,9 @@ class McpServer(ContextProtocol):
             self._client_status = new_state
             log_msg = f"client status changed, {self.name} {new_state}, error: {e}"
             logger.debug(log_msg)
-            await self._log_buffer.push_state_change(log_msg)
+            await self._log_buffer.push_state_change(
+                inpt=log_msg, state=ClientState.to_str(new_state)
+            )
             self._cond.notify_all()
 
     async def _wait_for_session(self) -> ClientSession:
