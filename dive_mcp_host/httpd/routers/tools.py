@@ -71,7 +71,7 @@ async def list_tools(
             description="",
             enabled=True,
             icon="",
-            error=str(server_info.error) if server_info.error is not None else None,
+            error=server_info.error_str,
         )
     logger.debug("active mcp servers: %s", result.keys())
 

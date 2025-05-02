@@ -10,6 +10,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppres
 from json import JSONDecodeError
 from json import loads as json_loads
 from logging import getLogger
+from traceback import format_exception
 from typing import TYPE_CHECKING, Any, Literal, Self
 
 import anyio
@@ -24,6 +25,7 @@ from pydantic_core import to_json
 from dive_mcp_host.host.errors import (
     InvalidMcpServerError,
     McpSessionClosedOrFailedError,
+    McpSessionGroupError,
     McpSessionNotInitializedError,
 )
 from dive_mcp_host.host.helpers.context import ContextProtocol
@@ -63,13 +65,20 @@ class McpServerInfo(BaseModel):
     initialize_result.instructions: Server instructions.
     """
 
-    error: BaseException | None
+    error: BaseException | BaseExceptionGroup | None
     """The error that occurred of the MCP server."""
 
     client_status: ClientState
     """The status of the client: RUNNING, CLOSED, RESTARTING, or INIT."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @property
+    def error_str(self) -> str | None:
+        """Print the entire error message."""
+        if self.error is None:
+            return None
+        return "\n".join(format_exception(self.error))
 
 
 class McpServer(ContextProtocol):
@@ -106,7 +115,7 @@ class McpServer(ContextProtocol):
         self._tool_results: types.ListToolsResult | None = None
         self._initialize_result: types.InitializeResult | None = None
         self._session_count: int = 0
-        self._exception: BaseException | None = None
+        self._exception: BaseException | BaseExceptionGroup | None = None
         self._mcp_tools: list[McpTool] = []
         self._retries: int = 0
         self._last_active: float = 0
@@ -207,12 +216,12 @@ class McpServer(ContextProtocol):
             except* ProcessLookupError as eg:
                 # this raised when a stdio process is exited
                 # and the initialize call is timeout
-                logger.warning(
-                    "ProcessLookupError for %s: %s",
-                    self.name,
+                err_msg = f"ProcessLookupError for {self.name}: {eg.exceptions}"
+                logger.exception(err_msg)
+                self._exception = McpSessionGroupError(
+                    err_msg,
                     eg.exceptions,
                 )
-                self._exception = InvalidMcpServerError(self.name, str(eg.exceptions))
                 should_break = True
             except* (
                 FileNotFoundError,
@@ -222,14 +231,16 @@ class McpServer(ContextProtocol):
                 httpx.InvalidURL,
                 httpx.TooManyRedirects,
             ) as eg:
-                logger.exception(
-                    "Client initialization error for %s: %s",
-                    self.name,
-                    eg.exceptions,
+                err_msg = (
+                    f"Client initialization error for {self.name}: {eg.exceptions}"
                 )
-                self._exception = InvalidMcpServerError(self.name, str(eg.exceptions))
+                logger.exception(err_msg)
+                self._exception = McpSessionGroupError(err_msg, eg.exceptions)
                 should_break = True
             except* httpx.HTTPStatusError as eg:
+                err_msg = f"Client http error for {self.name}: {eg.exceptions}"
+                logger.exception(err_msg)
+                self._exception = McpSessionGroupError(err_msg, eg.exceptions)
                 for e in eg.exceptions:
                     if (
                         isinstance(e, httpx.HTTPStatusError)
@@ -238,17 +249,15 @@ class McpServer(ContextProtocol):
                     ):
                         should_break = True
                         break
-                self._exception = InvalidMcpServerError(self.name, str(eg.exceptions))
             except* asyncio.CancelledError as e:
                 should_break = True
                 logger.debug("Client watcher cancelled for %s", self.name)
             except* BaseException as eg:
-                self._exception = InvalidMcpServerError(self.name, str(eg.exceptions))
-                logger.exception(
-                    "Client initialization error for %s: %s",
-                    self.name,
-                    eg.exceptions,
+                err_msg = (
+                    f"Client initialization error for {self.name}: {eg.exceptions}"
                 )
+                logger.exception(err_msg)
+                self._exception = McpSessionGroupError(err_msg, eg.exceptions)
 
             if self._exception:
                 await self._log_buffer.push_session_error(self._exception)

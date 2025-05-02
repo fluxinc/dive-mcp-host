@@ -51,6 +51,10 @@ class InvalidMcpServerError(MCPHostError, ValueError):
         super().__init__(f"{mcp_server}: {reason}")
 
 
+class McpSessionGroupError(MCPHostError, ValueError, BaseExceptionGroup):
+    """Exception group of MCP session errors."""
+
+
 class McpSessionNotInitializedError(MCPHostError):
     """Exception raised when a MCP session is not initialized."""
 
