@@ -79,10 +79,10 @@ def system_prompt(custom_rules: str) -> str:
 
     <Response_Format>
       - Use markdown formatting with clear structure
-      
+
       <Special_Cases>
         <Math_Formatting>
-          - For inline formulas: \\( [formula] \\) 
+          - For inline formulas: \\( [formula] \\)
           - For block formulas: \\( \\displaystyle [formula] \\)
           - Example: \\( E = mc^2 \\) and \\( \\displaystyle \\int_{{{{a}}}}^{{{{b}}}} f(x) dx = F(b) - F(a) \\)
         </Math_Formatting>
