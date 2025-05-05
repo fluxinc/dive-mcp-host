@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, Annotated, TypeVar, List, Dict, Any
 import logging
 
-from fastapi import APIRouter, Body, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, Request, UploadFile, Query
 from fastapi.responses import StreamingResponse
 
 from dive_mcp_host.httpd.database.models import (
@@ -53,7 +53,7 @@ async def list_chat(
     app: DiveHostAPI = Depends(get_app),
     dive_user: "DiveUser" = Depends(get_dive_user),
     sort_by: SortBy = SortBy.CHAT,
-    session_id: Annotated[str | None, Body(alias="sessionId", embed=True)] = None,
+    session_id: Annotated[str | None, Query(alias="sessionId")] = None,
 ) -> DataResult[list[Chat]]:
     """List all available chats for a session.
 
