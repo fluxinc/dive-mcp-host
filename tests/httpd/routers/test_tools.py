@@ -3,11 +3,14 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 from fastapi import status
+from fastapi.testclient import TestClient
 
 from dive_mcp_host.host.tools.echo import ECHO_DESCRIPTION, IGNORE_DESCRIPTION
+from dive_mcp_host.host.tools.log import LogMsg
 from dive_mcp_host.httpd.conf.mcp_servers import MCPServerConfig
 from dive_mcp_host.httpd.routers.models import SimpleToolInfo
 from dive_mcp_host.httpd.routers.tools import McpTool, ToolsResult, list_tools
+from dive_mcp_host.httpd.server import DiveHostAPI
 from tests import helper
 
 
@@ -358,3 +361,16 @@ def test_tools_cache_after_update(test_client):
     confirm = response.json()
     confirm["tools"] = sorted(confirm["tools"], key=lambda x: x["name"])
     assert first_time == confirm
+
+
+def test_stream_logs_notfound(test_client: tuple[TestClient, DiveHostAPI]):
+    """Test stream_logs function with not found server."""
+    client, _ = test_client
+    response = client.get("/api/tools/missing_server/logs/stream")
+    for line in response.iter_lines():
+        content = line.removeprefix("data: ")
+        if content == "[DONE]":
+            continue
+
+        data = LogMsg.model_validate_json(content)
+        assert data.event == ""
