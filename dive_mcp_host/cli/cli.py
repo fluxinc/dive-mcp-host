@@ -68,6 +68,9 @@ async def run() -> None:
             system_prompt = f.read()
 
     async with DiveMcpHost(config) as mcp_host:
+        print("Waiting for tools to initialize...")
+        await mcp_host.tools_initialized_event.wait()
+        print("Tools initialized")
         chat = mcp_host.chat(chat_id=current_chat_id, system_prompt=system_prompt)
         current_chat_id = chat.chat_id
         async with chat:

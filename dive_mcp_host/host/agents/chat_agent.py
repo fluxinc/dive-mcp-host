@@ -16,6 +16,7 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.messages.utils import count_tokens_approximately, trim_messages
+from langchain_core.prompt_values import ChatPromptValue
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_core.tools import BaseTool
@@ -34,7 +35,6 @@ from dive_mcp_host.host.agents.tool_call import extract_tool_calls
 from dive_mcp_host.host.helpers import today_datetime
 from dive_mcp_host.host.prompt import (
     PromptType,
-    tools_example_prompt,
     tools_prompt,
 )
 
@@ -66,10 +66,13 @@ def get_prompt_runnable(prompt: PromptType | ChatPromptTemplate | None) -> Runna
         )
     elif isinstance(prompt, str):
         _system_message: BaseMessage = SystemMessage(content=prompt)
-        prompt_runnable = RunnableCallable(
-            lambda state: [_system_message, *state.get("messages", None)],
-            name=PROMPT_RUNNABLE_NAME,
-        )
+
+        def _func(state: AgentState | ChatPromptValue) -> list[BaseMessage]:
+            if isinstance(state, ChatPromptValue):
+                return [_system_message, *state.to_messages()]
+            return [_system_message, *state.get("messages", None)]
+
+        prompt_runnable = RunnableCallable(_func, name=PROMPT_RUNNABLE_NAME)
     elif isinstance(prompt, SystemMessage):
         prompt_runnable = RunnableCallable(
             lambda state: [prompt, *state.get("messages", None)],
@@ -112,12 +115,15 @@ class ChatAgentFactory(AgentFactory[AgentState]):
 
         # changed when self.create_agent is called
         self._prompt: Runnable = get_prompt_runnable(None)
-        self._tool_in_prompt_example: Runnable = get_prompt_runnable(None)
         self._tool_prompt: Runnable = get_prompt_runnable(None)
 
+        # Initialize the tool prompt
         if self._tools_in_prompt:
-            self._tool_in_prompt_example = get_prompt_runnable(tools_example_prompt())
-            self._tool_prompt = get_prompt_runnable(tools_prompt(self._tools))
+            if isinstance(self._tools, ToolNode):
+                tools = list(self._tools.tools_by_name.values())
+                self._tool_prompt = get_prompt_runnable(tools_prompt(tools))
+            else:
+                self._tool_prompt = get_prompt_runnable(tools_prompt(self._tools))
 
         self._build_graph()
 
@@ -158,7 +164,7 @@ class ChatAgentFactory(AgentFactory[AgentState]):
             model = self._model.bind_tools(self._tool_classes)
             model_runnable = self._prompt | model
         else:
-            model_runnable = self._prompt | self._tool_in_prompt_example | self._model
+            model_runnable = self._prompt | self._tool_prompt | self._model
 
         response = model_runnable.invoke(state, config)
         if isinstance(response, AIMessage):
