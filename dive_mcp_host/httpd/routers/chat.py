@@ -53,7 +53,7 @@ async def list_chat(
     app: DiveHostAPI = Depends(get_app),
     dive_user: "DiveUser" = Depends(get_dive_user),
     sort_by: SortBy = SortBy.CHAT,
-    session_id: str | None = None,
+    session_id: Annotated[str | None, Body(alias="sessionId", embed=True)] = None,
 ) -> DataResult[list[Chat]]:
     """List all available chats for a session.
 
@@ -203,9 +203,9 @@ async def edit_chat(  # noqa: PLR0913
 async def retry_chat(
     request: Request,
     app: DiveHostAPI = Depends(get_app),
-    chat_id: Annotated[str | None, Body(alias="chatId")] = None,
-    message_id: Annotated[str | None, Body(alias="messageId")] = None,
-    session_id: Annotated[str | None, Body(alias="sessionId")] = None,
+    chat_id: Annotated[str | None, Body(alias="chatId", embed=True)] = None,
+    message_id: Annotated[str | None, Body(alias="messageId", embed=True)] = None,
+    session_id: Annotated[str | None, Body(alias="sessionId", embed=True)] = None,
 ) -> StreamingResponse:
     """Retry a chat.
 
@@ -274,7 +274,7 @@ async def get_chat(
 @chat.delete("/{chat_id}")
 async def delete_chat(
     chat_id: str,
-    session_id: str,
+    session_id: Annotated[str, Body(alias="sessionId", embed=True)],
     app: DiveHostAPI = Depends(get_app),
     dive_user: "DiveUser" = Depends(get_dive_user),
 ) -> ResultResponse:
@@ -299,9 +299,9 @@ async def delete_chat(
         
         if chat is None:
             raise UserInputError("Chat not found or you don't have permission to delete it")
-            
-        # If session_id is provided and doesn't match the chat's session_id, return error
-        if session_id and chat.chat.session_id and session_id != chat.chat.session_id:
+        
+        # Check if session_id matches the chat's session_id
+        if chat.chat.session_id != session_id:
             raise UserInputError("Session ID does not match the chat's session ID")
             
         # Delete the chat
@@ -310,6 +310,10 @@ async def delete_chat(
             user_id=dive_user["user_id"],
             session_id=session_id,
         )
+        
+        # Explicitly commit the transaction - this should be handled by the context manager
+        # but adding it to be sure
+        await session.commit()
         
         return ResultResponse(success=True)
 

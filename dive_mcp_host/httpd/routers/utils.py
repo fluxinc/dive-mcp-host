@@ -272,6 +272,8 @@ class ChatProcessor:
                             documents=query_input.documents or [],
                             tool_calls=query_input.tool_calls,
                         ),
+                        session_id=session_id,
+                        user_id=dive_user["user_id"],
                     )
 
             for message in current_messages:
