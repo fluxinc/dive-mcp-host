@@ -154,6 +154,9 @@ class ChatProcessor:
             if app.model_config_manager.full_config
             else False
         )
+        # Store chat_id and session_id for use in tracking methods
+        self.chat_id: str | None = None
+        self.session_id: str | None = None
 
     async def handle_chat(  # noqa: C901, PLR0912, PLR0915
         self,
@@ -170,8 +173,9 @@ class ChatProcessor:
             regenerate_message_id: Message ID to regenerate.
             session_id: Session ID for the chat (for new chat creation).
         """
-        # Store chat_id for use in the tracking methods
+        # Store chat_id and session_id for use in the tracking methods
         self.chat_id = chat_id
+        self.session_id = session_id
         
         # Clear previous chat data if regenerating
         if regenerate_message_id and chat_id:
@@ -187,13 +191,18 @@ class ChatProcessor:
         title = "New Chat"
         title_await = None
 
-        if isinstance(query_input, QueryInput) and query_input.text:
-            async with self.app.db_sessionmaker() as session:
-                db = self.app.msg_store(session)
-                if not await db.check_chat_exists(chat_id, dive_user["user_id"]):
-                    title_await = asyncio.create_task(
-                        self._generate_title(query_input.text)
-                    )
+        # Check if this is a new chat or existing chat
+        is_new_chat = False
+        async with self.app.db_sessionmaker() as session:
+            db = self.app.msg_store(session)
+            chat_exists = await db.check_chat_exists(chat_id, dive_user["user_id"])
+            is_new_chat = not chat_exists
+
+        # For new chats, generate a title if a text query is provided
+        if is_new_chat and isinstance(query_input, QueryInput) and query_input.text:
+            title_await = asyncio.create_task(
+                self._generate_title(query_input.text)
+            )
 
         await self.stream.write(
             StreamMessage(
@@ -237,9 +246,20 @@ class ChatProcessor:
         async with self.app.db_sessionmaker() as session:
             db = self.app.msg_store(session)
             if not await db.check_chat_exists(chat_id, dive_user["user_id"]):
+                # Use a default session ID if none is provided
+                chat_session_id = session_id or "default"
                 await db.create_chat(
-                    chat_id, title, dive_user["user_id"], dive_user["user_type"], session_id=session_id
+                    chat_id=chat_id, 
+                    title=title, 
+                    session_id=chat_session_id,
+                    user_id=dive_user["user_id"], 
+                    user_type=dive_user["user_type"],
                 )
+            else:
+                # If the chat exists, verify that the session ID matches
+                existing_chat = await db.get_chat_with_messages(chat_id, dive_user["user_id"])
+                if existing_chat and existing_chat.chat.session_id and session_id and existing_chat.chat.session_id != session_id:
+                    raise ChatError("Session ID does not match the chat's session ID")
 
             if regenerate_message_id and query_message:
                 await db.delete_messages_after(chat_id, query_message.id)  # type: ignore
@@ -731,11 +751,20 @@ class ChatProcessor:
     ) -> BaseMessage:
         """Get the last user input message from history."""
         dive_user: DiveUser = self.request_state.dive_user
+        session_id = getattr(self, "session_id", None)
+        
         async with self.app.db_sessionmaker() as session:
             db = self.app.msg_store(session)
-            chat = await db.get_chat_with_messages(chat_id, dive_user["user_id"])
+            
+            # Try to get chat with user_id and optionally session_id
+            chat = await db.get_chat_with_messages(
+                chat_id=chat_id,
+                user_id=dive_user["user_id"],
+            )
+                
             if chat is None:
                 raise ChatError("chat not found")
+                
             message = None
             for i in chat.messages:
                 if i.role == Role.USER:
@@ -746,7 +775,10 @@ class ChatProcessor:
                 message = None
             if message is None:
                 raise ChatError("message not found")
-
+                
+            # Store the session ID
+            self.session_id = chat.chat.session_id
+                
             return (
                 await self._process_history_messages(
                     [message],
