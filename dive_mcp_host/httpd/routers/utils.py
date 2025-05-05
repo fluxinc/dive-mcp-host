@@ -14,6 +14,7 @@ from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel
 from starlette.datastructures import State
 
+from dive_mcp_host.host.errors import LogBufferNotFoundError
 from dive_mcp_host.host.tools.log import LogEvent, LogManager, LogMsg
 from dive_mcp_host.host.tools.model_types import ClientState
 from dive_mcp_host.httpd.conf.prompt import PromptKey
@@ -683,11 +684,15 @@ class LogStreamHandler:
         stream: EventStreamContextManager,
         log_manager: LogManager,
         stream_until: ClientState | None = None,
+        stop_on_notfound: bool = True,
+        max_retries: int = 10,
     ) -> None:
         """Initialize the log processor."""
         self._stream = stream
         self._log_manager = log_manager
         self._end_event = asyncio.Event()
+        self._stop_on_notfound = stop_on_notfound
+        self._max_retries = max_retries
 
         self._stream_until: set[ClientState] = {
             ClientState.CLOSED,
@@ -706,20 +711,44 @@ class LogStreamHandler:
 
         Keep the connection open until client disconnects or
         client state is reached.
-        """
-        try:
-            async with self._log_manager.listen_log(
-                name=server_name,
-                listener=self._log_listener,
-            ):
-                with suppress(asyncio.CancelledError):
-                    await self._end_event.wait()
 
-        except Exception as e:
-            logger.exception("Error in log streaming for server %s", server_name)
-            msg = LogMsg(
-                event=LogEvent.STREAMING_ERROR,
-                body=f"Error streaming logs: {e}",
-                mcp_server_name=server_name,
-            )
-            await self._stream.write(msg.model_dump_json())
+        If self._stop_on_notfound is False, it will keep retrying until
+        the log buffer is found or max retries is reached.
+        """
+        while self._max_retries > 0:
+            self._max_retries -= 1
+
+            try:
+                async with self._log_manager.listen_log(
+                    name=server_name,
+                    listener=self._log_listener,
+                ):
+                    with suppress(asyncio.CancelledError):
+                        await self._end_event.wait()
+                        break
+            except LogBufferNotFoundError as e:
+                logger.warning(
+                    "Log buffer not found for server %s, retries left: %d",
+                    server_name,
+                    self._max_retries,
+                )
+                if self._stop_on_notfound:
+                    msg = LogMsg(
+                        event=LogEvent.STREAMING_ERROR,
+                        body=f"Error streaming logs: {e}",
+                        mcp_server_name=server_name,
+                    )
+                    await self._stream.write(msg.model_dump_json())
+                    break
+
+                await asyncio.sleep(1)
+
+            except Exception as e:
+                logger.exception("Error in log streaming for server %s", server_name)
+                msg = LogMsg(
+                    event=LogEvent.STREAMING_ERROR,
+                    body=f"Error streaming logs: {e}",
+                    mcp_server_name=server_name,
+                )
+                await self._stream.write(msg.model_dump_json())
+                break
