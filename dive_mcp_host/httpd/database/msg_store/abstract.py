@@ -18,11 +18,13 @@ class AbstractMessageStore(ABC):
     async def get_all_chats(
         self,
         user_id: str | None = None,
+        session_id: str | None = None,
     ) -> list[Chat]:
         """Retrieve all chats from the database.
 
         Args:
             user_id: User ID or fingerprint, depending on the prefix.
+            session_id: Session ID to filter chats.
 
         Returns:
             List of Chat objects.
@@ -51,6 +53,7 @@ class AbstractMessageStore(ABC):
         title: str,
         user_id: str | None = None,
         user_type: str | None = None,
+        session_id: str | None = None,
     ) -> Chat | None:
         """Create a new chat.
 
@@ -59,6 +62,7 @@ class AbstractMessageStore(ABC):
             title: Title of the chat.
             user_id: User ID or fingerprint, depending on the prefix.
             user_type: Optional user type
+            session_id: Optional session ID for the chat.
 
         Returns:
             Created Chat object or None if creation failed.

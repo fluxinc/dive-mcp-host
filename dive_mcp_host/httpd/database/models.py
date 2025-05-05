@@ -30,6 +30,7 @@ class Chat(BaseModel):
     title: str
     created_at: datetime = Field(alias="createdAt")
     user_id: str | None
+    session_id: str | None = None
 
 
 class Role(StrEnum):

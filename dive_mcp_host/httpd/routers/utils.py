@@ -160,8 +160,16 @@ class ChatProcessor:
         chat_id: str | None,
         query_input: QueryInput | None,
         regenerate_message_id: str | None,
+        session_id: str | None = None,
     ) -> tuple[str, TokenUsage]:
-        """Handle chat."""
+        """Handle chat.
+
+        Args:
+            chat_id: The chat ID.
+            query_input: The input for the chat.
+            regenerate_message_id: Message ID to regenerate.
+            session_id: Session ID for the chat (for new chat creation).
+        """
         # Store chat_id for use in the tracking methods
         self.chat_id = chat_id
         
@@ -230,7 +238,7 @@ class ChatProcessor:
             db = self.app.msg_store(session)
             if not await db.check_chat_exists(chat_id, dive_user["user_id"]):
                 await db.create_chat(
-                    chat_id, title, dive_user["user_id"], dive_user["user_type"]
+                    chat_id, title, dive_user["user_id"], dive_user["user_type"], session_id=session_id
                 )
 
             if regenerate_message_id and query_message:

@@ -45,12 +45,14 @@ class BaseMessageStore(AbstractMessageStore):
     async def get_all_chats(
         self,
         user_id: str | None = None,
+        session_id: str | None = None,
         sort_by: SortBy = SortBy.CHAT,
     ) -> list[Chat]:
         """Retrieve all chats from the database.
 
         Args:
             user_id: User ID or fingerprint, depending on the prefix.
+            session_id: Session ID to filter chats.
             sort_by: Sort by.
                 - 'chat': Sort by chat creation time.
                 - 'msg': Sort by message creation time.
@@ -59,6 +61,12 @@ class BaseMessageStore(AbstractMessageStore):
         Returns:
             List of Chat objects.
         """
+        filters = []
+        if user_id is not None:
+            filters.append(ORMChat.user_id == user_id)
+        if session_id is not None:
+            filters.append(ORMChat.session_id == session_id)
+
         if sort_by == SortBy.MESSAGE:
             query = (
                 select(
@@ -73,8 +81,9 @@ class BaseMessageStore(AbstractMessageStore):
                     ORMChat.title,
                     ORMChat.created_at,
                     ORMChat.user_id,
+                    ORMChat.session_id,
                 )
-                .where(ORMChat.user_id == user_id)
+                .where(*filters)
                 .order_by(desc("last_message_at"))
             )
             result = await self._session.execute(query)
@@ -83,7 +92,7 @@ class BaseMessageStore(AbstractMessageStore):
         elif sort_by == SortBy.CHAT:
             query = (
                 select(ORMChat)
-                .where(ORMChat.user_id == user_id)
+                .where(*filters)
                 .order_by(desc(ORMChat.created_at))
             )
             result = await self._session.scalars(query)
@@ -98,6 +107,7 @@ class BaseMessageStore(AbstractMessageStore):
                 title=chat.title,
                 createdAt=chat.created_at,
                 user_id=chat.user_id,
+                session_id=chat.session_id,
             )
             for chat in chats
         ]
@@ -134,6 +144,7 @@ class BaseMessageStore(AbstractMessageStore):
             title=data.title,
             createdAt=data.created_at,
             user_id=data.user_id,
+            session_id=data.session_id,
         )
         messages: list[Message] = []
         for msg in data.messages:

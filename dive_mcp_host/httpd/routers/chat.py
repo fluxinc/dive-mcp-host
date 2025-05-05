@@ -53,8 +53,9 @@ async def list_chat(
     app: DiveHostAPI = Depends(get_app),
     dive_user: "DiveUser" = Depends(get_dive_user),
     sort_by: SortBy = SortBy.CHAT,
+    session_id: str | None = None,
 ) -> DataResult[list[Chat]]:
-    """List all available chats.
+    """List all available chats for a session.
 
     Args:
         app (DiveHostAPI): The DiveHostAPI instance.
@@ -63,6 +64,7 @@ async def list_chat(
             - 'chat': Sort by chat creation time.
             - 'msg': Sort by message creation time.
             default: 'chat'
+        session_id (str | None): Session ID to filter chats.
 
     Returns:
         DataResult[list[Chat]]: List of available chats.
@@ -70,6 +72,7 @@ async def list_chat(
     async with app.db_sessionmaker() as session:
         chats = await app.msg_store(session).get_all_chats(
             dive_user["user_id"],
+            session_id=session_id,
             sort_by=sort_by,
         )
     return DataResult(success=True, message=None, data=chats)
@@ -83,6 +86,7 @@ async def create_chat(  # noqa: PLR0913
     message: Annotated[str | None, Form()] = None,
     files: Annotated[list[UploadFile] | None, File()] = None,
     filepaths: Annotated[list[str] | None, Form()] = None,
+    session_id: Annotated[str | None, Form(alias="sessionId")] = None,
 ) -> StreamingResponse:
     """Create a new chat.
 
@@ -93,6 +97,7 @@ async def create_chat(  # noqa: PLR0913
         message (str | None): The message to send.
         files (list[UploadFile] | None): The files to upload.
         filepaths (list[str] | None): The file paths to upload.
+        session_id (str | None): The session ID for the chat.
     """
     if files is None:
         files = []
@@ -109,7 +114,7 @@ async def create_chat(  # noqa: PLR0913
     async def process() -> None:
         async with stream:
             processor = ChatProcessor(app, request.state, stream)
-            await processor.handle_chat(chat_id, query_input, None)
+            await processor.handle_chat(chat_id, query_input, None, session_id=session_id)
 
     stream.add_task(process)
     return response

@@ -56,6 +56,7 @@ class Chat(Base):
         title: Chat title.
         created_at: Chat creation timestamp.
         user_id: User ID or fingerprint, depending on the prefix.
+        session_id: Session ID.
     """
 
     __tablename__ = "chats"
@@ -68,6 +69,7 @@ class Chat(Base):
     user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
     )
+    session_id: Mapped[str | None] = mapped_column(Text(), index=True)
 
     messages: Mapped[list["Message"]] = relationship(
         back_populates="chat",

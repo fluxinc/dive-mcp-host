@@ -158,6 +158,7 @@ class ChatInfoContent(BaseModel):
 
     id: str
     title: str
+    session_id: str | None = None
 
 
 class MessageInfoContent(BaseModel):

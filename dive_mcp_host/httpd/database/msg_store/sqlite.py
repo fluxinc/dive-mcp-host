@@ -17,6 +17,7 @@ class SQLiteMessageStore(BaseMessageStore):
         title: str,
         user_id: str | None = None,
         user_type: str | None = None,
+        session_id: str | None = None,
     ) -> Chat | None:
         """Create a new chat.
 
@@ -25,6 +26,7 @@ class SQLiteMessageStore(BaseMessageStore):
             title: Title of the chat.
             user_id: User ID or fingerprint, depending on the prefix.
             user_type: Optional user type
+            session_id: Optional session ID for the chat.
 
         Returns:
             Created Chat object or None if creation failed.
@@ -50,6 +52,7 @@ class SQLiteMessageStore(BaseMessageStore):
                     "title": title,
                     "created_at": datetime.now(UTC),
                     "user_id": user_id,
+                    "session_id": session_id,
                 },
             )
             .on_conflict_do_nothing()
@@ -63,4 +66,5 @@ class SQLiteMessageStore(BaseMessageStore):
             title=chat.title,
             createdAt=chat.created_at,
             user_id=chat.user_id,
+            session_id=chat.session_id,
         )
