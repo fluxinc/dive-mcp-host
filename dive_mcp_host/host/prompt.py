@@ -46,15 +46,15 @@ def tools_prompt(tools: Sequence[BaseTool]) -> str:
 User: When was the Eiffel Tower built?
 
 Assistant: I can use the search tool to find information about the Eiffel Tower.
-<tool_use>
+<tool_call>
   <name>search</name>
   <arguments>{{"query": "When was the Eiffel Tower built"}}</arguments>
-</tool_use>
+</tool_call>
 
-ToolMessage: <tool_use_result>
+ToolMessage: <tool_call_result>
   <name>search</name>
   <result>The Eiffel Tower was built between 1887 and 1889 and was officially opened on March 31, 1889.</result>
-</tool_use_result>
+</tool_call_result>
 
 Assistant: The Eiffel Tower was built between 1887 and 1889 and was officially opened on March 31, 1889.
 
@@ -62,26 +62,26 @@ Assistant: The Eiffel Tower was built between 1887 and 1889 and was officially o
 User: "What is 15% of $85.50 plus a $5 fee?"
 
 Assistant: I can use the calculator tool to find 15% of $85.50.
-<tool_use>
+<tool_call>
   <name>calculator</name>
   <arguments>{{"expression": "85.50 * 0.15"}}</arguments>
-</tool_use>
+</tool_call>
 
-ToolMessage: <tool_use_result>
+ToolMessage: <tool_call_result>
   <name>calculator</name>
   <result>12.83</result>
-</tool_use_result>
+</tool_call_result>
 
 Assistant: Now I'll add the $5 fee.
-<tool_use>
+<tool_call>
   <name>calculator</name>
   <arguments>{{"expression": "12.83 + 5"}}</arguments>
-</tool_use>
+</tool_call>
 
-ToolMessage: <tool_use_result>
+ToolMessage: <tool_call_result>
   <name>calculator</name>
   <result>17.83</result>
-</tool_use_result>
+</tool_call_result>
 
 Assistant: 15% of $85.50 is $12.83, and when you add the $5 fee, the total is $17.83.
 
@@ -89,26 +89,26 @@ Assistant: 15% of $85.50 is $12.83, and when you add the $5 fee, the total is $1
 User: "What is the population of Tokyo and how does it compare to New York City?"
 
 Assistant: I can use the search tool to find the population of Tokyo.
-<tool_use>
+<tool_call>
   <name>search</name>
   <arguments>{{"query": "Population of Tokyo"}}</arguments>
-</tool_use>
+</tool_call>
 
-ToolMessage: <tool_use_result>
+ToolMessage: <tool_call_result>
   <name>search</name>
   <result>Tokyo has a population of approximately 13.96 million people (2023 estimate).</result>
-</tool_use_result>
+</tool_call_result>
 
 Assistant: I can also use the search tool to find the population of New York City.
-<tool_use>
+<tool_call>
   <name>search</name>
   <arguments>{{"query": "Population of New York City"}}</arguments>
-</tool_use>
+</tool_call>
 
-ToolMessage: <tool_use_result>
+ToolMessage: <tool_call_result>
   <name>search</name>
   <result>New York City has a population of approximately 8.8 million people (2022 estimate).</result>
-</tool_use_result>
+</tool_call_result>
 
 Assistant: Tokyo has a population of approximately 13.96 million people, while New York City has approximately 8.8 million people. Tokyo is significantly larger, with about 5.16 million more residents than New York City.
 
