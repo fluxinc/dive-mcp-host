@@ -31,12 +31,12 @@ from langgraph.utils.runnable import RunnableCallable
 from pydantic import BaseModel
 
 from dive_mcp_host.host.agents.agent_factory import AgentFactory, initial_messages
-from dive_mcp_host.host.agents.tool_call import extract_tool_calls
-from dive_mcp_host.host.helpers import today_datetime
-from dive_mcp_host.host.prompt import (
-    PromptType,
-    tools_prompt,
+from dive_mcp_host.host.agents.tools_in_prompt import (
+    convert_messages,
+    extract_tool_calls,
 )
+from dive_mcp_host.host.helpers import today_datetime
+from dive_mcp_host.host.prompt import PromptType, tools_prompt
 
 StructuredResponse = dict | BaseModel
 StructuredResponseSchema = dict | type[BaseModel]
@@ -164,7 +164,9 @@ class ChatAgentFactory(AgentFactory[AgentState]):
             model = self._model.bind_tools(self._tool_classes)
             model_runnable = self._prompt | model
         else:
-            model_runnable = self._prompt | self._tool_prompt | self._model
+            model_runnable = (
+                self._prompt | self._tool_prompt | convert_messages | self._model
+            )
 
         response = model_runnable.invoke(state, config)
         if isinstance(response, AIMessage):
