@@ -200,6 +200,7 @@ class ModelSingleConfig(BaseModel):
     configuration: LLMConfiguration | None = None
     active: bool = Field(default=True)
     checked: bool = Field(default=False)
+    tools_in_prompt: bool = Field(default=False)
 
     model_config = ConfigDict(
         alias_generator=to_camel,
