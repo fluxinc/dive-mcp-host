@@ -15,18 +15,18 @@ class PostgreSQLMessageStore(BaseMessageStore):
         self,
         chat_id: str,
         title: str,
+        session_id: str,
         user_id: str | None = None,
         user_type: str | None = None,
-        session_id: str | None = None,
     ) -> Chat | None:
         """Create a new chat.
 
         Args:
             chat_id: Unique identifier for the chat.
             title: Title of the chat.
+            session_id: Session ID for the chat.
             user_id: User ID or fingerprint, depending on the prefix.
             user_type: Optional user type
-            session_id: Optional session ID for the chat.
 
         Returns:
             Created Chat object or None if creation failed.
