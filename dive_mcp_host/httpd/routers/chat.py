@@ -81,29 +81,45 @@ async def list_chat(
 @chat.post("")
 async def create_chat(  # noqa: PLR0913
     request: Request,
+    session_id: Annotated[str, Form(alias="sessionId")],
     app: DiveHostAPI = Depends(get_app),
     chat_id: Annotated[str | None, Form(alias="chatId")] = None,
     message: Annotated[str | None, Form()] = None,
     files: Annotated[list[UploadFile] | None, File()] = None,
     filepaths: Annotated[list[str] | None, Form()] = None,
-    session_id: Annotated[str | None, Form(alias="sessionId")] = None,
 ) -> StreamingResponse:
     """Create a new chat.
 
     Args:
         request (Request): The request object.
+        session_id (str): The session ID for the chat.
         app (DiveHostAPI): The DiveHostAPI instance.
         chat_id (str | None): The ID of the chat to create.
         message (str | None): The message to send.
         files (list[UploadFile] | None): The files to upload.
         filepaths (list[str] | None): The file paths to upload.
-        session_id (str | None): The session ID for the chat.
     """
+
+
     if files is None:
         files = []
 
     if filepaths is None:
         filepaths = []
+
+    # If chat_id is provided, verify session_id matches
+    if chat_id:
+        dive_user = request.state.dive_user
+        async with app.db_sessionmaker() as session:
+            # Check if chat exists
+            chat = await app.msg_store(session).get_chat_with_messages(
+                chat_id=chat_id,
+                user_id=dive_user["user_id"],
+            )
+            
+            # If chat exists, verify session_id
+            if chat and chat.chat.session_id and session_id != chat.chat.session_id:
+                raise UserInputError("Session ID does not match the chat's session ID")
 
     images, documents = await app.store.upload_files(files, filepaths)
 
@@ -129,6 +145,7 @@ async def edit_chat(  # noqa: PLR0913
     content: Annotated[str | None, Form()] = None,
     files: Annotated[list[UploadFile] | None, File()] = None,
     filepaths: Annotated[list[str] | None, Form()] = None,
+    session_id: Annotated[str | None, Form(alias="sessionId")] = None,
 ) -> StreamingResponse:
     """Edit a message in a chat and query again.
 
@@ -140,15 +157,32 @@ async def edit_chat(  # noqa: PLR0913
         content (str | None): The content to send.
         files (list[UploadFile] | None): The files to upload.
         filepaths (list[str] | None): The file paths to upload.
+        session_id (str | None): Session ID for the chat.
     """
-    if chat_id is None or message_id is None:
-        raise UserInputError("Chat ID and Message ID are required")
+    if chat_id is None or message_id is None or session_id is None:
+        raise UserInputError("Chat ID, Message ID and Session ID are required")
 
     if files is None:
         files = []
 
     if filepaths is None:
         filepaths = []
+
+    # Verify session ID if provided
+    dive_user = request.state.dive_user
+    async with app.db_sessionmaker() as session:
+        chat = await app.msg_store(session).get_chat_with_messages(
+            chat_id=chat_id,
+            user_id=dive_user["user_id"],
+        )
+        
+        # If chat doesn't exist or user doesn't own it, raise error
+        if chat is None:
+            raise UserInputError("Chat not found")
+            
+        # If session_id doesn't match the chat's session_id, raise error
+        if chat.chat.session_id and session_id != chat.chat.session_id:
+            raise UserInputError("Session ID does not match the chat's session ID")
 
     images, documents = await app.store.upload_files(files, filepaths)
 
@@ -159,7 +193,7 @@ async def edit_chat(  # noqa: PLR0913
     async def process() -> None:
         async with stream:
             processor = ChatProcessor(app, request.state, stream)
-            await processor.handle_chat(chat_id, query_input, message_id)
+            await processor.handle_chat(chat_id, query_input, message_id, session_id=session_id)
 
     stream.add_task(process)
     return response
@@ -171,6 +205,7 @@ async def retry_chat(
     app: DiveHostAPI = Depends(get_app),
     chat_id: Annotated[str | None, Body(alias="chatId")] = None,
     message_id: Annotated[str | None, Body(alias="messageId")] = None,
+    session_id: Annotated[str | None, Body(alias="sessionId")] = None,
 ) -> StreamingResponse:
     """Retry a chat.
 
@@ -179,9 +214,26 @@ async def retry_chat(
         app (DiveHostAPI): The DiveHostAPI instance.
         chat_id (str | None): The ID of the chat to retry.
         message_id (str | None): The ID of the message to retry.
+        session_id (str | None): Session ID for the chat.
     """
-    if chat_id is None or message_id is None:
-        raise UserInputError("Chat ID and Message ID are required")
+    if chat_id is None or message_id is None or session_id is None:
+        raise UserInputError("Chat ID, Message ID and Session ID are required")
+
+    # Verify session ID if provided
+    dive_user = request.state.dive_user
+    async with app.db_sessionmaker() as session:
+        chat = await app.msg_store(session).get_chat_with_messages(
+            chat_id=chat_id,
+            user_id=dive_user["user_id"],
+        )
+        
+        # If chat doesn't exist or user doesn't own it, raise error
+        if chat is None:
+            raise UserInputError("Chat not found")
+            
+        # If session_id doesn't match the chat's session_id, raise error
+        if chat.chat.session_id and session_id != chat.chat.session_id:
+            raise UserInputError("Session ID does not match the chat's session ID")
 
     stream = EventStreamContextManager()
     response = stream.get_response()
@@ -189,7 +241,7 @@ async def retry_chat(
     async def process() -> None:
         async with stream:
             processor = ChatProcessor(app, request.state, stream)
-            await processor.handle_chat(chat_id, None, message_id)
+            await processor.handle_chat(chat_id, None, message_id, session_id=session_id)
 
     stream.add_task(process)
     return response
@@ -222,6 +274,7 @@ async def get_chat(
 @chat.delete("/{chat_id}")
 async def delete_chat(
     chat_id: str,
+    session_id: str,
     app: DiveHostAPI = Depends(get_app),
     dive_user: "DiveUser" = Depends(get_dive_user),
 ) -> ResultResponse:
@@ -229,19 +282,36 @@ async def delete_chat(
 
     Args:
         chat_id (str): The ID of the chat to delete.
+        session_id (str): Session ID for the chat.
         app (DiveHostAPI): The DiveHostAPI instance.
         dive_user (DiveUser): The DiveUser instance.
 
     Returns:
         ResultResponse: Result of the delete operation.
     """
+    
     async with app.db_sessionmaker() as session:
-        await app.msg_store(session).delete_chat(
+        # Get the chat first to verify session_id
+        chat = await app.msg_store(session).get_chat_with_messages(
             chat_id=chat_id,
             user_id=dive_user["user_id"],
         )
-        await session.commit()
-    return ResultResponse(success=True, message=None)
+        
+        if chat is None:
+            raise UserInputError("Chat not found or you don't have permission to delete it")
+            
+        # If session_id is provided and doesn't match the chat's session_id, return error
+        if session_id and chat.chat.session_id and session_id != chat.chat.session_id:
+            raise UserInputError("Session ID does not match the chat's session ID")
+            
+        # Delete the chat
+        await app.msg_store(session).delete_chat(
+            chat_id=chat_id,
+            user_id=dive_user["user_id"],
+            session_id=session_id,
+        )
+        
+        return ResultResponse(success=True)
 
 
 @chat.post("/{chat_id}/abort")
