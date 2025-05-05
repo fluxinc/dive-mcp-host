@@ -89,6 +89,8 @@ class LLMConfig(BaseLLMConfig):
 
     api_key: SecretStr | None = Field(default=None)
     configuration: LLMConfiguration | None = Field(default=None)
+    tools_in_prompt: bool = Field(default=False)
+    """Teach the model to use tools in the prompt."""
 
     model_config = pydantic_model_config
 
@@ -99,6 +101,7 @@ class LLMConfig(BaseLLMConfig):
             "model_provider",
             "model",
             "streaming",
+            "tools_in_prompt",
         }
         if self.model_provider == "anthropic" and self.max_tokens is None:
             exclude.add("max_tokens")
