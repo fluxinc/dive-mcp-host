@@ -48,7 +48,7 @@ User: When was the Eiffel Tower built?
 Assistant: I can use the search tool to find information about the Eiffel Tower.
 <tool_use>
   <name>search</name>
-  <arguments>{{{{"query": "When was the Eiffel Tower built"}}}}</arguments>
+  <arguments>{{"query": "When was the Eiffel Tower built"}}</arguments>
 </tool_use>
 
 ToolMessage: <tool_use_result>
@@ -64,7 +64,7 @@ User: "What is 15% of $85.50 plus a $5 fee?"
 Assistant: I can use the calculator tool to find 15% of $85.50.
 <tool_use>
   <name>calculator</name>
-  <arguments>{{{{"expression": "85.50 * 0.15"}}}}</arguments>
+  <arguments>{{"expression": "85.50 * 0.15"}}</arguments>
 </tool_use>
 
 ToolMessage: <tool_use_result>
@@ -75,7 +75,7 @@ ToolMessage: <tool_use_result>
 Assistant: Now I'll add the $5 fee.
 <tool_use>
   <name>calculator</name>
-  <arguments>{{{{"expression": "12.83 + 5"}}}}</arguments>
+  <arguments>{{"expression": "12.83 + 5"}}</arguments>
 </tool_use>
 
 ToolMessage: <tool_use_result>
@@ -91,7 +91,7 @@ User: "What is the population of Tokyo and how does it compare to New York City?
 Assistant: I can use the search tool to find the population of Tokyo.
 <tool_use>
   <name>search</name>
-  <arguments>{{{{"query": "Population of Tokyo"}}}}</arguments>
+  <arguments>{{"query": "Population of Tokyo"}}</arguments>
 </tool_use>
 
 ToolMessage: <tool_use_result>
@@ -102,7 +102,7 @@ ToolMessage: <tool_use_result>
 Assistant: I can also use the search tool to find the population of New York City.
 <tool_use>
   <name>search</name>
-  <arguments>{{{{"query": "Population of New York City"}}}}</arguments>
+  <arguments>{{"query": "Population of New York City"}}</arguments>
 </tool_use>
 
 ToolMessage: <tool_use_result>
