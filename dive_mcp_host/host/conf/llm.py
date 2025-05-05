@@ -59,6 +59,8 @@ class BaseLLMConfig(BaseModel):
     model_provider: str | SpecialProvider = Field(default="openai")
     streaming: bool | None = True
     max_tokens: int | None = Field(default=None)
+    tools_in_prompt: bool = Field(default=False)
+    """Teach the model to use tools in the prompt."""
 
     model_config = pydantic_model_config
 
@@ -89,8 +91,6 @@ class LLMConfig(BaseLLMConfig):
 
     api_key: SecretStr | None = Field(default=None)
     configuration: LLMConfiguration | None = Field(default=None)
-    tools_in_prompt: bool = Field(default=False)
-    """Teach the model to use tools in the prompt."""
 
     model_config = pydantic_model_config
 

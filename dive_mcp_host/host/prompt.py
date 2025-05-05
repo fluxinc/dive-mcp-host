@@ -1,8 +1,10 @@
 """Prompt for the host."""
 
-from collections.abc import Callable
+import json
+from collections.abc import Callable, Sequence
 
 from langchain_core.messages import BaseMessage, SystemMessage
+from langchain_core.tools import BaseTool
 
 from dive_mcp_host.host.helpers import today_datetime
 
@@ -21,3 +23,103 @@ so you can reason better about the changes in context of the project."""
 def default_system_prompt() -> str:
     """The default system prompt."""
     return SYSTEM_PROMPT.format(today_datetime=today_datetime())
+
+
+def tools_example_prompt() -> str:
+    """How to use tools in prompt."""
+    return """
+## Function Tool usage example
+---
+User: When was the Eiffel Tower built?
+
+Assistant: I can use the search tool to find information about the Eiffel Tower.
+<tool_use>
+  <name>search</name>
+  <arguments>{"query": "When was the Eiffel Tower built"}</arguments>
+</tool_use>
+
+ToolMessage: <tool_use_result>
+  <name>search</name>
+  <result>The Eiffel Tower was built between 1887 and 1889 and was officially opened on March 31, 1889.</result>
+</tool_use_result>
+
+Assistant: The Eiffel Tower was built between 1887 and 1889 and was officially opened on March 31, 1889.
+
+---
+User: "What is 15% of $85.50 plus a $5 fee?"
+
+Assistant: I can use the calculator tool to find 15% of $85.50.
+<tool_use>
+  <name>calculator</name>
+  <arguments>{"expression": "85.50 * 0.15"}</arguments>
+</tool_use>
+
+ToolMessage: <tool_use_result>
+  <name>calculator</name>
+  <result>12.83</result>
+</tool_use_result>
+
+Assistant: Now I'll add the $5 fee.
+<tool_use>
+  <name>calculator</name>
+  <arguments>{"expression": "12.83 + 5"}</arguments>
+</tool_use>
+
+ToolMessage: <tool_use_result>
+  <name>calculator</name>
+  <result>17.83</result>
+</tool_use_result>
+
+Assistant: 15% of $85.50 is $12.83, and when you add the $5 fee, the total is $17.83.
+
+---
+User: "What is the population of Tokyo and how does it compare to New York City?"
+
+Assistant: I can use the search tool to find the population of Tokyo.
+<tool_use>
+  <name>search</name>
+  <arguments>{"query": "Population of Tokyo"}</arguments>
+</tool_use>
+
+ToolMessage: <tool_use_result>
+  <name>search</name>
+  <result>Tokyo has a population of approximately 13.96 million people (2023 estimate).</result>
+</tool_use_result>
+
+Assistant: I can also use the search tool to find the population of New York City.
+<tool_use>
+  <name>search</name>
+  <arguments>{"query": "Population of New York City"}</arguments>
+</tool_use>
+
+ToolMessage: <tool_use_result>
+  <name>search</name>
+  <result>New York City has a population of approximately 8.8 million people (2022 estimate).</result>
+</tool_use_result>
+
+Assistant: Tokyo has a population of approximately 13.96 million people, while New York City has approximately 8.8 million people. Tokyo is significantly larger, with about 5.16 million more residents than New York City.
+"""  # noqa: E501
+
+
+def tools_definition(tools: Sequence[BaseTool]) -> str:
+    """The description of the tools."""
+    return "\n".join(
+        f"""
+<tool>
+  <name>{tool.name}</name>
+  <description>{tool.description}</description>
+  <arguments>{json.dumps(tool.args)}</arguments>
+</tool>"""
+        for tool in tools
+    )
+
+
+def tools_prompt(tools: Sequence[BaseTool]) -> str:
+    """Description of tools in prompt."""
+    return f"""
+## Available tools
+---
+<tools>
+{tools_definition(tools)}
+</tools>
+"""
