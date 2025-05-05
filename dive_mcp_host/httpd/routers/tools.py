@@ -117,6 +117,8 @@ async def list_tools(
 async def stream_server_logs(
     server_name: str,
     stream_until: ClientState | None = None,
+    stop_on_notfound: bool = True,
+    max_retries: int = 10,
     app: DiveHostAPI = Depends(get_app),
 ) -> StreamingResponse:
     """Stream logs from a specific MCP server.
@@ -124,6 +126,8 @@ async def stream_server_logs(
     Args:
         server_name (str): The name of the MCP server to stream logs from.
         stream_until (ClientState | None): stream until client state is reached.
+        stop_on_notfound (bool): If True, stop streaming if the server is not found.
+        max_retries (int): The maximum number of retries to stream logs.
         app (DiveHostAPI): The DiveHostAPI instance.
 
     Returns:
@@ -140,6 +144,8 @@ async def stream_server_logs(
                 stream=stream,
                 log_manager=log_manager,
                 stream_until=stream_until,
+                stop_on_notfound=stop_on_notfound,
+                max_retries=max_retries,
             )
             await processor.stream_logs(server_name)
 
