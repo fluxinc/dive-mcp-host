@@ -733,7 +733,7 @@ class LogStreamHandler:
                     server_name,
                     self._max_retries,
                 )
-                if self._stop_on_notfound:
+                if self._stop_on_notfound or self._max_retries == 0:
                     msg = LogMsg(
                         event=LogEvent.STREAMING_ERROR,
                         body=f"Error streaming logs: {e}",

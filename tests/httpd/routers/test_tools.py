@@ -6,7 +6,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 
 from dive_mcp_host.host.tools.echo import ECHO_DESCRIPTION, IGNORE_DESCRIPTION
-from dive_mcp_host.host.tools.log import LogMsg
+from dive_mcp_host.host.tools.log import LogEvent, LogMsg
 from dive_mcp_host.httpd.conf.mcp_servers import MCPServerConfig
 from dive_mcp_host.httpd.routers.models import SimpleToolInfo
 from dive_mcp_host.httpd.routers.tools import McpTool, ToolsResult, list_tools
@@ -369,8 +369,10 @@ def test_stream_logs_notfound(test_client: tuple[TestClient, DiveHostAPI]):
     response = client.get("/api/tools/missing_server/logs/stream")
     for line in response.iter_lines():
         content = line.removeprefix("data: ")
-        if content == "[DONE]":
+        if content in ("[DONE]", ""):
             continue
 
         data = LogMsg.model_validate_json(content)
-        assert data.event == ""
+        assert data.event == LogEvent.STREAMING_ERROR
+        assert data.body == "Error streaming logs: Log buffer missing_server not found"
+        assert data.mcp_server_name == "missing_server"
