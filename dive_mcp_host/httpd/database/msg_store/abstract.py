@@ -51,18 +51,18 @@ class AbstractMessageStore(ABC):
         self,
         chat_id: str,
         title: str,
+        session_id: str,
         user_id: str | None = None,
         user_type: str | None = None,
-        session_id: str | None = None,
     ) -> Chat | None:
         """Create a new chat.
 
         Args:
             chat_id: Unique identifier for the chat.
             title: Title of the chat.
+            session_id: Session ID for the chat.
             user_id: User ID or fingerprint, depending on the prefix.
             user_type: Optional user type
-            session_id: Optional session ID for the chat.
 
         Returns:
             Created Chat object or None if creation failed.
@@ -103,12 +103,14 @@ class AbstractMessageStore(ABC):
     async def delete_chat(
         self,
         chat_id: str,
+        session_id: str,
         user_id: str | None = None,
     ) -> None:
         """Delete a chat from the database.
 
         Args:
             chat_id: Unique identifier for the chat.
+            session_id: Session ID for the chat.
             user_id: User ID or fingerprint, depending on the prefix.
         """
 
@@ -133,6 +135,7 @@ class AbstractMessageStore(ABC):
         message_id: str,
         data: QueryInput,
         user_id: str | None = None,
+        session_id: str | None = None,
     ) -> Message:
         """Update the content of a message.
 
@@ -140,6 +143,7 @@ class AbstractMessageStore(ABC):
             message_id: Unique identifier for the message.
             data: New content for the message.
             user_id: User ID or fingerprint, depending on the prefix.
+            session_id: Session ID for the chat.
 
         Returns:
             Updated Message object.
