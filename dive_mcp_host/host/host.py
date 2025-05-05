@@ -114,7 +114,7 @@ class DiveMcpHost(ContextProtocol):
         user_id: str = "default",
         tools: Sequence[BaseTool] | None = None,
         get_agent_factory_method: Callable[
-            [BaseChatModel, Sequence[BaseTool] | ToolNode],
+            [BaseChatModel, Sequence[BaseTool] | ToolNode, bool],
             AgentFactory[T],
         ] = get_chat_agent_factory,
         system_prompt: str | Callable[[T], list[BaseMessage]] | None = None,
@@ -144,6 +144,7 @@ class DiveMcpHost(ContextProtocol):
         agent_factory = get_agent_factory_method(
             self._model,
             tools,
+            self._config.llm.tools_in_prompt,
         )
         return Chat(
             model=self._model,
