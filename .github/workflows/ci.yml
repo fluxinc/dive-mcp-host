@@ -55,6 +55,7 @@ jobs:
         SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
         OLLAMA_URL: ${{ vars.OLLAMA_URL }}
         OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL }}
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       run: |
         uv run --extra dev --frozen pytest
 
