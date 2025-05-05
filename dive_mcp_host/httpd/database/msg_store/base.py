@@ -175,6 +175,7 @@ class BaseMessageStore(AbstractMessageStore):
         self,
         chat_id: str,
         title: str,
+        session_id: str,
         user_id: str | None = None,
         user_type: str | None = None,
     ) -> Chat | None:
@@ -183,6 +184,7 @@ class BaseMessageStore(AbstractMessageStore):
         Args:
             chat_id: Unique identifier for the chat.
             title: Title of the chat.
+            session_id: Session ID for the chat.
             user_id: User ID or fingerprint, depending on the prefix.
             user_type: Optional user type
 
@@ -284,18 +286,29 @@ class BaseMessageStore(AbstractMessageStore):
         exist = await self._session.scalar(query)
         return bool(exist)
 
-    async def delete_chat(self, chat_id: str, user_id: str | None = None) -> None:
+    async def delete_chat(
+        self, 
+        chat_id: str,
+        session_id: str,
+        user_id: str | None = None,
+    ) -> None:
         """Delete a chat from the database.
 
         Args:
             chat_id: Unique identifier for the chat.
             user_id: User ID or fingerprint, depending on the prefix.
+            session_id: Session ID for the chat.
         """
-        query = (
-            delete(ORMChat)
-            .where(ORMChat.id == chat_id)
-            .where(ORMChat.user_id == user_id)
-        )
+        query = delete(ORMChat).where(ORMChat.id == chat_id)
+        
+        # Add user_id filter if provided
+        if user_id is not None:
+            query = query.where(ORMChat.user_id == user_id)
+            
+        # Add session_id filter if provided
+        if session_id is not None:
+            query = query.where(ORMChat.session_id == session_id)
+            
         await self._session.execute(query)
 
     async def delete_messages_after(
@@ -323,7 +336,8 @@ class BaseMessageStore(AbstractMessageStore):
         self,
         message_id: str,
         data: QueryInput,
-        user_id: str | None = None,
+        session_id: str,
+        user_id: str | None = None
     ) -> Message:
         """Update the content of a message.
 
@@ -331,6 +345,7 @@ class BaseMessageStore(AbstractMessageStore):
             message_id: Unique identifier for the message.
             data: New content for the message.
             user_id: User ID or fingerprint, depending on the prefix.
+            session_id: Session ID for the chat.
 
         Returns:
             Updated Message object.
@@ -342,15 +357,24 @@ class BaseMessageStore(AbstractMessageStore):
         if data.documents:
             files.extend(data.documents)
 
-        # Update the message content and files with a single query
+        # Build the base query
         query = (
             update(ORMMessage)
-            .where(
-                ORMMessage.message_id == message_id,
-                ORMMessage.chat_id == ORMChat.id,
-                ORMChat.user_id == user_id,
-            )
-            .values(
+            .where(ORMMessage.message_id == message_id)
+            .where(ORMMessage.chat_id == ORMChat.id)
+        )
+        
+        # Add user_id filter if provided
+        if user_id is not None:
+            query = query.where(ORMChat.user_id == user_id)
+            
+        # Add session_id filter if provided
+        if session_id is not None:
+            query = query.where(ORMChat.session_id == session_id)
+            
+        # Update the message content and files
+        query = (
+            query.values(
                 content=data.text or "",
                 files=json.dumps(files) if files else "",
                 tool_calls=data.tool_calls,
@@ -358,6 +382,7 @@ class BaseMessageStore(AbstractMessageStore):
             .returning(ORMMessage)
             .options(selectinload(ORMMessage.resource_usage))
         )
+        
         updated_message = await self._session.scalar(query)
         if updated_message is None:
             raise ValueError(f"Message {message_id} not found or access denied")
