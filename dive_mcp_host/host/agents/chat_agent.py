@@ -30,6 +30,7 @@ from langgraph.utils.runnable import RunnableCallable
 from pydantic import BaseModel
 
 from dive_mcp_host.host.agents.agent_factory import AgentFactory, initial_messages
+from dive_mcp_host.host.agents.tool_call import extract_tool_calls
 from dive_mcp_host.host.helpers import today_datetime
 from dive_mcp_host.host.prompt import PromptType
 
@@ -144,6 +145,8 @@ class ChatAgentFactory(AgentFactory[AgentState]):
         model = self._model.bind_tools(self._tool_classes)
         model_runnable = self._prompt | model
         response = model_runnable.invoke(state, config)
+        if isinstance(response, AIMessage):
+            response = extract_tool_calls(response)
         if self._check_more_steps_needed(state, response):
             response = AIMessage(
                 id=response.id,
