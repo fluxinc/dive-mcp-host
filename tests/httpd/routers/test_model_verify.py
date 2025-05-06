@@ -9,6 +9,7 @@ import pytest
 from fastapi import status
 from openai import AuthenticationError
 
+from dive_mcp_host.httpd.routers.model_verify import ToolVerifyState
 from tests import helper
 
 MOCK_MODEL_SETTING = {
@@ -221,7 +222,13 @@ def test_verify_model_streaming_with_mock_key_should_fail(test_client):
         )
 
 
-def _check_verify_streaming_response(response: httpx.Response, model_name: str) -> None:
+def _check_verify_streaming_response(
+    response: httpx.Response,
+    model_name: str,
+    need_tools_in_prompt: bool = False,
+    bind_tool_finial_result: ToolVerifyState = ToolVerifyState.TOOL_RESPONDED,
+    bind_tool_error: str | None = None,
+) -> None:
     assert response.status_code == status.HTTP_200_OK, response.content
 
     # Verify response headers for SSE
@@ -267,9 +274,9 @@ def _check_verify_streaming_response(response: httpx.Response, model_name: str) 
                         "step": 2,
                         "modelName": model_name,
                         "testType": "tools",
-                        "ok": True,
-                        "finalState": "TOOL_RESPONDED",
-                        "error": None,
+                        "ok": not need_tools_in_prompt,
+                        "finalState": bind_tool_finial_result,
+                        "error": bind_tool_error,
                     },
                 )
                 check_tools = True
@@ -300,15 +307,15 @@ def _check_verify_streaming_response(response: httpx.Response, model_name: str) 
                                 "error": None,
                             },
                             "tools": {
-                                "ok": True,
-                                "finalState": "TOOL_RESPONDED",
-                                "error": None,
+                                "ok": not need_tools_in_prompt,
+                                "finalState": bind_tool_finial_result,
+                                "error": bind_tool_error,
                             },
                             "toolsInPrompt": {
-                                "ok": check_tools_in_prompt,
+                                "ok": need_tools_in_prompt,
                                 "finalState": (
                                     "SKIPPED"
-                                    if not check_tools_in_prompt
+                                    if not need_tools_in_prompt
                                     else "TOOL_RESPONDED"
                                 ),
                                 "error": None,
@@ -321,6 +328,7 @@ def _check_verify_streaming_response(response: httpx.Response, model_name: str) 
 
     assert check_connection
     assert check_tools
+    assert check_tools_in_prompt == need_tools_in_prompt
     assert check_final
 
 
@@ -488,3 +496,39 @@ def test_verify_siliconflow(test_client):
         _check_verify_streaming_response(response, model_name)
     else:
         pytest.skip("SILICONFLOW_API_KEY is not set")
+
+
+def test_verify_openrouter_tool_in_prompt(test_client):
+    """Test the /api/model_verify POST endpoint with openrouter.
+
+    Use a model that needs tools in prompt.
+    """
+    client, _ = test_client
+
+    if api_key := os.environ.get("OPENROUTER_API_KEY"):
+        model_name = "qwen/qwen3-32b"
+        test_model_settings = {
+            "modelSettings": [
+                {
+                    "model": model_name,
+                    "modelProvider": "openai",
+                    "apiKey": api_key,
+                    "configuration": {
+                        "baseURL": "https://openrouter.ai/api/v1",
+                    },
+                },
+            ],
+        }
+        response = client.post(
+            "/model_verify/streaming",
+            json=test_model_settings,
+        )
+        _check_verify_streaming_response(
+            response,
+            model_name,
+            need_tools_in_prompt=True,
+            bind_tool_finial_result=ToolVerifyState.ERROR,
+            bind_tool_error="{'message': 'Provider returned error', 'code': 502, 'metadata': {'raw': '{\"error\":{\"message\":\"inference exception\"}}', 'provider_name': 'DeepInfra'}}",  # noqa: E501
+        )
+    else:
+        pytest.skip("OPENROUTER_API_KEY is not set")
