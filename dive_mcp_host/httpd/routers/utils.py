@@ -737,13 +737,15 @@ class LogStreamHandler:
                     server_name,
                     self._max_retries,
                 )
+
+                msg = LogMsg(
+                    event=LogEvent.STREAMING_ERROR,
+                    body=f"Error streaming logs: {e}",
+                    mcp_server_name=server_name,
+                )
+                await self._stream.write(msg.model_dump_json())
+
                 if self._stop_on_notfound or self._max_retries == 0:
-                    msg = LogMsg(
-                        event=LogEvent.STREAMING_ERROR,
-                        body=f"Error streaming logs: {e}",
-                        mcp_server_name=server_name,
-                    )
-                    await self._stream.write(msg.model_dump_json())
                     break
 
                 await asyncio.sleep(1)
