@@ -425,9 +425,11 @@ def test_stream_logs_notfound_wait(test_client: tuple[TestClient, DiveHostAPI]):
             data = LogMsg.model_validate_json(content)
             responses.append(data)
 
-        assert len(responses) == 2
-        assert responses[0].event == LogEvent.STDERR
-        assert responses[0].client_state == ClientState.INIT
+        assert len(responses) >= 3
+        assert responses[-3].event == LogEvent.STREAMING_ERROR
 
-        assert responses[1].event == LogEvent.STATUS_CHANGE
-        assert responses[1].client_state == ClientState.RUNNING
+        assert responses[-2].event == LogEvent.STDERR
+        assert responses[-2].client_state == ClientState.INIT
+
+        assert responses[-1].event == LogEvent.STATUS_CHANGE
+        assert responses[-1].client_state == ClientState.RUNNING
