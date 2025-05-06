@@ -443,3 +443,35 @@ def test_verify_siliconflow(test_client):
         _check_verify_streaming_response(response, model_name)
     else:
         pytest.skip("SILICONFLOW_API_KEY is not set")
+
+
+def test_verify_azure(test_client):
+    """Test the /api/model_verify POST endpoint with azure."""
+    client, _ = test_client
+
+    if (
+        (api_key := os.environ.get("AZURE_OPENAI_API_KEY"))
+        and (endpoint := os.environ.get("AZURE_OPENAI_ENDPOINT"))
+        and (deployment_name := os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME"))
+        and (api_version := os.environ.get("AZURE_OPENAI_API_VERSION"))
+    ):
+        model_name = "gpt-4o"
+        test_model_settings = {
+            "modelSettings": [
+                {
+                    "model": model_name,
+                    "modelProvider": "azure_openai",
+                    "apiKey": api_key,
+                    "azureEndpoint": endpoint,
+                    "azureDeployment": deployment_name,
+                    "apiVersion": api_version,
+                },
+            ],
+        }
+        response = client.post(
+            "/model_verify/streaming",
+            json=test_model_settings,
+        )
+        _check_verify_streaming_response(response, model_name)
+    else:
+        pytest.skip("SILICONFLOW_API_KEY is not set")

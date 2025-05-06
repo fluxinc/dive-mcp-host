@@ -143,6 +143,7 @@ class LLMBedrockConfig(BaseLLMConfig):
         model_kwargs["streaming"] = True if self.streaming is None else self.streaming
         return model_kwargs
 
+
 class LLMAzureConfig(LLMConfig):
     """Configuration for Azure LLM models."""
 
@@ -153,6 +154,17 @@ class LLMAzureConfig(LLMConfig):
     configuration: LLMConfiguration | None = Field(default=None)
 
     model_config = pydantic_model_config
+
+    def to_load_model_kwargs(self) -> dict:
+        """Convert the LLM config to kwargs for load_model.
+
+        Ignore the base_url from the LLMConfig.
+        """
+        kwargs = super().to_load_model_kwargs()
+        if "base_url" in kwargs:
+            del kwargs["base_url"]
+        return kwargs
+
 
 type LLMConfigTypes = Annotated[
     LLMBedrockConfig | LLMAzureConfig | LLMConfig, Field(union_mode="left_to_right")
