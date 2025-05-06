@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import sys
 import time
 from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
 from json import JSONDecodeError
@@ -103,9 +104,15 @@ class McpServer(ContextProtocol):
         self.name = name
         self.config = config
         self._log_buffer = LogBuffer(name=name, size=log_buffer_length)
-        self._log_proxy = LogProxy(
+        self._stderr_log_proxy = LogProxy(
             callback=self._log_buffer.push_stderr,
             mcp_server_name=self.name,
+            stdio=sys.stderr,
+        )
+        self._stdout_log_proxy = LogProxy(
+            callback=self._log_buffer.push_stdout,
+            mcp_server_name=self.name,
+            stdio=sys.stdout,
         )
         self._cond = asyncio.Condition()
         """The condition variable to synchronize access to shared variables."""
@@ -346,7 +353,7 @@ class McpServer(ContextProtocol):
                         args=self.config.args,
                         env=env,
                     ),
-                    errlog=self._log_proxy,
+                    errlog=self._stderr_log_proxy,
                 )
             if self.config.transport in ("sse", "websocket") and self.config.url:
                 return local_mcp_net_server_client(
@@ -354,7 +361,8 @@ class McpServer(ContextProtocol):
                     command=self.config.command,
                     args=self.config.args,
                     env=env,
-                    errlog=self._log_proxy,
+                    stderrlog=self._stderr_log_proxy,
+                    stdoutlog=self._stdout_log_proxy,
                 )
             raise InvalidMcpServerError(
                 self.name, "Only stdio is supported for command."
@@ -619,7 +627,8 @@ class McpTool(BaseTool):
 @asynccontextmanager
 async def local_mcp_net_server_client(  # noqa: PLR0913
     config: ServerConfig,
-    errlog: LogProxy,
+    stderrlog: LogProxy,
+    stdoutlog: LogProxy,
     command: str | None = None,
     args: list[str] | None = None,
     env: dict[str, str] | None = None,
@@ -633,7 +642,8 @@ async def local_mcp_net_server_client(  # noqa: PLR0913
         args: The arguments to start the MCP server. if None, use config.args.
         env: The environment variables to start the MCP server. if None, use config.env.
         max_connection_retries: The maximum number of connection creaation.
-        errlog: The log proxy to write the stderr of the subprocess.
+        stderrlog: The log proxy to write the stderr of the subprocess.
+        stdoutlog: The log proxy to write the stdout of the subprocess.
     """
     command = command or config.command
     args = args or config.args
@@ -647,12 +657,24 @@ async def local_mcp_net_server_client(  # noqa: PLR0913
             *args,
             env=env,
             stderr=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
         )
     ):
         logger.error("Failed to start subprocess for %s", config.name)
         raise RuntimeError("failed to start subprocess")
     retried = 0
+
     # it tooks time to start the server, so we need to retry
+    async def _read_stdout(
+        stream: asyncio.StreamReader | None,
+    ) -> None:
+        """Read the stdout of the subprocess."""
+        if not stream:
+            return
+
+        async for line in stream:
+            await stdoutlog.write(line.decode())
+            await stdoutlog.flush()
 
     async def _read_stderr(
         stream: asyncio.StreamReader | None,
@@ -662,12 +684,16 @@ async def local_mcp_net_server_client(  # noqa: PLR0913
             return
 
         async for line in stream:
-            await errlog.write(line.decode())
-            await errlog.flush()
+            await stderrlog.write(line.decode())
+            await stderrlog.flush()
 
     read_stderr_task = asyncio.create_task(
         _read_stderr(subprocess.stderr),
         name="read-stderr",
+    )
+    read_stdout_task = asyncio.create_task(
+        _read_stdout(subprocess.stdout),
+        name="read-stdout",
     )
 
     try:
@@ -700,15 +726,19 @@ async def local_mcp_net_server_client(  # noqa: PLR0913
         with suppress(TimeoutError):
             logger.debug("Terminating subprocess for %s", config.name)
             read_stderr_task.cancel()
+            read_stdout_task.cancel()
             subprocess.terminate()
             subprocess.send_signal(signal.SIGINT)
             await asyncio.wait_for(subprocess.wait(), timeout=10)
             await read_stderr_task
+            await read_stdout_task
             subprocess = None
         if subprocess:
             logger.info("Timeout to terminate mcp-server %s. Kill it.", config.name)
             with suppress(TimeoutError):
                 read_stderr_task.cancel()
+                read_stdout_task.cancel()
                 subprocess.kill()
                 await asyncio.wait_for(subprocess.wait(), timeout=10)
                 await read_stderr_task
+                await read_stdout_task
