@@ -64,6 +64,11 @@ def test_do_verify_model_with_env_api_key(test_client):
                 "final_state": "TOOL_RESPONDED",
                 "error_msg": None,
             },
+            "supportToolsInPrompt": {
+                "success": False,
+                "final_state": "SKIPPED",
+                "error_msg": None,
+            },
         },
     )
 
@@ -139,6 +144,18 @@ def test_verify_model_streaming_with_env_api_key(test_client):
                             "error": None,
                         },
                     )
+                elif step == 3 and test_type == "tools_in_prompt":
+                    helper.dict_subset(
+                        json_obj,
+                        {
+                            "step": 3,
+                            "modelName": "gpt-4o-mini",
+                            "testType": "tools_in_prompt",
+                            "ok": True,
+                            "finalState": "TOOL_RESPONDED",
+                            "error": None,
+                        },
+                    )
 
             elif json_obj["type"] == "final":
                 helper.dict_subset(
@@ -154,6 +171,11 @@ def test_verify_model_streaming_with_env_api_key(test_client):
                                     "error": None,
                                 },
                                 "tools": {
+                                    "ok": True,
+                                    "finalState": "TOOL_RESPONDED",
+                                    "error": None,
+                                },
+                                "toolsInPrompt": {
                                     "ok": True,
                                     "finalState": "TOOL_RESPONDED",
                                     "error": None,
@@ -250,6 +272,19 @@ def _check_verify_streaming_response(response: httpx.Response, model_name: str) 
                     },
                 )
                 check_tools = True
+            elif step == 3 and test_type == "tools_in_prompt":
+                helper.dict_subset(
+                    json_obj,
+                    {
+                        "step": 3,
+                        "modelName": model_name,
+                        "testType": "tools_in_prompt",
+                        "ok": True,
+                        "finalState": "TOOL_RESPONDED",
+                        "error": None,
+                    },
+                )
+                check_tools_in_prompt = True
         elif json_obj["type"] == "final":
             helper.dict_subset(
                 json_obj,
@@ -268,6 +303,11 @@ def _check_verify_streaming_response(response: httpx.Response, model_name: str) 
                                 "finalState": "TOOL_RESPONDED",
                                 "error": None,
                             },
+                            "toolsInPrompt": {
+                                "ok": True,
+                                "finalState": "TOOL_RESPONDED",
+                                "error": None,
+                            },
                         },
                     ],
                 },
@@ -276,6 +316,7 @@ def _check_verify_streaming_response(response: httpx.Response, model_name: str) 
 
     assert check_connection
     assert check_tools
+    assert check_tools_in_prompt
     assert check_final
 
 
