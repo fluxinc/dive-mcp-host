@@ -149,3 +149,52 @@ def test_extract_tool_calls_with_non_string_content():
     # Should not modify the message
     assert len(result.tool_calls) == 0
     assert result.content == ["This is a list content"]
+
+
+def test_extract_tool_calls_with_multiline_json():
+    """Test case with multi-line JSON in tool call."""
+    message = AIMessage(
+        content="""<tool_call>
+  <name>spec_search</name>
+  <arguments>
+    {
+      "index": "spec_grouping_refrigerator",
+      "elasticsearch_query": {
+        "query": {
+          "bool": {
+            "must": [
+              { "match": { "region": "tw" } }
+            ],
+            "must_not": [
+              { "match": { "status": "deleted" } }
+            ]
+          }
+        },
+        "size": 10,
+        "sort": [
+          { "specs.technical_specs.power_consumption": "asc" }
+        ]
+      }
+    }
+  </arguments>
+</tool_call>
+"""
+    )
+
+    result = extract_tool_calls(message)
+    assert len(result.tool_calls) == 1
+    tool_call = result.tool_calls[0]
+    assert tool_call["name"] == "spec_search"
+    assert tool_call["args"] == {
+        "index": "spec_grouping_refrigerator",
+        "elasticsearch_query": {
+            "query": {
+                "bool": {
+                    "must": [{"match": {"region": "tw"}}],
+                    "must_not": [{"match": {"status": "deleted"}}],
+                }
+            },
+            "size": 10,
+            "sort": [{"specs.technical_specs.power_consumption": "asc"}],
+        },
+    }

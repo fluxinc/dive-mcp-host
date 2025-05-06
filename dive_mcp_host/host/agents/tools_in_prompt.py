@@ -30,8 +30,8 @@ def extract_tool_calls(response: AIMessage) -> AIMessage:
         # Transform the tool call content into a ToolCall
         for match in matches:
             # Try XML format
-            name_match = re.search(r"<name>(.*?)</name>", match)
-            args_match = re.search(r"<arguments>(.*?)</arguments>", match)
+            name_match = re.search(r"<name>(.*?)</name>", match, re.DOTALL)
+            args_match = re.search(r"<arguments>(.*?)</arguments>", match, re.DOTALL)
             if name_match and args_match:
                 try:
                     name = name_match.group(1).strip()
@@ -51,7 +51,7 @@ def extract_tool_calls(response: AIMessage) -> AIMessage:
                     )
                 continue
             # Try JSON format
-            json_match = re.search(r"\{[^<]*\}", match)
+            json_match = re.search(r"\{[^<]*\}", match, re.DOTALL)
             if json_match:
                 try:
                     tool_call = json.loads(json_match.group().strip())
@@ -115,13 +115,23 @@ def convert_ai_message(ai_message: AIMessage) -> AIMessage:
 
 def convert_tool_message(tool_message: ToolMessage) -> ToolMessage:
     """Convert a tool message for sending to the model."""
-    return ToolMessage(
-        content=f"""
+    if tool_message.status == "success":
+        content = f"""
 <tool_call_result>
   <name>{tool_message.name}</name>
   <result>{tool_message.content}</result>
 </tool_call_result>
-""",
+"""
+    else:
+        content = f"""
+<tool_call_failed>
+  <name>{tool_message.name}</name>
+  <error>{tool_message.content}</error>
+</tool_call_failed>
+"""
+
+    return ToolMessage(
+        content=content,
         name=tool_message.name,
         tool_call_id=tool_message.tool_call_id,
         id=tool_message.id,
