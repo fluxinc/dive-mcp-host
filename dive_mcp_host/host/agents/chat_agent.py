@@ -162,10 +162,14 @@ class ChatAgentFactory(AgentFactory[AgentState]):
         # TODO: _validate_chat_history
         if not self._tools_in_prompt:
             model = self._model.bind_tools(self._tool_classes)
-            model_runnable = self._prompt | model
+            model_runnable = self._prompt | drop_empty_messages | model
         else:
             model_runnable = (
-                self._prompt | self._tool_prompt | convert_messages | self._model
+                self._prompt
+                | self._tool_prompt
+                | convert_messages
+                | drop_empty_messages
+                | self._model
             )
 
         response = model_runnable.invoke(state, config)
@@ -313,3 +317,9 @@ def get_chat_agent_factory(
 ) -> ChatAgentFactory:
     """Get an agent factory."""
     return ChatAgentFactory(model, tools, tools_in_prompt)
+
+
+@RunnableCallable
+def drop_empty_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
+    """Drop empty messages."""
+    return [m for m in messages if m.content]
