@@ -119,6 +119,7 @@ class DiveMcpHost(ContextProtocol):
         ] = get_chat_agent_factory,
         system_prompt: str | Callable[[T], list[BaseMessage]] | None = None,
         disable_default_system_prompt: bool = False,
+        tools_in_prompt: bool = False,
         volatile: bool = False,
     ) -> Chat[T]:
         """Start or resume a chat.
@@ -131,6 +132,7 @@ class DiveMcpHost(ContextProtocol):
             get_agent_factory_method: The method to get the agent factory.
             volatile: if True, the chat will not be saved.
             disable_default_system_prompt: disable default system prompt
+            tools_in_prompt: if True, the tools will be passed in the prompt.
 
         If the chat ID is not provided, a new chat will be created.
         Customize the agent factory to use a different model or tools.
@@ -141,10 +143,11 @@ class DiveMcpHost(ContextProtocol):
             raise RuntimeError("Model not initialized")
         if tools is None:
             tools = self._tool_manager.langchain_tools()
+        _tools_in_prompt = tools_in_prompt or self._config.llm.tools_in_prompt
         agent_factory = get_agent_factory_method(
             self._model,
             tools,
-            self._config.llm.tools_in_prompt,
+            _tools_in_prompt,
         )
         return Chat(
             model=self._model,
