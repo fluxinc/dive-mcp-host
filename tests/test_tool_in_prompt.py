@@ -113,7 +113,7 @@ def test_extract_tool_calls_with_invalid_json():
     """Test case with invalid JSON in tool call."""
     message = AIMessage(
         content="""<tool_call>
-{"name": "echo", "arguments": {"message": "helloXXX", "delay_ms": 10}}
+{"name": "echo" "arguments": {"message": "helloXXX", "delay_ms": 10}}
 </tool_call>"""
     )
 
