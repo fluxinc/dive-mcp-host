@@ -91,6 +91,17 @@ User: "What is the population of Tokyo and how does it compare to New York City?
 Assistant: I can use the search tool to find the population of Tokyo.
 <tool_call>
   <name>search</name>
+  <arguments>{{"query": 123131}}</arguments>
+</tool_call>
+
+ToolMessage: <tool_call_failed>
+  <name>search</name>
+  <error>Input sould be a string</error>
+</tool_call_failed>
+
+Assistant: Oh.. I see that my argumnet needs to be a string, let me try again.
+<tool_call>
+  <name>search</name>
   <arguments>{{"query": "Population of Tokyo"}}</arguments>
 </tool_call>
 
