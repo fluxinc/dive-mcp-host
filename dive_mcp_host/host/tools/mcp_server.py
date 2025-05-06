@@ -625,7 +625,7 @@ class McpTool(BaseTool):
 
 
 @asynccontextmanager
-async def local_mcp_net_server_client(  # noqa: PLR0913
+async def local_mcp_net_server_client(  # noqa: PLR0913, PLR0915
     config: ServerConfig,
     stderrlog: LogProxy,
     stdoutlog: LogProxy,
