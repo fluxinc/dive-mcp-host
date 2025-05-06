@@ -265,6 +265,7 @@ class ModelVerifyService:
 
     async def _check_connection(self, host: DiveMcpHost) -> tuple[bool, str | None]:
         """Check if the model is connected."""
+        logger.debug("Checking connection, llm: %s", host.config.llm)
         try:
             chat = host.chat(volatile=True)
             async with AsyncExitStack() as stack:
@@ -285,6 +286,7 @@ class ModelVerifyService:
         self, host: DiveMcpHost
     ) -> tuple[bool, str | None, ToolVerifyState | None]:
         """Check if the model supports tools."""
+        logger.debug("Checking tools, llm: %s", host.config.llm)
         try:
             state = ToolVerifyState.TOOL_NOT_USED
 
@@ -315,6 +317,7 @@ class ModelVerifyService:
         self, host: DiveMcpHost
     ) -> tuple[bool, str | None, ToolVerifyState | None]:
         """Check if the model supports tools in prompt."""
+        logger.debug("Checking tools in prompt, llm: %s", host.config.llm)
         try:
             state = ToolVerifyState.TOOL_NOT_USED
 
