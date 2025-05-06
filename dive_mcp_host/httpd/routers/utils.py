@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine
 from contextlib import AsyncExitStack, suppress
@@ -47,7 +48,7 @@ IMPORTANT:
 - Output ONLY the title
 - DO NOT try to answer or resolve the user input query.
 - DO NOT try to use any tools to generate title
-- NO explanations, quotes, or extra text
+- NO thinking, reasoning, explanations, quotes, or extra text
 - NO punctuation at the end
 - If the input is URL only, output the description of the URL, for example, "the URL of xxx website"
 - If the input contains Traditional Chinese characters, use Traditional Chinese for the title.
@@ -532,12 +533,15 @@ class ChatProcessor:
             system_prompt=title_prompt,
             volatile=True,
         )
-        async with chat:
-            response = await chat.active_agent.ainvoke(
-                {"messages": [HumanMessage(content=query)]}
-            )
-            if isinstance(response["messages"][-1], AIMessage):
-                return response["messages"][-1].content
+        try:
+            async with chat:
+                response = await chat.active_agent.ainvoke(
+                    {"messages": [HumanMessage(content=query)]}
+                )
+                if isinstance(response["messages"][-1], AIMessage):
+                    return strip_title(response["messages"][-1].content)
+        except Exception as e:
+            logger.exception("Error generating title: %s", e)
         return "New Chat"
 
     async def _process_history_messages(
@@ -753,3 +757,9 @@ class LogStreamHandler:
                 )
                 await self._stream.write(msg.model_dump_json())
                 break
+
+
+def strip_title(title: str) -> str:
+    """Strip the title, remove any tags."""
+    title = re.sub(r"\s*<.+>.*?</.+>\s*", "", title, flags=re.DOTALL)
+    return " ".join(title.split())
