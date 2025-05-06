@@ -23,7 +23,7 @@ provides a `listen_log` method that users can listen to log updates.
 │                                                 │     │
 │                                                 │     │
 │┌─────────────────┐      ┌────────┐              │     │
-││MCP Server stderr├──────►LogProxy┼─────┐        │     │
+││MCP Server stdio ├──────►LogProxy┼─────┐        │     │
 │└─────────────────┘      └────────┘     │        │     │
 │                                        │        │     │
 │┌────────────────────────┐              │  ┌─────┼───┐ │
@@ -49,6 +49,7 @@ from logging import INFO, getLogger
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from traceback import format_exception
+from typing import TextIO
 
 from pydantic import BaseModel, Field
 
@@ -63,6 +64,7 @@ class LogEvent(StrEnum):
 
     STATUS_CHANGE = "status_change"
     STDERR = "stderr"
+    STDOUT = "stdout"
     SESSION_ERROR = "session_error"
 
     # extra events for api
@@ -169,11 +171,24 @@ class LogBuffer:
         )
         await self.push_log(msg)
 
+    async def push_stdout(
+        self,
+        inpt: str,
+    ) -> None:
+        """Push the stdout log to the log buffer."""
+        msg = LogMsg(
+            event=LogEvent.STDOUT,
+            body=inpt,
+            mcp_server_name=self.name,
+            client_state=self._client_state,
+        )
+        await self.push_log(msg)
+
     async def push_stderr(
         self,
         inpt: str,
     ) -> None:
-        """Push the client status change to the log buffer."""
+        """Push the stderr log to the log buffer."""
         msg = LogMsg(
             event=LogEvent.STDERR,
             body=inpt,
@@ -235,20 +250,21 @@ class LogProxy:
         self,
         callback: Callable[[str], Coroutine[None, None, None]],
         mcp_server_name: str,
+        stdio: TextIO = sys.stderr,
     ) -> None:
         """Initialize the proxy."""
-        self._stderr = sys.stderr
+        self._stdio = stdio
         self._callback = callback
         self._mcp_server_name = mcp_server_name
 
     async def write(self, s: str) -> None:
         """Write logs."""
         await self._callback(s)
-        self._stderr.write(s)
+        self._stdio.write(s)
 
     async def flush(self) -> None:
         """Flush the logs."""
-        self._stderr.flush()
+        self._stdio.flush()
 
 
 class _LogFile:
