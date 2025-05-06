@@ -1,3 +1,13 @@
+"""Handle tools in prompt.
+
+For models that "doesn't support tool calls" in the sense that it cannot bind tools,
+we need to put "tool calls" and "tool result" in the message content before
+passing them to the model.
+
+But for our graph to function, we also need to extract tool calls from message content
+and trasform them into ToolCall objects inside AIMessage.tool_calls.
+"""
+
 import json
 import re
 import uuid
