@@ -291,7 +291,11 @@ class ModelVerifyService:
             state = ToolVerifyState.TOOL_NOT_USED
 
             test_tool = TestTool()
-            chat = host.chat(volatile=True, tools=[test_tool.weather_tool])
+            chat = host.chat(
+                volatile=True,
+                tools=[test_tool.weather_tool],
+                tools_in_prompt=False,
+            )
 
             async with AsyncExitStack() as stack:
                 await stack.enter_async_context(chat)
