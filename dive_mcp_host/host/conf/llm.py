@@ -147,13 +147,36 @@ class LLMBedrockConfig(BaseLLMConfig):
         return model_kwargs
 
 
+class LLMAzureConfig(LLMConfig):
+    """Configuration for Azure LLM models."""
+
+    model_provider: Literal["azure_openai"] = "azure_openai"
+    api_version: str
+    azure_endpoint: str
+    azure_deployment: str
+    configuration: LLMConfiguration | None = Field(default=None)
+
+    model_config = pydantic_model_config
+
+    def to_load_model_kwargs(self) -> dict:
+        """Convert the LLM config to kwargs for load_model.
+
+        Ignore the base_url from the LLMConfig.
+        """
+        kwargs = super().to_load_model_kwargs()
+        if "base_url" in kwargs:
+            del kwargs["base_url"]
+        return kwargs
+
+
 type LLMConfigTypes = Annotated[
-    LLMBedrockConfig | LLMConfig, Field(union_mode="left_to_right")
+    LLMBedrockConfig | LLMAzureConfig | LLMConfig, Field(union_mode="left_to_right")
 ]
 
 
 model_provider_map: dict[str, type[LLMConfigTypes]] = {
     "bedrock": LLMBedrockConfig,
+    "azure_openai": LLMAzureConfig,
 }
 
 
