@@ -320,6 +320,10 @@ def get_chat_agent_factory(
 
 
 @RunnableCallable
-def drop_empty_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
+def drop_empty_messages(inpt: ChatPromptValue) -> list[BaseMessage]:
     """Drop empty messages."""
-    return [m for m in messages if m.content]
+    result = []
+    for message in inpt.to_messages():
+        if message.content:
+            result.append(message)
+    return result
