@@ -1,5 +1,7 @@
 """Errors for the MCP host."""
 
+from typing import Any
+
 
 class MCPHostError(Exception):
     """Base exception for MCP host errors."""
@@ -16,6 +18,21 @@ class ThreadNotFoundError(MCPHostError):
         """
         self.thread_id = thread_id
         super().__init__(f"Thread {thread_id} not found")
+
+
+class ThreadQueryError(MCPHostError):
+    """Exception raised when a query is not valid."""
+
+    def __init__(self, query: Any, state_values: dict[str, Any] | None = None) -> None:
+        """Initialize the error.
+
+        Args:
+            query: The query that was not valid.
+            state_values: Thread state values.
+        """
+        self.query = query
+        self.state_values = state_values
+        super().__init__(f"Error in query {query}")
 
 
 class GraphNotCompiledError(MCPHostError):
