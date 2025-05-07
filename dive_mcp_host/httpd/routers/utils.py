@@ -537,7 +537,6 @@ class ChatProcessor:
                 }
             elif isinstance(result, list):
                 # Direct list format: [{type: 'text', text: '...'}]
-                logger.info(f"[{chat_id}] Direct list format: {result}")
                 processed_result = [
                     item for item in result 
                     if not (isinstance(item, dict) and
@@ -586,7 +585,7 @@ class ChatProcessor:
                     if message.content:
                         await self._stream_text_msg(message)
                 elif isinstance(message, ToolMessage):
-                    logger.info(f"[{chat_id}] got tool message: %s", message.model_dump_json())
+                    logger.info(f"[{chat_id}] got response for tool call to '{message.name}' tool, tool call id: {message.tool_call_id}")
                     await self._stream_tool_result_msg(message)
                 else:
                     # idk what is this

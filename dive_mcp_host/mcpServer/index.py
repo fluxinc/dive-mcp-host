@@ -110,7 +110,8 @@ class MCPServerTracker:
         """
         if chat_id not in self._chat_sources:
             self._chat_sources[chat_id] = []
-        logger.info(f"[{chat_id}] Tracking sources: {sources}")
+        source_filenames = [source.get('filename', '') for source in sources]
+        logger.info(f"[{chat_id}] Tracking sources: {source_filenames}")
         # Add unique sources only (compare by URL)
         existing_sources = self._chat_sources[chat_id]
         existing_urls = set(source.get('url', '') for source in existing_sources)

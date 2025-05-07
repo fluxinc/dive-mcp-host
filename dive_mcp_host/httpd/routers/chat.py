@@ -357,7 +357,6 @@ async def chat_sources(
     # Get the sources for the chat
     tracker = MCPServerTracker.getInstance()
     sources = tracker.get_last_sources(chat_id) or []
-    logger.info(f"Sources: {sources}")
     return SourcesResponse(
         success=True,
         message=None,
