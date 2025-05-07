@@ -217,6 +217,11 @@ class ModelSingleConfig(BaseModel):
     def post_validate(self) -> Self:
         """Validate the model config by converting to LLMConfigTypes."""
         get_llm_config_type(self.model_provider).model_validate(self.model_dump())
+
+        # ollama doesn't work well with normal bind tools
+        if self.model_provider == "ollama":
+            self.tools_in_prompt = True
+
         return self
 
     @field_serializer("api_key", when_used="json")

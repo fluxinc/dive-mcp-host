@@ -41,6 +41,13 @@ def tools_definition(tools: Sequence[BaseTool]) -> str:
 def tools_prompt(tools: Sequence[BaseTool]) -> str:
     """Example and description for tools in prompt."""
     return f"""
+## Available Tools
+---
+<tools>
+{tools_definition(tools)}
+</tools>
+---
+
 ## Function Tool Use Example
 ---
 User: When was the Eiffel Tower built?
@@ -122,11 +129,10 @@ ToolMessage: <tool_call_result>
 </tool_call_result>
 
 Assistant: Tokyo has a population of approximately 13.96 million people, while New York City has approximately 8.8 million people. Tokyo is significantly larger, with about 5.16 million more residents than New York City.
-
-
-## Available Tools
 ---
-<tools>
-{tools_definition(tools)}
-</tools>
+
+## Important Notes
+- Use the tools listed in the 'Available Tools' section whenever you can.
+- Do not print out code and pretend you have used the tool.
+- Actually use the tool by returning with a <tool_call> tag.
 """  # noqa: E501

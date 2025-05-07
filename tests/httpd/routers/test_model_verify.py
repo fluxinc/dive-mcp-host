@@ -153,7 +153,7 @@ def test_verify_model_streaming_with_env_api_key(test_client):
                             "modelName": "gpt-4o-mini",
                             "testType": "tools_in_prompt",
                             "ok": False,
-                            "finalState": "TOOL_RESPONDED",
+                            "finalState": "SKIPPED",
                             "error": None,
                         },
                     )
@@ -287,8 +287,10 @@ def _check_verify_streaming_response(
                         "step": 3,
                         "modelName": model_name,
                         "testType": "tools_in_prompt",
-                        "ok": True,
-                        "finalState": "TOOL_RESPONDED",
+                        "ok": need_tools_in_prompt,
+                        "finalState": (
+                            "TOOL_RESPONDED" if need_tools_in_prompt else "SKIPPED"
+                        ),
                         "error": None,
                     },
                 )
@@ -328,7 +330,7 @@ def _check_verify_streaming_response(
 
     assert check_connection
     assert check_tools
-    assert check_tools_in_prompt == need_tools_in_prompt
+    assert check_tools_in_prompt
     assert check_final
 
 
@@ -353,7 +355,12 @@ def test_verify_ollama(test_client):
             "/model_verify/streaming",
             json=test_model_settings,
         )
-        _check_verify_streaming_response(response, olama_model)
+        _check_verify_streaming_response(
+            response,
+            olama_model,
+            need_tools_in_prompt=True,
+            bind_tool_finial_result=ToolVerifyState.SKIPPED,
+        )
     else:
         pytest.skip("OLLAMA_URL is not set")
 

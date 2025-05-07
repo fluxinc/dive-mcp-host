@@ -204,20 +204,23 @@ class Chat[STATE_TYPE: MessagesState](ContextProtocol):
                     yield response
             except Exception as e:
                 raise ThreadQueryError(
-                    query, state_values=await self.dump_values()
+                    query, state_values=await self.dump_values(), error=e
                 ) from e
 
         return _stream_response()
 
     async def dump_values(self) -> dict[str, Any] | None:
         """Dump the values of the state of the chat."""
-        if state := await self.active_agent.aget_state(
-            RunnableConfig(
-                configurable={"thread_id": self._chat_id, "user_id": self._user_id},
-            )
-        ):
-            return state.values
-        return None
+        try:
+            if state := await self.active_agent.aget_state(
+                RunnableConfig(
+                    configurable={"thread_id": self._chat_id, "user_id": self._user_id},
+                )
+            ):
+                return state.values
+        except Exception:
+            logger.exception("Failed to dump values")
+            return None
 
 
 def _convert_query_to_messages(

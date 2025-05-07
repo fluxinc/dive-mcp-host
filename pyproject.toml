@@ -139,6 +139,7 @@ lint.ignore = [
     "B008",   # For FastAPI 'Depends' usage
     "S101",   # Need assert statements for unknown values
     "PGH003",
+    "TC006", # forces use of string type for 'cast' ex: cast("dict[str, Any]", response.json())
 ]
 # Follow Google Style Guide
 lint.extend-select = ["I"]
