@@ -371,6 +371,7 @@ class McpServer(ContextProtocol):
             if self.config.transport in ("sse", None):
                 return sse_client(
                     url=self.config.url,
+                    headers=self.config.headers,
                 )
             if self.config.transport == "websocket":
                 return websocket_client(
