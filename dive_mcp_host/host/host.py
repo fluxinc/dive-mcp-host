@@ -287,6 +287,15 @@ class DiveMcpHost(ContextProtocol):
             return ckp["channel_values"].get("messages", [])
         raise ThreadNotFoundError(thread_id)
 
+    async def delete_thread(self, thread_id: str) -> None:
+        """Delete a thread.
+
+        Args:
+            thread_id: The thread ID to delete.
+        """
+        if self._checkpointer:
+            await self._checkpointer.adelete_thread(thread_id)
+
     @property
     def log_manager(self) -> LogManager:
         """Get the log manager."""
