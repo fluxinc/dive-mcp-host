@@ -491,7 +491,7 @@ async def test_thread_query_error_with_state(sqlite_uri: str) -> None:
             with mock.patch.object(model, "_generate") as mock_responses:
                 mock_responses.side_effect = Exception("Test exception")
 
-                with pytest.raises(ThreadQueryError) as exc_info:  # noqa: PT012
+                with pytest.raises(ThreadQueryError) as exc_info:
                     async for _ in chat.query("Hello, world!"):
                         pass
 

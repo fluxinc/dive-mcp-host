@@ -23,15 +23,22 @@ class ThreadNotFoundError(MCPHostError):
 class ThreadQueryError(MCPHostError):
     """Exception raised when a query is not valid."""
 
-    def __init__(self, query: Any, state_values: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        query: Any,
+        state_values: dict[str, Any] | None = None,
+        error: Exception | None = None,
+    ) -> None:
         """Initialize the error.
 
         Args:
             query: The query that was not valid.
             state_values: Thread state values.
+            error: The error that occurred.
         """
         self.query = query
         self.state_values = state_values
+        self.error = error
         super().__init__(f"Error in query {query}")
 
 

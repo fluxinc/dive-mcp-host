@@ -104,7 +104,7 @@ def convert_ai_message(ai_message: AIMessage) -> AIMessage:
             ]
         )
         return AIMessage(
-            content=content,  # type: ignore
+            content="\n".join(content),  # type: ignore
             id=ai_message.id,
             usage_metadata=ai_message.usage_metadata,
             response_metadata=ai_message.response_metadata,

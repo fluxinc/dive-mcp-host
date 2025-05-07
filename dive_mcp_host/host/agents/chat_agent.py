@@ -102,6 +102,7 @@ class ChatAgentFactory(AgentFactory[AgentState]):
     ) -> None:
         """Initialize the chat agent factory."""
         self._model = model
+        self._model_class = type(model).__name__
         self._tools = tools
         self._tools_in_prompt = tools_in_prompt
         self._response_format: (
@@ -322,6 +323,20 @@ def get_chat_agent_factory(
 @RunnableCallable
 def drop_empty_messages(inpt: ChatPromptValue | list[BaseMessage]) -> list[BaseMessage]:
     """Drop empty messages."""
-    if isinstance(inpt, ChatPromptValue):
-        return [message for message in inpt.to_messages() if message.content]
-    return [message for message in inpt if message.content]
+    messages = inpt.to_messages() if isinstance(inpt, ChatPromptValue) else inpt
+
+    result = []
+    for message in messages:
+        # AIMessage have more constraints
+        if isinstance(message, AIMessage):
+            if (
+                not message.content
+                and not message.tool_calls
+                and not message.invalid_tool_calls
+            ):
+                continue
+        # ToolMessage, SystemMessage, HumanMessage needs to have content
+        elif not message.content:
+            continue
+        result.append(message)
+    return result
