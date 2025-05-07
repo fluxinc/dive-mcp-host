@@ -1,0 +1,3 @@
+[submodule "RAG-mcp-server"]
+	path = RAG-mcp-server
+	url = https://github.com/fluxinc/RAG-mcp-server.git

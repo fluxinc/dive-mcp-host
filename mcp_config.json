@@ -5,11 +5,11 @@
             "command": "node",
             "enabled": true,
             "args": [
-                "/app/mcp-server/dist/index.js",
+                "/app/RAG-mcp-server/dist/index.js",
                 "--log"
             ],
             "env": {
-                "LOG_FILE_PATH": "/app/mcp-server/logs/mcp-server.log",
+                "LOG_FILE_PATH": "/app/RAG-mcp-server/logs/mcp-server.log",
                 "DATABRIDGE_URL": "http://morphik:8000"
             }
         }

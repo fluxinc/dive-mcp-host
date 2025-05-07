@@ -18,26 +18,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install PM2 globally for process management
 RUN npm install -g pm2
 
-# Set build arguments for the MCP server repository
-ARG MCP_REPO_URL=github.com/fluxinc/rag-mcp-server.git
-ARG MCP_REPO_BRANCH=master
-ARG GITHUB_TOKEN
-
-# Clone the MCP server repository using GitHub token for authentication
-RUN echo "Cloning MCP server repository..."
-RUN git clone --branch $MCP_REPO_BRANCH https://${GITHUB_TOKEN:+${GITHUB_TOKEN}@}${MCP_REPO_URL} /app/mcp-server
+# Now, go back to main directory and copy the Python application code
+COPY . .
 
 # Install MCP Node.js dependencies and build
-WORKDIR /app/mcp-server
+WORKDIR /app/RAG-mcp-server
 
 RUN npm install
 RUN npm run build
 RUN npm prune --production
-RUN mkdir -p /app/mcp-server/logs
+RUN mkdir -p /app/RAG-mcp-server/logs
 
-# Now, go back to main directory and copy the Python application code
 WORKDIR /app
-COPY . .
 
 # Create README.md file if it doesn't exist
 RUN test -f README.md || echo "# Dive MCP Host\n\nPython server component for the Dive application." > README.md
