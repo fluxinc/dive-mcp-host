@@ -4,9 +4,9 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from pydantic import SecretStr
 import pytest
 import pytest_asyncio
+from pydantic import SecretStr
 
 from dive_mcp_host.httpd.conf.mcp_servers import (
     Config,
