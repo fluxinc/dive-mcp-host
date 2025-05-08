@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from pydantic import SecretStr
 
 if TYPE_CHECKING:
     from langgraph.pregel.io import AddableUpdatesDict
@@ -116,7 +117,7 @@ async def test_anthropic(echo_tool_stdio_config: dict[str, ServerConfig]) -> Non
             llm=LLMConfig(
                 model="claude-3-7-sonnet-20250219",
                 model_provider="anthropic",
-                api_key=api_key,
+                api_key=SecretStr(api_key),
             ),
             mcp_servers=echo_tool_stdio_config,
         )
@@ -140,7 +141,7 @@ async def test_openai(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
             llm=LLMConfig(
                 model="gpt-4o-mini",
                 model_provider="openai",
-                api_key=api_key,
+                api_key=SecretStr(api_key),
                 configuration=LLMConfiguration(
                     temperature=0.0,
                     top_p=0,
@@ -162,7 +163,7 @@ async def test_host_google(echo_tool_stdio_config: dict[str, ServerConfig]) -> N
             llm=LLMConfig(
                 model="gemini-2.0-flash",
                 model_provider="google-genai",
-                api_key=api_key,
+                api_key=SecretStr(api_key),
                 configuration=LLMConfiguration(
                     temperature=0.0,
                     top_p=0,
@@ -188,9 +189,9 @@ async def test_bedrock(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
                 model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
                 model_provider="bedrock",
                 credentials=Credentials(
-                    access_key_id=key_id,
-                    secret_access_key=access_key,
-                    session_token=token or "",
+                    access_key_id=SecretStr(key_id),
+                    secret_access_key=SecretStr(access_key),
+                    session_token=SecretStr(token or ""),
                 ),
                 region="us-east-1",
             ),
@@ -213,7 +214,7 @@ async def test_mistralai(echo_tool_stdio_config: dict[str, ServerConfig]) -> Non
             llm=LLMConfig(
                 model="mistral-large-latest",
                 model_provider="mistralai",
-                api_key=api_key,
+                api_key=SecretStr(api_key),
                 configuration=LLMConfiguration(
                     temperature=0.5,
                     top_p=0.5,
@@ -236,7 +237,7 @@ async def test_siliconflow(echo_tool_stdio_config: dict[str, ServerConfig]) -> N
             llm=LLMConfig(
                 model="Qwen/Qwen2.5-7B-Instruct",
                 model_provider="openai",
-                api_key=api_key,
+                api_key=SecretStr(api_key),
                 configuration=LLMConfiguration(
                     temperature=0.5,
                     top_p=0.5,
@@ -258,7 +259,8 @@ async def test_openrouter(echo_tool_stdio_config: dict[str, ServerConfig]) -> No
             llm=LLMConfig(
                 model="qwen/qwen3-30b-a3b",
                 model_provider="openai",
-                api_key=api_key,
+                api_key=SecretStr(api_key),
+                tools_in_prompt=True,
                 configuration=LLMConfiguration(
                     temperature=0.5, top_p=0.5, baseURL="https://openrouter.ai/api/v1"
                 ),
@@ -283,7 +285,7 @@ async def test_azure(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
             llm=LLMAzureConfig(
                 model="gpt4",
                 model_provider="azure_openai",
-                api_key=api_key,
+                api_key=SecretStr(api_key),
                 azure_endpoint=endpoint,
                 azure_deployment=deployment_name,
                 api_version=api_version,
