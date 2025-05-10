@@ -43,6 +43,7 @@ class McpServerConfig(BaseModel):
     args: list[str] | None = Field(default_factory=list)
     env: dict[str, str] | None = Field(default_factory=dict)
     url: str | None = None
+    headers: dict[str, SecretStr] | None = Field(default_factory=dict)
 
     def model_post_init(self, _: Any) -> None:
         """Post-initialization hook."""
@@ -199,8 +200,12 @@ class ModelSingleConfig(BaseModel):
     max_tokens: int | None = None
     api_key: SecretStr | None = None
     configuration: LLMConfiguration | None = None
+    azure_endpoint: str | None = None
+    azure_deployment: str | None = None
+    api_version: str | None = None
     active: bool = Field(default=True)
     checked: bool = Field(default=False)
+    tools_in_prompt: bool = Field(default=False)
 
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -214,6 +219,11 @@ class ModelSingleConfig(BaseModel):
     def post_validate(self) -> Self:
         """Validate the model config by converting to LLMConfigTypes."""
         get_llm_config_type(self.model_provider).model_validate(self.model_dump())
+
+        # ollama doesn't work well with normal bind tools
+        if self.model_provider == "ollama":
+            self.tools_in_prompt = True
+
         return self
 
     @field_serializer("api_key", when_used="json")

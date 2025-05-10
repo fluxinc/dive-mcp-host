@@ -59,6 +59,8 @@ class BaseLLMConfig(BaseModel):
     model_provider: str | SpecialProvider = Field(default="openai")
     streaming: bool | None = True
     max_tokens: int | None = Field(default=None)
+    tools_in_prompt: bool = Field(default=False)
+    """Teach the model to use tools in the prompt."""
 
     model_config = pydantic_model_config
 
@@ -99,6 +101,7 @@ class LLMConfig(BaseLLMConfig):
             "model_provider",
             "model",
             "streaming",
+            "tools_in_prompt",
         }
         if self.model_provider == "anthropic" and self.max_tokens is None:
             exclude.add("max_tokens")
@@ -144,13 +147,36 @@ class LLMBedrockConfig(BaseLLMConfig):
         return model_kwargs
 
 
+class LLMAzureConfig(LLMConfig):
+    """Configuration for Azure LLM models."""
+
+    model_provider: Literal["azure_openai"] = "azure_openai"
+    api_version: str
+    azure_endpoint: str
+    azure_deployment: str
+    configuration: LLMConfiguration | None = Field(default=None)
+
+    model_config = pydantic_model_config
+
+    def to_load_model_kwargs(self) -> dict:
+        """Convert the LLM config to kwargs for load_model.
+
+        Ignore the base_url from the LLMConfig.
+        """
+        kwargs = super().to_load_model_kwargs()
+        if "base_url" in kwargs:
+            del kwargs["base_url"]
+        return kwargs
+
+
 type LLMConfigTypes = Annotated[
-    LLMBedrockConfig | LLMConfig, Field(union_mode="left_to_right")
+    LLMBedrockConfig | LLMAzureConfig | LLMConfig, Field(union_mode="left_to_right")
 ]
 
 
 model_provider_map: dict[str, type[LLMConfigTypes]] = {
     "bedrock": LLMBedrockConfig,
+    "azure_openai": LLMAzureConfig,
 }
 
 

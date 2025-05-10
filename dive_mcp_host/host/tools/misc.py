@@ -1,15 +1,27 @@
-from typing import Any
+from langchain_core.tools import tool
+from langchain_core.tools.base import BaseTool
 
-from langchain_core.tools import BaseTool
 
-
-class TestTool(BaseTool):
+class TestTool:
     """Test tool."""
 
-    name: str = "weather_tool"
-    description: str = "get weather information for a specific city"
-    called: bool = False
+    def __init__(self) -> None:
+        """Initialize test state."""
+        self._called: bool = False
 
-    def _run(self, *_args: Any, **_kwargs: Any) -> Any:
-        self.called = True
-        return {"result": "success"}
+    @property
+    def called(self) -> bool:
+        """Whether the tool has been called."""
+        return self._called
+
+    @property
+    def weather_tool(self) -> BaseTool:
+        """Weather tool."""
+
+        @tool
+        def check_weather_location(city: str) -> str:
+            """Get current weather information."""
+            self._called = True
+            return f"The weather in {city} is sunny."
+
+        return check_weather_location

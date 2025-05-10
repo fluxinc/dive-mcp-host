@@ -9,8 +9,10 @@ import pytest
 from fastapi import status
 from openai import AuthenticationError
 
+from dive_mcp_host.httpd.routers.model_verify import ToolVerifyState
 from tests import helper
 
+ERROR_NOT_NULL = "ERROR_NOT_NULL"
 MOCK_MODEL_SETTING = {
     "model": "gpt-4o-mini",
     "modelProvider": "openai",
@@ -49,12 +51,28 @@ def test_do_verify_model_with_env_api_key(test_client):
     # Parse JSON response
     response_data = cast("dict", response.json())
 
-    # Validate response structure
-    assert response_data["success"] is True
-
     # Validate result structure
-    assert isinstance(response_data["connectingSuccess"], bool)
-    assert isinstance(response_data["supportTools"], bool)
+    helper.dict_subset(
+        response_data,
+        {
+            "success": True,
+            "connecting": {
+                "success": True,
+                "final_state": "CONNECTED",
+                "error_msg": None,
+            },
+            "supportTools": {
+                "success": True,
+                "final_state": "TOOL_RESPONDED",
+                "error_msg": None,
+            },
+            "supportToolsInPrompt": {
+                "success": False,
+                "final_state": "SKIPPED",
+                "error_msg": None,
+            },
+        },
+    )
 
 
 def test_verify_model_streaming_with_env_api_key(test_client):
@@ -111,7 +129,8 @@ def test_verify_model_streaming_with_env_api_key(test_client):
                             "step": 1,
                             "modelName": "gpt-4o-mini",
                             "testType": "connection",
-                            "status": "success",
+                            "ok": True,
+                            "finalState": "CONNECTED",
                             "error": None,
                         },
                     )
@@ -122,7 +141,20 @@ def test_verify_model_streaming_with_env_api_key(test_client):
                             "step": 2,
                             "modelName": "gpt-4o-mini",
                             "testType": "tools",
-                            "status": "success",
+                            "ok": True,
+                            "finalState": "TOOL_RESPONDED",
+                            "error": None,
+                        },
+                    )
+                elif step == 3 and test_type == "tools_in_prompt":
+                    helper.dict_subset(
+                        json_obj,
+                        {
+                            "step": 3,
+                            "modelName": "gpt-4o-mini",
+                            "testType": "tools_in_prompt",
+                            "ok": False,
+                            "finalState": "SKIPPED",
                             "error": None,
                         },
                     )
@@ -136,10 +168,19 @@ def test_verify_model_streaming_with_env_api_key(test_client):
                             {
                                 "modelName": "gpt-4o-mini",
                                 "connection": {
-                                    "status": "success",
+                                    "ok": True,
+                                    "finalState": "CONNECTED",
+                                    "error": None,
                                 },
                                 "tools": {
-                                    "status": "success",
+                                    "ok": True,
+                                    "finalState": "TOOL_RESPONDED",
+                                    "error": None,
+                                },
+                                "toolsInPrompt": {
+                                    "ok": False,
+                                    "finalState": "SKIPPED",
+                                    "error": None,
                                 },
                             },
                         ],
@@ -182,7 +223,13 @@ def test_verify_model_streaming_with_mock_key_should_fail(test_client):
         )
 
 
-def _check_verify_streaming_response(response: httpx.Response, model_name: str) -> None:
+def _check_verify_streaming_response(
+    response: httpx.Response,
+    model_name: str,
+    need_tools_in_prompt: bool = False,
+    bind_tool_finial_result: ToolVerifyState = ToolVerifyState.TOOL_RESPONDED,
+    bind_tool_error: str | None = None,
+) -> None:
     assert response.status_code == status.HTTP_200_OK, response.content
 
     # Verify response headers for SSE
@@ -199,6 +246,7 @@ def _check_verify_streaming_response(response: httpx.Response, model_name: str) 
     check_connection = False
     check_tools = False
     check_final = False
+    check_tools_in_prompt = False
 
     # extract and parse the JSON data
     for json_obj in helper.extract_stream(content):
@@ -214,45 +262,84 @@ def _check_verify_streaming_response(response: httpx.Response, model_name: str) 
                         "step": 1,
                         "modelName": model_name,
                         "testType": "connection",
-                        "status": "success",
+                        "ok": True,
+                        "finalState": "CONNECTED",
                         "error": None,
                     },
                 )
                 check_connection = True
             elif step == 2 and test_type == "tools":
+                answer = {
+                    "step": 2,
+                    "modelName": model_name,
+                    "testType": "tools",
+                    "ok": not need_tools_in_prompt,
+                    "finalState": bind_tool_finial_result,
+                    "error": bind_tool_error,
+                }
+
+                if bind_tool_error == ERROR_NOT_NULL:
+                    assert json_obj["error"] is not None
+                    json_obj.pop("error")
+                    answer.pop("error")
+
+                helper.dict_subset(json_obj, answer)
+                check_tools = True
+            elif step == 3 and test_type == "tools_in_prompt":
                 helper.dict_subset(
                     json_obj,
                     {
-                        "step": 2,
+                        "step": 3,
                         "modelName": model_name,
-                        "testType": "tools",
-                        "status": "success",
+                        "testType": "tools_in_prompt",
+                        "ok": need_tools_in_prompt,
+                        "finalState": (
+                            "TOOL_RESPONDED" if need_tools_in_prompt else "SKIPPED"
+                        ),
                         "error": None,
                     },
                 )
-                check_tools = True
+                check_tools_in_prompt = True
         elif json_obj["type"] == "final":
-            helper.dict_subset(
-                json_obj,
-                {
-                    "type": "final",
-                    "results": [
-                        {
-                            "modelName": model_name,
-                            "connection": {
-                                "status": "success",
-                            },
-                            "tools": {
-                                "status": "success",
-                            },
+            answer = {
+                "type": "final",
+                "results": [
+                    {
+                        "modelName": model_name,
+                        "connection": {
+                            "ok": True,
+                            "finalState": "CONNECTED",
+                            "error": None,
                         },
-                    ],
-                },
-            )
+                        "tools": {
+                            "ok": not need_tools_in_prompt,
+                            "finalState": bind_tool_finial_result,
+                            "error": bind_tool_error,
+                        },
+                        "toolsInPrompt": {
+                            "ok": need_tools_in_prompt,
+                            "finalState": (
+                                "SKIPPED"
+                                if not need_tools_in_prompt
+                                else "TOOL_RESPONDED"
+                            ),
+                            "error": None,
+                        },
+                    },
+                ],
+            }
+
+            if bind_tool_error == ERROR_NOT_NULL:
+                assert json_obj["results"][0]["tools"]["error"] is not None
+                json_obj["results"][0]["tools"].pop("error")
+                answer["results"][0]["tools"].pop("error")
+
+            helper.dict_subset(json_obj, answer)
             check_final = True
 
     assert check_connection
     assert check_tools
+    assert check_tools_in_prompt
     assert check_final
 
 
@@ -277,7 +364,12 @@ def test_verify_ollama(test_client):
             "/model_verify/streaming",
             json=test_model_settings,
         )
-        _check_verify_streaming_response(response, olama_model)
+        _check_verify_streaming_response(
+            response,
+            olama_model,
+            need_tools_in_prompt=True,
+            bind_tool_finial_result=ToolVerifyState.SKIPPED,
+        )
     else:
         pytest.skip("OLLAMA_URL is not set")
 
@@ -420,3 +512,71 @@ def test_verify_siliconflow(test_client):
         _check_verify_streaming_response(response, model_name)
     else:
         pytest.skip("SILICONFLOW_API_KEY is not set")
+
+
+def test_verify_azure(test_client):
+    """Test the /api/model_verify POST endpoint with azure."""
+    client, _ = test_client
+
+    if (
+        (api_key := os.environ.get("AZURE_OPENAI_API_KEY"))
+        and (endpoint := os.environ.get("AZURE_OPENAI_ENDPOINT"))
+        and (deployment_name := os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME"))
+        and (api_version := os.environ.get("AZURE_OPENAI_API_VERSION"))
+    ):
+        model_name = "gpt-4o"
+        test_model_settings = {
+            "modelSettings": [
+                {
+                    "model": model_name,
+                    "modelProvider": "azure_openai",
+                    "apiKey": api_key,
+                    "azureEndpoint": endpoint,
+                    "azureDeployment": deployment_name,
+                    "apiVersion": api_version,
+                },
+            ],
+        }
+        response = client.post(
+            "/model_verify/streaming",
+            json=test_model_settings,
+        )
+        _check_verify_streaming_response(response, model_name)
+    else:
+        pytest.skip("SILICONFLOW_API_KEY is not set")
+
+
+def test_verify_openrouter_tool_in_prompt(test_client):
+    """Test the /api/model_verify POST endpoint with openrouter.
+
+    Use a model that needs tools in prompt.
+    """
+    client, _ = test_client
+
+    if api_key := os.environ.get("OPENROUTER_API_KEY"):
+        model_name = "qwen/qwen3-32b"
+        test_model_settings = {
+            "modelSettings": [
+                {
+                    "model": model_name,
+                    "modelProvider": "openai",
+                    "apiKey": api_key,
+                    "configuration": {
+                        "baseURL": "https://openrouter.ai/api/v1",
+                    },
+                },
+            ],
+        }
+        response = client.post(
+            "/model_verify/streaming",
+            json=test_model_settings,
+        )
+        _check_verify_streaming_response(
+            response,
+            model_name,
+            need_tools_in_prompt=True,
+            bind_tool_finial_result=ToolVerifyState.ERROR,
+            bind_tool_error=ERROR_NOT_NULL,
+        )
+    else:
+        pytest.skip("OPENROUTER_API_KEY is not set")

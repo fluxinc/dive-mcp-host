@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from pydantic import SecretStr
 
 if TYPE_CHECKING:
     from langgraph.pregel.io import AddableUpdatesDict
@@ -11,6 +12,7 @@ if TYPE_CHECKING:
 from dive_mcp_host.host.conf import HostConfig
 from dive_mcp_host.host.conf.llm import (
     Credentials,
+    LLMAzureConfig,
     LLMBedrockConfig,
     LLMConfig,
     LLMConfiguration,
@@ -115,7 +117,7 @@ async def test_anthropic(echo_tool_stdio_config: dict[str, ServerConfig]) -> Non
             llm=LLMConfig(
                 model="claude-3-7-sonnet-20250219",
                 model_provider="anthropic",
-                api_key=api_key,
+                api_key=SecretStr(api_key),
             ),
             mcp_servers=echo_tool_stdio_config,
         )
@@ -126,7 +128,7 @@ async def test_anthropic(echo_tool_stdio_config: dict[str, ServerConfig]) -> Non
 
 
 @pytest.mark.asyncio
-async def test_host_openai(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
+async def test_openai(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
     """Test the host context initialization."""
     echo_tool_stdio_config["fetch"] = ServerConfig(
         name="fetch",
@@ -139,7 +141,7 @@ async def test_host_openai(echo_tool_stdio_config: dict[str, ServerConfig]) -> N
             llm=LLMConfig(
                 model="gpt-4o-mini",
                 model_provider="openai",
-                api_key=api_key,
+                api_key=SecretStr(api_key),
                 configuration=LLMConfiguration(
                     temperature=0.0,
                     top_p=0,
@@ -161,7 +163,7 @@ async def test_host_google(echo_tool_stdio_config: dict[str, ServerConfig]) -> N
             llm=LLMConfig(
                 model="gemini-2.0-flash",
                 model_provider="google-genai",
-                api_key=api_key,
+                api_key=SecretStr(api_key),
                 configuration=LLMConfiguration(
                     temperature=0.0,
                     top_p=0,
@@ -187,29 +189,32 @@ async def test_bedrock(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
                 model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
                 model_provider="bedrock",
                 credentials=Credentials(
-                    access_key_id=key_id,
-                    secret_access_key=access_key,
-                    session_token=token or "",
+                    access_key_id=SecretStr(key_id),
+                    secret_access_key=SecretStr(access_key),
+                    session_token=SecretStr(token or ""),
                 ),
                 region="us-east-1",
             ),
             mcp_servers=echo_tool_stdio_config,
         )
     else:
-        pytest.skip("need environment variable GOOGLE_API_KEY to run this test")
+        pytest.skip(
+            "need environment variable BEDROCK_ACCESS_KEY_ID,"
+            " BEDROCK_SECRET_ACCESS_KEY, BEDROCK_SESSION_TOKEN to run this test"
+        )
 
     await _run_the_test(config)
 
 
 @pytest.mark.asyncio
-async def test__mistralai(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
+async def test_mistralai(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
     """Test the host context initialization."""
     if api_key := environ.get("MISTRAL_API_KEY"):
         config = HostConfig(
             llm=LLMConfig(
                 model="mistral-large-latest",
                 model_provider="mistralai",
-                api_key=api_key,
+                api_key=SecretStr(api_key),
                 configuration=LLMConfiguration(
                     temperature=0.5,
                     top_p=0.5,
@@ -232,7 +237,7 @@ async def test_siliconflow(echo_tool_stdio_config: dict[str, ServerConfig]) -> N
             llm=LLMConfig(
                 model="Qwen/Qwen2.5-7B-Instruct",
                 model_provider="openai",
-                api_key=api_key,
+                api_key=SecretStr(api_key),
                 configuration=LLMConfiguration(
                     temperature=0.5,
                     top_p=0.5,
@@ -243,4 +248,59 @@ async def test_siliconflow(echo_tool_stdio_config: dict[str, ServerConfig]) -> N
         )
     else:
         pytest.skip("need environment variable SILICONFLOW_API_KEY to run this test")
+    await _run_the_test(config)
+
+
+@pytest.mark.asyncio
+async def test_openrouter(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
+    """Test the host context initialization."""
+    if api_key := environ.get("OPENROUTER_API_KEY"):
+        config = HostConfig(
+            llm=LLMConfig(
+                model="qwen/qwen3-30b-a3b",
+                model_provider="openai",
+                api_key=SecretStr(api_key),
+                tools_in_prompt=True,
+                configuration=LLMConfiguration(
+                    temperature=0.5, top_p=0.5, baseURL="https://openrouter.ai/api/v1"
+                ),
+            ),
+            mcp_servers=echo_tool_stdio_config,
+        )
+    else:
+        pytest.skip("need environment variable OPENROUTER_API_KEY to run this test")
+    await _run_the_test(config)
+
+
+@pytest.mark.asyncio
+async def test_azure(echo_tool_stdio_config: dict[str, ServerConfig]) -> None:
+    """Test the host context initialization."""
+    if (
+        (api_key := environ.get("AZURE_OPENAI_API_KEY"))
+        and (endpoint := environ.get("AZURE_OPENAI_ENDPOINT"))
+        and (deployment_name := environ.get("AZURE_OPENAI_DEPLOYMENT_NAME"))
+        and (api_version := environ.get("AZURE_OPENAI_API_VERSION"))
+    ):
+        config = HostConfig(
+            llm=LLMAzureConfig(
+                model="gpt4",
+                model_provider="azure_openai",
+                api_key=SecretStr(api_key),
+                azure_endpoint=endpoint,
+                azure_deployment=deployment_name,
+                api_version=api_version,
+                max_tokens=800,
+                configuration=LLMConfiguration(
+                    temperature=0.7,
+                    top_p=0,
+                ),
+            ),
+            mcp_servers=echo_tool_stdio_config,
+        )
+    else:
+        pytest.skip(
+            "need environment variable AZURE_API_KEY, AZURE_ENDPOINT,"
+            " AZURE_DEPLOYMENT_NAME, AZURE_API_VERSION to run this test"
+        )
+
     await _run_the_test(config)

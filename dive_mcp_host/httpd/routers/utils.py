@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine
 from contextlib import AsyncExitStack, suppress
@@ -14,6 +15,9 @@ from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel
 from starlette.datastructures import State
 
+from dive_mcp_host.host.errors import LogBufferNotFoundError
+from dive_mcp_host.host.tools.log import LogEvent, LogManager, LogMsg
+from dive_mcp_host.host.tools.model_types import ClientState
 from dive_mcp_host.httpd.conf.prompt import PromptKey
 from dive_mcp_host.httpd.database.models import (
     Message,
@@ -45,7 +49,7 @@ IMPORTANT:
 - Output ONLY the title
 - DO NOT try to answer or resolve the user input query.
 - DO NOT try to use any tools to generate title
-- NO explanations, quotes, or extra text
+- NO thinking, reasoning, explanations, quotes, or extra text
 - NO punctuation at the end
 - If the input is URL only, output the description of the URL, for example, "the URL of xxx website"
 - If the input contains Traditional Chinese characters, use Traditional Chinese for the title.
@@ -453,6 +457,7 @@ class ChatProcessor:
             user_id=dive_user.get("user_id") or "default",
             tools=tools,
             system_prompt=prompt,
+            disable_default_system_prompt=self.disable_dive_system_prompt,
         )
         async with AsyncExitStack() as stack:
             if chat_id:
@@ -473,6 +478,13 @@ class ChatProcessor:
         content = self._str_output_parser.invoke(message)
         if content:
             await self.stream.write(StreamMessage(type="text", content=content))
+        if message.response_metadata.get("stop_reason") == "max_tokens":
+            await self.stream.write(
+                StreamMessage(
+                    type="error",
+                    content="stop_reason: max_tokens",
+                )
+            )
 
     async def _stream_tool_calls_msg(self, message: AIMessage) -> None:
         # Get the singleton instance of MCPServerTracker
@@ -632,11 +644,15 @@ class ChatProcessor:
             system_prompt=title_prompt,
             volatile=True,
         )
-        async with chat:
-            responses = [
-                response async for response in chat.query(query, stream_mode="updates")
-            ]
-            return responses[0]["agent"]["messages"][0].content
+        try:
+            async with chat:
+                response = await chat.active_agent.ainvoke(
+                    {"messages": [HumanMessage(content=query)]}
+                )
+                if isinstance(response["messages"][-1], AIMessage):
+                    return strip_title(response["messages"][-1].content)
+        except Exception as e:
+            logger.exception("Error generating title: %s", e)
         return "New Chat"
 
     async def _process_history_messages(
@@ -786,3 +802,89 @@ class ChatProcessor:
                     [],
                 )
             )[0]
+
+
+class LogStreamHandler:
+    """Handles streaming of logs."""
+
+    def __init__(
+        self,
+        stream: EventStreamContextManager,
+        log_manager: LogManager,
+        stream_until: ClientState | None = None,
+        stop_on_notfound: bool = True,
+        max_retries: int = 10,
+    ) -> None:
+        """Initialize the log processor."""
+        self._stream = stream
+        self._log_manager = log_manager
+        self._end_event = asyncio.Event()
+        self._stop_on_notfound = stop_on_notfound
+        self._max_retries = max_retries
+
+        self._stream_until: set[ClientState] = {
+            ClientState.CLOSED,
+            ClientState.FAILED,
+        }
+        if stream_until:
+            self._stream_until.add(stream_until)
+
+    async def _log_listener(self, msg: LogMsg) -> None:
+        await self._stream.write(msg.model_dump_json())
+        if msg.client_state in self._stream_until:
+            self._end_event.set()
+
+    async def stream_logs(self, server_name: str) -> None:
+        """Stream logs from specific MCP server.
+
+        Keep the connection open until client disconnects or
+        client state is reached.
+
+        If self._stop_on_notfound is False, it will keep retrying until
+        the log buffer is found or max retries is reached.
+        """
+        while self._max_retries > 0:
+            self._max_retries -= 1
+
+            try:
+                async with self._log_manager.listen_log(
+                    name=server_name,
+                    listener=self._log_listener,
+                ):
+                    with suppress(asyncio.CancelledError):
+                        await self._end_event.wait()
+                        break
+            except LogBufferNotFoundError as e:
+                logger.warning(
+                    "Log buffer not found for server %s, retries left: %d",
+                    server_name,
+                    self._max_retries,
+                )
+
+                msg = LogMsg(
+                    event=LogEvent.STREAMING_ERROR,
+                    body=f"Error streaming logs: {e}",
+                    mcp_server_name=server_name,
+                )
+                await self._stream.write(msg.model_dump_json())
+
+                if self._stop_on_notfound or self._max_retries == 0:
+                    break
+
+                await asyncio.sleep(1)
+
+            except Exception as e:
+                logger.exception("Error in log streaming for server %s", server_name)
+                msg = LogMsg(
+                    event=LogEvent.STREAMING_ERROR,
+                    body=f"Error streaming logs: {e}",
+                    mcp_server_name=server_name,
+                )
+                await self._stream.write(msg.model_dump_json())
+                break
+
+
+def strip_title(title: str) -> str:
+    """Strip the title, remove any tags."""
+    title = re.sub(r"\s*<.+>.*?</.+>\s*", "", title, flags=re.DOTALL)
+    return " ".join(title.split())

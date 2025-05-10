@@ -1,5 +1,7 @@
 """Errors for the MCP host."""
 
+from typing import Any
+
 
 class MCPHostError(Exception):
     """Base exception for MCP host errors."""
@@ -16,6 +18,28 @@ class ThreadNotFoundError(MCPHostError):
         """
         self.thread_id = thread_id
         super().__init__(f"Thread {thread_id} not found")
+
+
+class ThreadQueryError(MCPHostError):
+    """Exception raised when a query is not valid."""
+
+    def __init__(
+        self,
+        query: Any,
+        state_values: dict[str, Any] | None = None,
+        error: Exception | None = None,
+    ) -> None:
+        """Initialize the error.
+
+        Args:
+            query: The query that was not valid.
+            state_values: Thread state values.
+            error: The error that occurred.
+        """
+        self.query = query
+        self.state_values = state_values
+        self.error = error
+        super().__init__(f"Error in query {query}")
 
 
 class GraphNotCompiledError(MCPHostError):
@@ -51,6 +75,10 @@ class InvalidMcpServerError(MCPHostError, ValueError):
         super().__init__(f"{mcp_server}: {reason}")
 
 
+class McpSessionGroupError(MCPHostError, ValueError, BaseExceptionGroup):
+    """Exception group of MCP session errors."""
+
+
 class McpSessionNotInitializedError(MCPHostError):
     """Exception raised when a MCP session is not initialized."""
 
@@ -65,3 +93,11 @@ class McpSessionClosedOrFailedError(MCPHostError):
     def __init__(self, mcp_server: str, state: str) -> None:
         """Initialize the error."""
         super().__init__(f"MCP session {state} for {mcp_server}")
+
+
+class LogBufferNotFoundError(MCPHostError):
+    """Exception raised when a log buffer is not found."""
+
+    def __init__(self, name: str) -> None:
+        """Initialize the error."""
+        super().__init__(f"Log buffer {name} not found")

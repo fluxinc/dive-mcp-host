@@ -23,6 +23,7 @@ from dive_mcp_host.host.errors import (
     GraphNotCompiledError,
     MessageTypeError,
     ThreadNotFoundError,
+    ThreadQueryError,
 )
 from dive_mcp_host.host.helpers.context import ContextProtocol
 from dive_mcp_host.host.prompt import default_system_prompt
@@ -43,6 +44,7 @@ class Chat[STATE_TYPE: MessagesState](ContextProtocol):
         user_id: str = "default",
         store: BaseStore | None = None,
         checkpointer: BaseCheckpointSaver[V] | None = None,
+        disable_default_system_prompt: bool = False,
     ) -> None:
         """Initialize the chat.
 
@@ -54,6 +56,8 @@ class Chat[STATE_TYPE: MessagesState](ContextProtocol):
             user_id: The user ID to use for the chat.
             store: The store to use for the chat.
             checkpointer: The langgraph checkpointer to use for the chat.
+            disable_default_system_prompt: disable default system prompt
+
         The agent_factory is called only once to compile the agent.
         """
         self._chat_id: str = chat_id if chat_id else uuid.uuid4().hex
@@ -65,6 +69,7 @@ class Chat[STATE_TYPE: MessagesState](ContextProtocol):
         self._agent: CompiledGraph | None = None
         self._agent_factory: AgentFactory[STATE_TYPE] = agent_factory
         self._abort_signal: asyncio.Event | None = None
+        self._disable_default_system_prompt = disable_default_system_prompt
 
     @property
     def active_agent(self) -> CompiledGraph:
@@ -85,14 +90,20 @@ class Chat[STATE_TYPE: MessagesState](ContextProtocol):
         self._abort_signal.set()
 
     async def _run_in_context(self) -> AsyncGenerator[Self, None]:
-        if self._system_prompt is None:
+        if self._system_prompt is None and not self._disable_default_system_prompt:
             system_prompt = default_system_prompt()
         else:
             system_prompt = self._system_prompt
+
         if callable(system_prompt):
             prompt = system_prompt
         else:
-            prompt = self._agent_factory.create_prompt(system_prompt=system_prompt)
+            prompt = (
+                self._agent_factory.create_prompt(system_prompt=system_prompt)
+                if system_prompt
+                else ""
+            )
+
         # we can do something to the prompt here.
         self._agent = self._agent_factory.create_agent(
             prompt=prompt,
@@ -182,16 +193,34 @@ class Chat[STATE_TYPE: MessagesState](ContextProtocol):
                 user_id=self._user_id,
                 thread_id=self._chat_id,
             )
-            async for response in self.active_agent.astream(
-                input=init_state,
-                stream_mode=stream_mode,
-                config=config,
-            ):
-                if signal.is_set():
-                    break
-                yield response
+            try:
+                async for response in self.active_agent.astream(
+                    input=init_state,
+                    stream_mode=stream_mode,
+                    config=config,
+                ):
+                    if signal.is_set():
+                        break
+                    yield response
+            except Exception as e:
+                raise ThreadQueryError(
+                    query, state_values=await self.dump_values(), error=e
+                ) from e
 
         return _stream_response()
+
+    async def dump_values(self) -> dict[str, Any] | None:
+        """Dump the values of the state of the chat."""
+        try:
+            if state := await self.active_agent.aget_state(
+                RunnableConfig(
+                    configurable={"thread_id": self._chat_id, "user_id": self._user_id},
+                )
+            ):
+                return state.values
+        except Exception:
+            logger.exception("Failed to dump values")
+            return None
 
 
 def _convert_query_to_messages(

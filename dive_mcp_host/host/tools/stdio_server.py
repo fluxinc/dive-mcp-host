@@ -1,11 +1,11 @@
 """Copy of mcp.client.stdio.stdio_client."""
 
 import logging
+import subprocess
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import TextIO
 
 import anyio
 import anyio.abc
@@ -15,10 +15,11 @@ from anyio.streams.text import TextReceiveStream
 from mcp import types
 from mcp.client.stdio import StdioServerParameters, get_default_environment
 from mcp.client.stdio.win32 import (
-    create_windows_process,
     get_windows_executable_command,
     terminate_windows_process,
 )
+
+from dive_mcp_host.host.tools.log import LogProxy
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +44,9 @@ DEFAULT_INHERITED_ENV_VARS = (
 
 
 @asynccontextmanager
-async def stdio_client(  # noqa: PLR0915
+async def stdio_client(  # noqa: C901, PLR0915
     server: StdioServerParameters,
-    errlog: TextIO = sys.stderr,
+    errlog: LogProxy,
 ) -> AsyncGenerator[
     tuple[
         MemoryObjectReceiveStream[types.JSONRPCMessage | Exception],
@@ -74,9 +75,23 @@ async def stdio_client(  # noqa: PLR0915
             if server.env is not None
             else get_default_environment()
         ),
-        errlog=errlog,
         cwd=server.cwd,
     )
+
+    async def stderr_reader() -> None:
+        try:
+            assert process.stderr, "Opened process is missing stderr"
+            async for line in TextReceiveStream(
+                process.stderr,
+                encoding=server.encoding,
+                errors=server.encoding_error_handler,
+            ):
+                await errlog.write(line)
+                await errlog.flush()
+        except anyio.ClosedResourceError:
+            await anyio.lowlevel.checkpoint()
+        finally:
+            logger.debug("stderr_pipe closed")
 
     async def stdout_reader() -> None:
         assert process.stdout, "Opened process is missing stdout"
@@ -129,6 +144,7 @@ async def stdio_client(  # noqa: PLR0915
     ):
         tg.start_soon(stdout_reader)
         tg.start_soon(stdin_writer)
+        tg.start_soon(stderr_reader)
         try:
             yield read_stream, write_stream
         except Exception as exc:  # noqa: BLE001
@@ -154,16 +170,16 @@ async def _create_platform_compatible_process(
     command: str,
     args: list[str],
     env: dict[str, str] | None = None,
-    errlog: TextIO = sys.stderr,
     cwd: Path | str | None = None,
 ) -> anyio.abc.Process:
     """Copy from mcp.client.stdio._create_platform_compatible_process."""
-    if sys.platform == "win32":
-        process = await create_windows_process(command, args, env, errlog, cwd)
+    if sys.platform == "win32" and hasattr(subprocess, "CREATE_NO_WINDOW"):
+        creationflags = subprocess.CREATE_NO_WINDOW
     else:
-        process = await anyio.open_process(
-            [command, *args], env=env, stderr=errlog, cwd=cwd
-        )
+        creationflags = 0
+    process = await anyio.open_process(
+        [command, *args], creationflags=creationflags, env=env, cwd=cwd
+    )
     logger.info("launched process: %s, pid: %s", command, process.pid)
 
     return process

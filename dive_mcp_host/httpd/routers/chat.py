@@ -310,12 +310,9 @@ async def delete_chat(
             user_id=dive_user["user_id"],
             session_id=session_id,
         )
-        
-        # Explicitly commit the transaction - this should be handled by the context manager
-        # but adding it to be sure
         await session.commit()
-        
-        return ResultResponse(success=True)
+    await app.dive_host["default"].delete_thread(chat_id)
+    return ResultResponse(success=True, message=None)
 
 
 @chat.post("/{chat_id}/abort")

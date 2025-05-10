@@ -1,6 +1,7 @@
+from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import AnyUrl, BaseModel, Field, UrlConstraints
+from pydantic import AnyUrl, BaseModel, Field, SecretStr, UrlConstraints
 
 from dive_mcp_host.host.conf.llm import LLMConfigTypes
 
@@ -27,6 +28,21 @@ class ServerConfig(BaseModel):
     url: str | None = None
     keep_alive: float | None = None
     transport: Literal["stdio", "sse", "websocket"]
+    headers: dict[str, SecretStr] = Field(default_factory=dict)
+
+
+class LogConfig(BaseModel):
+    """Config for mcp server logs.
+
+    Attributes:
+        log_dir: base directory for log files.
+        rotation_files: max log rotation files per mcp server.
+        buffer_length: the amount of log entries in log buffer.
+    """
+
+    log_dir: Path = Field(default_factory=lambda: Path.cwd() / "logs")
+    rotation_files: int = 5
+    buffer_length: int = 1000
 
 
 class HostConfig(BaseModel):
@@ -35,6 +51,7 @@ class HostConfig(BaseModel):
     llm: LLMConfigTypes
     checkpointer: CheckpointerConfig | None = None
     mcp_servers: dict[str, ServerConfig]
+    log_config: LogConfig = Field(default_factory=LogConfig)
 
 
 class AgentConfig(BaseModel):
