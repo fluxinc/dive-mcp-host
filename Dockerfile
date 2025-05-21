@@ -1,6 +1,8 @@
 FROM python:3.12-slim
 
 WORKDIR /app
+ARG DATABRIDGE_SERVER_URL
+ARG OPENAI_API_KEY
 
 # Install system dependencies, Git, and Node.js
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -33,6 +35,45 @@ WORKDIR /app
 
 # Create README.md file if it doesn't exist
 RUN test -f README.md || echo "# Dive MCP Host\n\nPython server component for the Dive application." > README.md
+
+# Create mcp_config.json
+RUN cat <<EOF > /app/mcp_config.json
+{
+    "mcpServers": {
+        "rag-mcp-server": {
+            "transport": "command",
+            "command": "node",
+            "enabled": true,
+            "args": [
+                "/app/RAG-mcp-server/dist/index.js",
+                "--log"
+            ],
+            "env": {
+                "LOG_FILE_PATH": "/app/RAG-mcp-server/logs/mcp-server.log",
+                "DATABRIDGE_URL": "$DATABRIDGE_SERVER_URL"
+            }
+        }
+    }
+}
+EOF
+
+# Create model_config.json
+RUN cat <<EOF > /app/model_config.json
+{
+  "activeProvider": "openai",
+  "configs": {
+    "openai": {
+      "modelProvider": "openai",
+      "model": "gpt-4o-mini",
+      "apiKey": "$OPENAI_API_KEY",
+      "base_url": "https://api.openai.com/v1",
+      "temperature": 0.2,
+      "top_p": 0.5
+    }
+  },
+  "enable_tools": true
+}
+EOF
 
 # Install the package with pip in editable mode with caching
 # Use BuildKit cache mount to persist pip cache between builds
