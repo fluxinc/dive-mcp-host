@@ -109,5 +109,9 @@ EXPOSE 61990
 # Set environment for better Python output
 ENV PYTHONUNBUFFERED=1
 
+# Install Playwright
+RUN playwright install
+RUN playwright install-deps
+
 # Run both services using the startup script
 CMD ["/app/start.sh"]
