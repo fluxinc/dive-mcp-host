@@ -9,6 +9,7 @@ from dive_mcp_host.httpd.conf.httpd_service import ServiceManager
 from dive_mcp_host.httpd.middlewares import default_state, error_handler
 from dive_mcp_host.httpd.routers.chat import chat
 from dive_mcp_host.httpd.routers.config import config
+from dive_mcp_host.httpd.routers.ingestion import ingestion
 from dive_mcp_host.httpd.routers.model_verify import model_verify
 from dive_mcp_host.httpd.routers.openai import openai
 from dive_mcp_host.httpd.routers.tools import tools
@@ -64,6 +65,7 @@ def create_app(
     app.include_router(tools, prefix="/api/tools")
     app.include_router(config, prefix="/api/config")
     app.include_router(model_verify, prefix="/model_verify")
+    app.include_router(ingestion, prefix="/api/ingestion")
 
     # remote endpoints
     app.include_router(chat, prefix="/api/v1/mcp")
