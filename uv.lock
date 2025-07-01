@@ -551,7 +551,7 @@ requires-dist = [
     { name = "langchain-mistralai", specifier = ">=0.2" },
     { name = "langchain-ollama", specifier = ">=0.2" },
     { name = "langchain-openai", specifier = ">=0.3.11" },
-    { name = "langgraph", specifier = ">=0.3.18" },
+    { name = "langgraph", specifier = ">=0.3.18,<=0.4.10" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=0.3" },
     { name = "langgraph-checkpoint-sqlite", specifier = ">=2" },
     { name = "langgraph-prebuilt", specifier = ">=0.1.3" },
