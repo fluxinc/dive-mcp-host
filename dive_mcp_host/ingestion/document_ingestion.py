@@ -96,7 +96,7 @@ class MorphikDocumentIngester:
     async def check_health(self) -> bool:
         """Check if the Morphik server is healthy (async)"""
         try:
-            response = await self._client.get("/health", timeout=DEFAULT_TIMEOUT)
+            response = await self._client.get("/ping", timeout=DEFAULT_TIMEOUT)
             response.raise_for_status()
             logger.info("✅ Morphik server is healthy")
             return True
@@ -178,7 +178,8 @@ class MorphikDocumentIngester:
                 file_content = f.read()
 
                 fields = [
-                    ('file', (file_info['name'], file_content, file_info['mime_type']))
+                    ('file', (file_info['name'], file_content, file_info['mime_type'])),
+                    ('use_colpali', 'true')
                 ]
                 if folder_name:
                     fields.append(('folder_name', folder_name))
