@@ -1,10 +1,10 @@
-FROM python:3.12-slim
+FROM mcr.microsoft.com/playwright:v1.50.0-jammy
 
 WORKDIR /app
 ARG DATABRIDGE_SERVER_URL
 ARG OPENAI_API_KEY
 
-# Install system dependencies, Git, and Node.js
+# Install system dependencies, Git, Node.js, and pip
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gnupg \
     git \
+    python3-pip \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -75,11 +76,8 @@ RUN cat <<EOF > /app/model_config.json
 }
 EOF
 
-# Install the package with pip in editable mode with caching
-# Use BuildKit cache mount to persist pip cache between builds
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -e ".[dev]" && \
-    pip install watchdog[watchmedo]
+# Install uv for Python package management
+RUN pip install uv
 
 # Create a startup script that ensures the SQLite database exists
 RUN echo '#!/bin/bash\n\
@@ -98,8 +96,8 @@ if [ ! -f "/app/db.sqlite" ]; then\n\
     chmod 666 /app/db.sqlite\n\
 fi\n\
 \n\
-# Start the Python service with hot reloading\n\
-cd /app && watchmedo auto-restart --directory=/app/dive_mcp_host --pattern="*.py" --recursive -- dive_httpd --listen 0.0.0.0\n\
+# Start the Python service\n\
+cd /app && uv run dive_httpd\n\
 ' > /app/start.sh && \
     chmod +x /app/start.sh
 
@@ -108,10 +106,6 @@ EXPOSE 61990
 
 # Set environment for better Python output
 ENV PYTHONUNBUFFERED=1
-
-# Install Playwright
-RUN playwright install
-RUN playwright install-deps
 
 # Run both services using the startup script
 CMD ["/app/start.sh"]
