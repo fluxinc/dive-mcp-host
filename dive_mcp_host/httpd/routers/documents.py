@@ -8,7 +8,7 @@ PAGINATION_LIMIT = 10
 def get_document_manager() -> MorphikDocumentManager:
     return MorphikDocumentManager()
 
-@router.get("", response_model=List[Dict[str, Any]])
+@router.get("", response_model=Dict[str, Any])
 async def list_documents(
     page: int = 0,
     status: Optional[str] = None,

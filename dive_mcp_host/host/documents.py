@@ -40,8 +40,8 @@ class MorphikDocumentManager:
     async def close(self):
         await self._client.aclose()
 
-    async def list_documents(self, skip: int = 0, limit: int = 100, status: Optional[str] = None) -> List[Dict[str, Any]]:
-        """List documents from the Morphik API."""
+    async def list_documents(self, skip: int = 0, limit: int = 100, status: Optional[str] = None) -> Dict[str, Any]:
+        """List documents from the Morphik API with pagination metadata."""
         try:
             params = {"skip": skip, "limit": limit} 
             if status:
