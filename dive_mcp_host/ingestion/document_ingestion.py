@@ -65,6 +65,82 @@ def _extract_lang_from_html(html_content: str) -> Optional[str]:
         return match.group(1).lower()
     return None
 
+async def _is_pdf_url(url: str) -> bool:
+    """
+    Check if a URL points to a PDF file by examining the Content-Type header
+    and URL extension as fallback.
+    """
+    try:
+        # First check the URL extension as a quick check
+        parsed_url = urlparse(url)
+        if parsed_url.path.lower().endswith('.pdf'):
+            return True
+        
+        # Make a HEAD request to check Content-Type header
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+        }
+        async with httpx.AsyncClient(follow_redirects=True, timeout=10.0, headers=headers) as client:
+            response = await client.head(url)
+            content_type = response.headers.get('content-type', '').lower()
+            return 'application/pdf' in content_type
+    except Exception as e:
+        logger.error(f"Could not determine if URL {url} is PDF: {e}")
+        # Fallback to extension check only
+        return False
+
+async def _download_pdf_from_url(url: str) -> bytes:
+    """
+    Download PDF content directly from URL with retry mechanism.
+    """
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/pdf,application/octet-stream,*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Referer': urlparse(url).scheme + '://' + urlparse(url).netloc + '/'
+    }
+    
+    max_retries = 2
+    logger.info(f"Downloading PDF from URL: {url}")
+    for attempt in range(max_retries + 1):
+        try:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=10.0, headers=headers) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                
+                # Verify that we actually got a PDF
+                content_type = response.headers.get('content-type', '').lower()
+                if 'application/pdf' not in content_type:
+                    # Check if the content starts with PDF magic bytes
+                    if not response.content.startswith(b'%PDF'):
+                        raise ValueError(f"URL {url} did not return a valid PDF file")
+                
+                return response.content
+                
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 403 and attempt < max_retries:
+                logger.warning(f"Attempt {attempt + 1} failed with 403 Forbidden for {url}. Retrying in 2 seconds...")
+                await asyncio.sleep(2)
+                continue
+            else:
+                raise
+        except httpx.RequestError as e:
+            if attempt < max_retries:
+                logger.warning(f"Attempt {attempt + 1} failed with request error for {url}: {e}. Retrying in 2 seconds...")
+                await asyncio.sleep(2)
+                continue
+            else:
+                raise
+
 class MorphikDocumentIngester:
     """
     Handles document ingestion into the Morphik system.
@@ -220,7 +296,15 @@ class MorphikDocumentIngester:
         logger.info(f"Received request to crawl site: {clean_site}")
 
         try:
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            }
             async with httpx.AsyncClient(follow_redirects=True, timeout=30.0, headers=headers) as client:
                 try:
                     response = await client.get(clean_site)
@@ -294,7 +378,9 @@ class MorphikDocumentIngester:
 
     async def ingest_urls(self, urls: List[str], folder_name: Optional[str] = None) -> Dict[str, List[Dict]]:
         """
-        Accepts one or more URLs, crawls them, and ingests the content as PDF.
+        Accepts one or more URLs and ingests the content.
+        For PDF URLs: downloads directly and ingests as PDF.
+        For HTML URLs: crawls and converts to PDF before ingesting.
         """
         logger.info(f"Received request to ingest from {len(urls)} URLs. Folder: {folder_name or 'N/A'}")
 
@@ -303,59 +389,125 @@ class MorphikDocumentIngester:
 
         successful_ingestions, failed_ingestions, skipped_ingestions = [], [], []
 
-        run_config = CrawlerRunConfig(pdf=True)
-        async with AsyncWebCrawler() as crawler:
-            for url in urls:
-                try:
-                    result = await crawler.arun(url=url, config=run_config)
-                    if not result.success:
-                        failed_ingestions.append({"url": url, "error": result.error_message})
-                        continue
+        # Separate URLs into PDF and HTML categories
+        pdf_urls = []
+        html_urls = []
+        
+        for url in urls:
+            try:
+                if await _is_pdf_url(url):
+                    pdf_urls.append(url)
+                else:
+                    html_urls.append(url)
+            except Exception as e:
+                logger.error(f"Error categorizing URL {url}: {e}\n defaulting to HTML processing")
+                # Default to HTML processing if categorization fails
+                html_urls.append(url)
 
-                    lang = _extract_lang_from_html(result.html)
-                    if not lang or not lang.startswith("en"):
-                        skipped_ingestions.append({"url": url, "error": f"Language '{lang}' is not English."})
-                        continue
-                    
-                    if not result.pdf:
-                        failed_ingestions.append({"url": url, "error": "Failed to generate PDF."})
-                        continue
-                    
-                    title = result.metadata.get('title') if result.metadata else None
-                    
-                    if title:
-                        file_name = f"{_slugify(title, to_lower=False, separator='_')}.pdf"
-                    else:
-                        # Fallback to a filename derived from the URL if no title is available
-                        parsed_url = urlparse(url)
-                        # Use the last part of the path as the filename
-                        url_path_last_segment = parsed_url.path.strip('/').split('/')[-1]
+        # Process PDF URLs directly
+        for url in pdf_urls:
+            try:
+                # Try to download PDF content directly
+                pdf_content = await _download_pdf_from_url(url)
+                
+                # Default to English language as requested
+                lang = "en"
+                
+                # Generate filename from URL
+                parsed_url = urlparse(url)
+                url_path_last_segment = parsed_url.path.strip('/').split('/')[-1]
+                
+                if url_path_last_segment and url_path_last_segment.lower().endswith('.pdf'):
+                    # Remove .pdf extension before slugifying, then add it back
+                    file_name_base = url_path_last_segment[:-4]  # Remove .pdf
+                    file_name = f"{_slugify(file_name_base, to_lower=False, separator='_')}.pdf"
+                elif url_path_last_segment:
+                    file_name = f"{_slugify(url_path_last_segment, to_lower=False, separator='_')}.pdf"
+                else:
+                    # Use hostname if path is empty
+                    file_name_base = parsed_url.hostname or f"downloaded_{os.urandom(4).hex()}"
+                    file_name = f"{_slugify(file_name_base, to_lower=True)}.pdf"
+
+                # Save to temporary file
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                    temp_file.write(pdf_content)
+                    temp_file_path = Path(temp_file.name)
+
+                file_info = self.get_file_info(temp_file_path)
+                file_info['name'] = file_name
+
+                if await self.individual_ingest_file(file_info, folder_name):
+                    successful_ingestions.append({"url": url, "filename": file_name})
+                    logger.info(f"Successfully ingested PDF from URL: {url}")
+                else:
+                    failed_ingestions.append({"url": url, "error": "Morphik API ingestion failed."})
+
+                os.unlink(temp_file_path)
+
+            except (httpx.HTTPStatusError, httpx.RequestError, ValueError) as e:
+                logger.warning(f"Direct PDF download failed for {url}: {e}. Falling back to crawler approach.")
+                # Fallback to crawler approach for this PDF URL
+                html_urls.append(url)
+            except Exception as e:
+                logger.error(f"An unexpected error occurred while processing PDF URL {url}: {e}", exc_info=True)
+                failed_ingestions.append({"url": url, "error": str(e)})
+
+        # Process HTML URLs using the existing crawler logic
+        if html_urls:
+            run_config = CrawlerRunConfig(pdf=True)
+            async with AsyncWebCrawler() as crawler:
+                for url in html_urls:
+                    try:
+                        result = await crawler.arun(url=url, config=run_config)
+                        if not result.success:
+                            failed_ingestions.append({"url": url, "error": result.error_message})
+                            continue
+
+                        lang = _extract_lang_from_html(result.html) or "en"
+                        if not lang.startswith("en"):
+                            skipped_ingestions.append({"url": url, "error": f"Language '{lang}' is not English."})
+                            continue
                         
-                        if url_path_last_segment:
-                            file_name_base = url_path_last_segment
+                        if not result.pdf:
+                            failed_ingestions.append({"url": url, "error": "Failed to generate PDF."})
+                            continue
+                        
+                        title = result.metadata.get('title') if result.metadata else None
+                        
+                        if title:
+                            file_name = f"{_slugify(title, to_lower=False, separator='_')}.pdf"
                         else:
-                            # If path is empty (e.g., homepage), use the hostname
-                            file_name_base = parsed_url.hostname or f"crawled_{os.urandom(4).hex()}"
-                        
-                        file_name = f"{_slugify(file_name_base, to_lower=True)}.pdf"
+                            # Fallback to a filename derived from the URL if no title is available
+                            parsed_url = urlparse(url)
+                            # Use the last part of the path as the filename
+                            url_path_last_segment = parsed_url.path.strip('/').split('/')[-1]
+                            
+                            if url_path_last_segment:
+                                file_name_base = url_path_last_segment
+                            else:
+                                # If path is empty (e.g., homepage), use the hostname
+                                file_name_base = parsed_url.hostname or f"crawled_{os.urandom(4).hex()}"
+                            
+                            file_name = f"{_slugify(file_name_base, to_lower=True)}.pdf"
 
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-                        temp_file.write(result.pdf)
-                        temp_file_path = Path(temp_file.name)
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                            temp_file.write(result.pdf)
+                            temp_file_path = Path(temp_file.name)
 
-                    file_info = self.get_file_info(temp_file_path)
-                    file_info['name'] = file_name
+                        file_info = self.get_file_info(temp_file_path)
+                        file_info['name'] = file_name
 
-                    if await self.individual_ingest_file(file_info, folder_name):
-                        successful_ingestions.append({"url": url, "filename": file_name})
-                    else:
-                        failed_ingestions.append({"url": url, "error": "Morphik API ingestion failed."})
+                        if await self.individual_ingest_file(file_info, folder_name):
+                            successful_ingestions.append({"url": url, "filename": file_name})
+                            logger.info(f"Successfully crawled and ingested HTML from URL: {url}")
+                        else:
+                            failed_ingestions.append({"url": url, "error": "Morphik API ingestion failed."})
 
-                    os.unlink(temp_file_path)
+                        os.unlink(temp_file_path)
 
-                except Exception as e:
-                    logger.error(f"An unexpected error occurred while processing {url}: {e}", exc_info=True)
-                    failed_ingestions.append({"url": url, "error": str(e)})
+                    except Exception as e:
+                        logger.error(f"An unexpected error occurred while processing HTML URL {url}: {e}", exc_info=True)
+                        failed_ingestions.append({"url": url, "error": str(e)})
 
         return {
             "successful": successful_ingestions,
