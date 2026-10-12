@@ -34,7 +34,7 @@ jobs:
         uv sync --extra dev --frozen
 
     - name: Test with pytest
-      if: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/development'}}
+      if: ${{ github.ref != 'refs/heads/master' && github.ref != 'refs/heads/development'}}
       env:
         POSTGRES_URI: postgresql://mcp:mcp@postgres:5432/mcp
         SQLITE_URI: sqlite:///dummy.db
@@ -42,7 +42,7 @@ jobs:
         uv run --extra dev --frozen pytest
 
     - name: Test with pytest
-      if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development' }}
+      if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/development' }}
       env:
         POSTGRES_URI: postgresql://mcp:mcp@postgres:5432/mcp
         SQLITE_URI: sqlite:///dummy.db
